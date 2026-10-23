@@ -1,0 +1,211 @@
+# Winner Hunter keywords: one per line, searched in order (each run goes on where the last one stopped). NL · DE · FR · EN.
+# Pets
+huisdier
+hond
+kat
+hund
+katze
+chien
+chat
+dog
+cat
+# Sleep & comfort
+slaap
+slapen
+schlaf
+schlafen
+sommeil
+sleep
+kussen
+kissen
+oreiller
+deken
+decke
+pillow
+# Pain, posture & health
+pijn
+rugpijn
+nekpijn
+schmerzen
+rückenschmerzen
+douleur
+mal de dos
+pain relief
+houding
+haltung
+posture
+knie
+voeten
+füße
+pieds
+massage
+massagegerät
+# Beauty & care
+serum
+crème
+creme
+huid
+haut
+peau
+skincare
+haar
+haare
+cheveux
+haarverwijdering
+haarentfernung
+épilation
+tanden
+zähne
+dents
+nagels
+nägel
+make-up
+parfum
+# Home, kitchen & cleaning
+keuken
+küche
+cuisine
+kitchen
+schoonmaken
+reinigung
+nettoyage
+cleaning
+organizer
+opbergen
+aufbewahrung
+rangement
+badkamer
+badezimmer
+salle de bain
+led
+lamp
+lampe
+verlichting
+beleuchtung
+decoratie
+deko
+déco
+# Garden & outdoor
+tuin
+garten
+jardin
+garden
+camping
+wandelen
+wandern
+randonnée
+vissen
+angeln
+pêche
+fiets
+fahrrad
+vélo
+# Baby, kids & toys
+baby
+bébé
+kinderen
+kinder
+enfant
+speelgoed
+spielzeug
+jouet
+# Fitness & sport
+fitness
+yoga
+sport
+hardlopen
+laufen
+running
+# Car
+auto
+voiture
+car accessories
+# Tech & gadgets
+gadget
+handig
+praktisch
+pratique
+telefoon
+handy
+téléphone
+oplader
+ladegerät
+chargeur
+koptelefoon
+kopfhörer
+écouteurs
+smartwatch
+camera
+überwachungskamera
+caméra
+# Gifts, Q4 & seasons
+cadeau
+geschenk
+gift
+kerst
+weihnachten
+noël
+christmas
+black friday
+cyber monday
+winter
+herfst
+herbst
+automne
+# Sale angles (§6)
+50% korting
+70% korting
+uitverkoop
+magazijn uitverkoop
+gratis verzending
+50% rabatt
+70% rabatt
+ausverkauf
+lagerverkauf
+kostenloser versand
+50% de réduction
+soldes
+livraison gratuite
+50% off
+sale
+# Jewellery, watches & bags
+sieraden
+schmuck
+bijoux
+ketting
+kette
+collier
+horloge
+uhr
+montre
+tas
+tasche
+sac
+# Clothing & shoes
+jurk
+kleid
+robe
+dress
+broek
+hose
+pantalon
+trui
+pullover
+pull
+jas
+jacke
+manteau
+rok
+rock
+jupe
+blouse
+vest
+pyjama
+lingerie
+sneakers
+schoenen
+schuhe
+chaussures
+laarzen
+stiefel
+bottes

@@ -1,0 +1,305 @@
+// The board in a real browser (Chromium via Playwright) at iPhone size, against the Worker handler served
+// locally on an in-memory D1. Skipped when Playwright or Chromium is not available.
+//   SHOTS=/some/dir node --test test/board.e2e.test.mjs    (screenshots saved there)
+import test from 'node:test';
+import assert from 'node:assert';
+import fs from 'node:fs';
+import http from 'node:http';
+import { createRequire } from 'node:module';
+import { handle } from '../worker/src/app.mjs';
+import { extractAd, isReady, waitReady } from '../worker/src/adview.mjs';
+import { seededEnv, NOW } from './helpers/seed.mjs';
+
+let chromium = null;
+try {
+  ({ chromium } = createRequire(import.meta.url)('playwright'));
+} catch (e) {
+  // no Playwright: skipped
+}
+const HTML = fs.readFileSync(new URL('../worker/src/board.html', import.meta.url), 'utf8');
+const SHOTS = process.env.SHOTS || '';
+const COLORS = ['#e9b8a6', '#a6c8e9', '#b8e9a6', '#e9e0a6', '#d2a6e9', '#a6e9de'];
+
+// Every photo on screen has loaded (lazy photos further down are not asked yet).
+const imagesInView = () => [...document.images].filter((i) => i.getBoundingClientRect().top < innerHeight).every((i) => i.complete && i.naturalWidth > 0);
+
+function serve(env, launch = null) {
+  const server = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const body = chunks.length ? Buffer.concat(chunks) : undefined;
+    const request = new Request(`http://${req.headers.host}${req.url}`, { method: req.method, headers: req.headers, body: req.method === 'GET' || req.method === 'HEAD' ? undefined : body });
+    const out = await handle(request, env, { html: HTML, now: NOW, launch });
+    const headers = {};
+    out.headers.forEach((v, k) => (headers[k] = v));
+    res.writeHead(out.status, headers);
+    res.end(Buffer.from(await out.arrayBuffer()));
+  });
+  return new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(server)));
+}
+
+// The ad viewer's browser, faked: a video ad for even ids, a carousel for odd ones (what extractAd returns).
+const LONG = Array.from({ length: 12 }, (_, i) => `Regel ${i + 1} van de advertentietekst.`).join('\n');
+function fakeViewer() {
+  return async () => {
+    let id = '';
+    return {
+      newPage: async () => ({
+        goto: async (url) => { id = new URL(url).searchParams.get('id'); },
+        waitForFunction: async () => {},
+        evaluate: async () => (Number(id) % 2 === 0
+          ? { name: 'Shop ' + id, avatar: 'https://scontent.xx.fbcdn.net/p5.jpg', library_id: id, body: LONG, cards: [], low_impressions: true,
+            media: [{ type: 'video', src: 'https://video.xx.fbcdn.net/ad.mp4', poster: 'https://scontent.xx.fbcdn.net/p3.jpg' }],
+            link: { caption: 'MARIJKEDENBOSCH.NL', title: 'Eindigt vanavond 23:59!', description: 'Gratis verzending', cta: 'Shop now', href: 'https://l.facebook.com/l.php?u=' + encodeURIComponent('https://marijkedenbosch.nl/products/jurk') } }
+          : { name: 'Shop ' + id, library_id: id, body: 'Kies je kleur 👇', media: [], link: null,
+            cards: [1, 2, 3].map((n) => ({ media: { type: 'image', src: `https://scontent.xx.fbcdn.net/p${n}.jpg` }, title: 'Kleur ' + n, cta: 'Shop now', href: 'https://shop.test/products/k' + n })) }),
+      }),
+      close: async () => {},
+    };
+  };
+}
+
+async function launch() {
+  try {
+    return await chromium.launch();
+  } catch (e) {
+    return chromium.launch({ executablePath: '/opt/pw-browsers/chromium' }).catch(() => null);
+  }
+}
+
+test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways scroll, no console errors', { skip: !chromium && 'Playwright not installed', timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  if (!browser) return t.skip('Chromium not available');
+  const env = Object.assign(await seededEnv(), { META_TOKEN: 'tok', BROWSER: {} });
+  const server = await serve(env, fakeViewer());
+  const base = `http://localhost:${server.address().port}`;
+  const errors = [];
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, colorScheme: 'light' });
+  const page = await ctx.newPage();
+  await page.clock.setFixedTime(new Date(NOW));
+  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('dialog', (d) => (errors.push('dialog: ' + d.message()), d.dismiss()));
+  // Store photos come from the stores' CDNs: answer them with a colored square here.
+  await ctx.route(/^https:\/\//, (route) => {
+    const n = Number((route.request().url().match(/p(\d+)\.jpg/) || [0, 0])[1]);
+    route.fulfill({ status: 200, contentType: 'image/svg+xml', body: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><rect width="400" height="400" fill="${COLORS[n % COLORS.length]}"/><circle cx="200" cy="200" r="${90 + (n % 4) * 15}" fill="#fff" fill-opacity=".55"/></svg>` });
+  });
+  const shot = async (name) => SHOTS && page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage: false });
+  const noSideScroll = async (where) => {
+    const { sw, cw } = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
+    assert.ok(sw <= cw, `${where}: page is ${sw}px wide in a ${cw}px screen`);
+  };
+  try {
+    await page.goto(base + '/');
+    await noSideScroll('PIN screen');
+    await shot('1-pin');
+    await page.fill('input[name=pin]', '000000');
+    await page.click('button[type=submit]');
+    assert.match(await page.textContent('.err'), /Wrong PIN/);
+    // the wrong PIN answer is a 401 on purpose (Chromium logs that as a console error)
+    assert.deepStrictEqual(errors.splice(0), ['Failed to load resource: the server responded with a status of 401 (Unauthorized)']);
+    await page.fill('input[name=pin]', '482913');
+    await Promise.all([page.waitForURL(base + '/'), page.click('button[type=submit]')]);
+    await page.waitForSelector('.card');
+    assert.strictEqual(await page.locator('[data-view]').count(), 2, 'All and ★ only (no Top 20)');
+    assert.strictEqual(await page.getAttribute('[data-view=all]', 'aria-pressed'), 'true', 'All is the start view');
+    assert.ok(await page.locator('#q').isVisible(), 'search right away');
+    assert.strictEqual(await page.locator('.card').count(), 27);
+    assert.strictEqual(await page.locator('.score').count(), 0, 'no score on the cards');
+    assert.match(await page.locator('.card').first().locator('.meta').innerText(), /81[\s\S]*shop ads[\s\S]*41d[\s\S]*live[\s\S]*3[\s\S]*copies/i);
+    assert.match(await page.locator('.card').first().locator('.hero').innerText(), /90K[\s\S]*reach \/ day/i);
+    assert.match(await page.textContent('#run'), /Last run 6 h ago · 48K ads · 23 new winners/);
+    // Market Radar: every seed product reaches NL 70% / BE 30%
+    await page.waitForSelector('#radar:not([hidden]) .mk');
+    await page.waitForFunction(() => document.querySelector('#topShare').textContent === '70%', null, { timeout: 5000 }); // counts up
+    assert.match(await page.textContent('#rtop'), /#1 market\s*Netherlands\s*70% of all reach/);
+    assert.strictEqual(await page.locator('#hexmap .hx[data-cc]').count(), 2, 'NL and BE light up on the map');
+    assert.deepStrictEqual(await page.locator('.mk').evaluateAll((els) => els.map((e) => e.dataset.cc)), ['NL', 'BE']);
+    assert.ok(await page.locator('#alert').isHidden(), 'healthy run: no banner');
+    await page.waitForFunction(imagesInView);
+    await noSideScroll('All');
+    await shot('2-all');
+    // a card opens on tap, with its links
+    await page.locator('.card .t').nth(1).click();
+    const open = page.locator('.card.open');
+    assert.strictEqual(await open.count(), 1);
+    assert.ok(await open.locator('.copy').isVisible(), 'ad text in the opened card');
+    assert.ok(await open.locator('a', { hasText: 'Ad ↗' }).isVisible());
+    assert.ok(await open.locator('a', { hasText: 'Search 1688 ↗' }).isVisible());
+    await open.scrollIntoViewIfNeeded();
+    await noSideScroll('open card');
+    await shot('3-card-open');
+    // ▶ Bekijk ad: on every compact card; opens the ad in a sheet on this page (video ad)
+    assert.strictEqual(await page.locator('.card .view').count(), 27);
+    assert.strictEqual(await page.locator('.card:not(.open) .copy').filter({ visible: true }).count(), 0, 'no ad text on compact cards');
+    const vid = '9000';
+    await page.locator(`.card[data-id="${vid}"] .view`).click();
+    await page.waitForSelector('#sheet:not([hidden]) .fb video');
+    const v = page.locator('#sheet video');
+    assert.strictEqual(await v.getAttribute('poster'), 'https://scontent.xx.fbcdn.net/p3.jpg');
+    assert.strictEqual(await v.getAttribute('src'), 'https://video.xx.fbcdn.net/ad.mp4');
+    assert.ok(await v.evaluate((el) => el.controls && el.playsInline && el.preload === 'metadata'));
+    const cta = page.locator('#sheet a.cta');
+    assert.strictEqual(await cta.textContent(), 'Shop now');
+    assert.strictEqual(await cta.getAttribute('href'), 'https://marijkedenbosch.nl/products/jurk');
+    assert.strictEqual(await cta.getAttribute('target'), '_blank');
+    assert.strictEqual(await cta.getAttribute('rel'), 'noopener noreferrer');
+    assert.match(await page.textContent('#sheet .fbh'), new RegExp(`Shop ${vid}Sponsored · Library ID: ${vid}`));
+    assert.match(await page.textContent('#sheet .lt'), /MARIJKEDENBOSCH\.NL.*Eindigt vanavond 23:59!.*Gratis verzending/);
+    assert.ok(await page.locator('#sheet .low').isVisible());
+    assert.ok(await page.locator('#meer').isVisible(), '12 lines of text: collapsed with "meer"');
+    await page.click('#meer');
+    assert.ok(await page.locator('#meer').isHidden());
+    assert.strictEqual(await page.getAttribute('#sLib', 'href'), `https://www.facebook.com/ads/library/?id=${vid}`);
+    assert.ok(await page.locator('#sShop').isVisible());
+    assert.strictEqual(page.url(), base + '/', 'same page');
+    await noSideScroll('ad viewer');
+    await shot('3a-ad-video');
+    await page.click('#sClose');
+    await page.waitForSelector('#sheet', { state: 'hidden' });
+    assert.strictEqual(await page.locator('#sheet video').count(), 0, 'video gone (stopped)');
+    // a carousel: horizontal scroll-snap row of cards; Escape closes; so does going back (back-swipe)
+    await page.locator('.card[data-id="9001"] .view').click();
+    await page.waitForSelector('#sheet:not([hidden]) .car .cc');
+    assert.strictEqual(await page.locator('#sheet .cc img').count(), 3);
+    assert.strictEqual(await page.locator('#sheet .cc a.cta').count(), 3);
+    assert.strictEqual(await page.$eval('#sheet .car', (el) => getComputedStyle(el).scrollSnapType), 'x mandatory');
+    await noSideScroll('carousel');
+    await shot('3b-ad-carousel');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('#sheet', { state: 'hidden' });
+    await page.locator('.card').first().locator('.view').click();
+    await page.waitForSelector('#sheet:not([hidden]) .fb video');
+    await page.goBack();
+    await page.waitForSelector('#sheet', { state: 'hidden' });
+    assert.strictEqual(page.url(), base + '/', 'back closes the sheet, stays on the board');
+    // ✓ seen: gone from the board, with an Undo
+    const id = await page.locator('.card').first().getAttribute('data-id');
+    await page.locator('.card').first().locator('[data-act=seen]').click();
+    await page.waitForSelector('#toast:not([hidden])');
+    await page.waitForFunction((x) => !document.querySelector(`.card[data-id="${x}"]`), id);
+    assert.strictEqual(await page.locator('.card').count(), 26);
+    assert.strictEqual(env.db.prepare('SELECT status FROM hidden WHERE ad_id = ?').get(id).status, 'seen');
+    await page.click('#undo');
+    await page.waitForFunction((x) => !!document.querySelector(`.card[data-id="${x}"]`), id);
+    // ★ star
+    await page.locator('.card').nth(2).locator('[data-act=star]').click();
+    await page.waitForFunction(() => document.querySelectorAll('.star[aria-pressed="true"]').length === 1);
+    assert.strictEqual(await page.textContent('#nstar'), '1', 'the ★ count follows');
+    // All, search and filters (always in view); the nasty title stays text
+    await page.click('[data-f=r2500]');
+    await page.waitForFunction(() => document.querySelector('[data-f=r2500]').getAttribute('aria-pressed') === 'true');
+    await page.waitForTimeout(200);
+    await noSideScroll('All + filters');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await shot('4-all-filters');
+    await page.click('[data-f=r2500]');
+    await page.fill('#q', 'onerror');
+    await page.waitForFunction(() => document.querySelectorAll('.card').length === 1);
+    assert.match(await page.textContent('.card .t'), /<img src=x onerror=alert\(1\)>/);
+    assert.strictEqual(await page.locator('.card .t img').count(), 0, 'no HTML from the data');
+    assert.ok((await page.getAttribute('#csv', 'href')).startsWith('/export.csv?view=all&q=onerror'));
+    await page.click('[data-view=starred]');
+    await page.waitForFunction(() => document.querySelectorAll('.card').length === 1);
+    assert.ok(await page.locator('#radar').isHidden(), 'no radar in ★');
+    // one market: tap Belgium on the radar, the big number becomes the reach a day there; tap again for all
+    await page.click('[data-view=all]');
+    await page.fill('#q', '');
+    await page.waitForFunction(() => document.querySelectorAll('.card').length === 27);
+    await page.click('.mk[data-cc=BE]');
+    await page.waitForFunction(() => !document.querySelector('#ccChip').hidden && document.querySelector('.hero span').textContent === 'BE reach / day');
+    assert.strictEqual(await page.getAttribute('.mk[data-cc=BE]', 'aria-pressed'), 'true');
+    assert.ok((await page.getAttribute('#csv', 'href')).includes('cc=BE'));
+    assert.match(await page.textContent('#count'), /27 matches · by BE reach per day/);
+    await noSideScroll('one market');
+    await shot('4b-market');
+    await page.click('#ccChip');
+    await page.waitForFunction(() => document.querySelector('#ccChip').hidden && document.querySelector('.hero span').textContent === 'reach / day');
+    // dark mode, desktop width
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.click('[data-view=all]');
+    await page.fill('#q', '');
+    await page.waitForFunction(() => document.querySelectorAll('.card').length === 27);
+    await page.waitForFunction(imagesInView);
+    await shot('5-all-dark');
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await noSideScroll('desktop');
+    await shot('6-desktop-dark');
+    // a failed run: red banner on top, on a phone
+    env.db.prepare("UPDATE state SET value = ? WHERE key = 'last_run'").run(JSON.stringify({ status: 'done', health: 'failed', finished_at: new Date(NOW - 3600e3).toISOString(), ads_checked: 0, new_winners: 0,
+      alert: 'Run mislukt: 0 ads gecheckt (Meta token?) / Run failed: 0 ads checked (Meta token?) <b>x</b>' }));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.reload();
+    await page.waitForSelector('#alert:not([hidden])');
+    assert.strictEqual(await page.textContent('#alert'), 'Run mislukt: 0 ads gecheckt (Meta token?) / Run failed: 0 ads checked (Meta token?) <b>x</b>', 'shown as text');
+    assert.strictEqual(await page.getAttribute('#alert', 'class'), 'alert');
+    const box = await page.locator('#alert').boundingBox();
+    assert.ok(box.y < 40, 'at the top');
+    await noSideScroll('alert banner');
+    await shot('7-alert');
+    assert.deepStrictEqual(errors, []);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+});
+
+test('extractAd reads a render_ad-like page: header, text, media, link box; and a carousel', { skip: !chromium && 'Playwright not installed', timeout: 30000 }, async (t) => {
+  const browser = await launch();
+  if (!browser) return t.skip('Chromium not available');
+  const page = await browser.newPage({ viewport: { width: 500, height: 1000 } });
+  await page.route(/^https:\/\//, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: `<svg xmlns="http://www.w3.org/2000/svg" width="${/emoji/.test(route.request().url()) ? 16 : /av/.test(route.request().url()) ? 60 : 600}" height="60"/>` }));
+  const L = 'https://l.facebook.com/l.php?u=' + encodeURIComponent('https://marijkedenbosch.nl/products/jurk') + '&amp;h=AT0';
+  const head = `<div><img src="https://scontent.test/av.jpg" width="60" height="60" alt="Marijke"><div><a href="https://www.facebook.com/marijke">Marijke den Bosch</a></div><div>Sponsored</div><div>Library ID: 1234567890</div><div role="button">Menu</div><div>\u200b</div></div>`;
+  try {
+    await page.setContent(`<body>${head}
+      <div><div>Eindigt vanavond! <img src="https://scontent.test/emoji.png" width="16" height="16" alt="🔥"></div><div><br></div><div>Nu 50% korting.</div></div>
+      <a href="${L}"><img src="https://scontent.test/creative.jpg" width="400"></a>
+      <div><a href="${L}"><div>MARIJKEDENBOSCH.NL</div><div>Eindigt vanavond 23:59!</div><div>Gratis verzending</div></a><div role="button">Shop now</div></div>
+      <div>Low impression count</div></body>`, { waitUntil: 'load' });
+    const one = await page.evaluate(extractAd);
+    assert.strictEqual(one.name, 'Marijke den Bosch');
+    assert.strictEqual(one.avatar, 'https://scontent.test/av.jpg');
+    assert.strictEqual(one.library_id, '1234567890');
+    assert.strictEqual(one.body, 'Eindigt vanavond! 🔥\n\nNu 50% korting.');
+    assert.deepStrictEqual(one.media, [{ type: 'image', src: 'https://scontent.test/creative.jpg', poster: '' }]);
+    assert.deepStrictEqual(Object.assign({}, one.link, { href: undefined }), { caption: 'MARIJKEDENBOSCH.NL', title: 'Eindigt vanavond 23:59!', description: 'Gratis verzending', cta: 'Shop now', href: undefined });
+    assert.match(one.link.href, /^https:\/\/l\.facebook\.com\/l\.php\?u=/);
+    assert.strictEqual(one.low_impressions, true);
+    assert.deepStrictEqual(one.cards, []);
+    // video + carousel
+    await page.setContent(`<body>${head}<div>Kies je kleur</div>
+      <div style="display:flex">${[1, 2].map((n) => `<div><a href="https://shop.test/k${n}"><img src="https://scontent.test/c${n}.jpg" width="300"></a><div>Kleur ${n}</div><div><span>Shop now</span></div></div>`).join('')}</div></body>`, { waitUntil: 'load' });
+    const car = await page.evaluate(extractAd);
+    assert.strictEqual(car.body, 'Kies je kleur');
+    assert.deepStrictEqual(car.media, []);
+    assert.deepStrictEqual(car.cards.map((c) => [c.media.src, c.title, c.cta, c.href]), [1, 2].map((n) => [`https://scontent.test/c${n}.jpg`, 'Kleur ' + n, 'Shop now', `https://shop.test/k${n}`]));
+    await page.setContent(`<body>${head}<div>Kijk!</div><div><div><video src="https://video.test/v.mp4" poster="https://scontent.test/poster.jpg" width="400"></video></div></div>
+      <div><div>SHOP.NL</div><div>Titel</div><div>Learn more</div></div></body>`, { waitUntil: 'domcontentloaded' });
+    const vid = await page.evaluate(extractAd);
+    assert.deepStrictEqual(vid.media, [{ type: 'video', src: 'https://video.test/v.mp4', poster: 'https://scontent.test/poster.jpg' }]);
+    assert.deepStrictEqual([vid.body, vid.link.caption, vid.link.title, vid.link.cta], ['Kijk!', 'SHOP.NL', 'Titel', 'Learn more']);
+    // Facebook's cookie dialog over the ad: waitReady clicks "Decline optional cookies"; the ad is read, not the dialog
+    const consent = (btn) => `<div role="dialog"><div>Allow the use of cookies from Facebook on this browser?</div><div>We use cookies and similar technologies.</div>
+      <div><img src="https://static.test/cookies1.png" width="300"><div>What are cookies?</div><div role="button">Learn more</div></div>
+      <div><img src="https://static.test/cookies2.png" width="300"><div>Why do we use cookies?</div><div role="button">Learn more</div></div>
+      ${btn ? '<div role="button" aria-label="Decline optional cookies" onclick="this.closest(\'[role=dialog]\').remove()"><span>Decline optional cookies</span></div>' : ''}</div>`;
+    const ad = `${head}<div>Kijk!</div><div><video src="https://video.test/v.mp4" poster="https://scontent.test/poster.jpg" width="400"></video></div>`;
+    await page.setContent(`<body>${ad}${consent(true)}</body>`, { waitUntil: 'load' });
+    assert.strictEqual(await page.evaluate(isReady), false, 'not ready while the cookie dialog shows');
+    assert.strictEqual(await waitReady(page, 3000), true);
+    assert.strictEqual(await page.locator('[role=dialog]').count(), 0, 'dialog declined');
+    const after = await page.evaluate(extractAd);
+    assert.strictEqual(after.name, 'Marijke den Bosch');
+    assert.deepStrictEqual([after.body, after.cards, after.media.map((m) => m.type)], ['Kijk!', [], ['video']]);
+    // a dialog without a button to click: the extractor leaves it out
+    await page.setContent(`<body>${ad}${consent(false)}</body>`, { waitUntil: 'load' });
+    assert.strictEqual(await waitReady(page, 400), false);
+    const stuck = await page.evaluate(extractAd);
+    assert.deepStrictEqual([stuck.body, stuck.cards, stuck.media.map((m) => m.src)], ['Kijk!', [], ['https://video.test/v.mp4']]);
+  } finally {
+    await browser.close();
+  }
+});

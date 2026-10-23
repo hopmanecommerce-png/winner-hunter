@@ -1,0 +1,12 @@
+{
+  "name": "winner-hunter",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Finds winning dropshipping products in the Meta Ad Library every night and shows them on a live board.",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "run": "node run.mjs",
+    "test": "node --test --test-concurrency=1 \"test/*.test.mjs\""
+  }
+}

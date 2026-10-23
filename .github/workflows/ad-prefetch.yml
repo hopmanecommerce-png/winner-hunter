@@ -1,0 +1,40 @@
+# Opens every ad on the board ahead of time (Meta's render_ad page in Chrome on the runner) and stores it in D1, so
+# "▶ Bekijk ad" on the board opens at once. Runs every 8 hours and after each Winner Hunter run; only ads without a
+# stored view from the last 16 hours. Secrets: META_TOKEN, CF_API_TOKEN, CF_ACCOUNT_ID.
+name: Ad prefetch
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '43 */8 * * *'
+  workflow_run:
+    workflows: ['Winner Hunter']
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ad-prefetch
+  cancel-in-progress: false
+
+jobs:
+  prefetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      META_TOKEN: ${{ secrets.META_TOKEN }}
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID || '8934aca9-51d3-4f87-9c62-e897843149a1' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Playwright drives the runner's own Google Chrome: no browser download.
+      - name: Install Playwright
+        working-directory: winner-hunter
+        run: npm install --no-save --no-package-lock playwright-core@1.56.1
+      - name: Open the ads
+        run: node winner-hunter/prefetch.mjs

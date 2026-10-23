@@ -1,0 +1,922 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#04050a">
+<meta name="color-scheme" content="dark">
+<title>Winner Hunter</title>
+<style nonce="__NONCE__">
+  :root {
+    color-scheme: dark;
+    --bg: #04050a; --card: #0b0d18; --card2: rgba(255, 255, 255, .045); --glass: rgba(8, 10, 20, .62);
+    --ink: #eef1ff; --muted: #8f95b8; --faint: #5f6589; --line: rgba(150, 160, 255, .12); --line2: rgba(150, 160, 255, .26);
+    --cy: #2ee6ff; --vi: #8b5cff; --mg: #ff4fd8; --holo: linear-gradient(110deg, #2ee6ff 0%, #8b5cff 52%, #ff4fd8 100%);
+    --win: #3dffb0; --bad: #ff5c7a; --amb: #ffc94d; --link: #7fdcff;
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", "Segoe UI", Roboto, system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --r: 20px;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; background: var(--bg); }
+  body { margin: 0; min-height: 100vh; color: var(--ink); font: 15px/1.4 var(--sans); -webkit-font-smoothing: antialiased; background: var(--bg); overflow-x: hidden; }
+  /* Aurora and a fading grid behind everything */
+  body::before { content: ''; position: fixed; inset: -20vmax; z-index: -2; pointer-events: none;
+    background: radial-gradient(38vmax 30vmax at 18% 8%, rgba(46, 230, 255, .16), transparent 70%),
+      radial-gradient(34vmax 28vmax at 88% 4%, rgba(255, 79, 216, .14), transparent 70%),
+      radial-gradient(40vmax 30vmax at 50% 105%, rgba(139, 92, 255, .14), transparent 70%);
+    animation: drift 26s ease-in-out infinite alternate; }
+  body::after { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background-image: linear-gradient(rgba(150, 160, 255, .055) 1px, transparent 1px), linear-gradient(90deg, rgba(150, 160, 255, .055) 1px, transparent 1px);
+    background-size: 44px 44px; -webkit-mask-image: radial-gradient(120% 70% at 50% 0, #000 10%, transparent 75%); mask-image: radial-gradient(120% 70% at 50% 0, #000 10%, transparent 75%); }
+  @keyframes drift { to { transform: translate3d(3vmax, 2vmax, 0) rotate(4deg); } }
+  button, input, select { font: inherit; color: inherit; }
+  button { -webkit-user-select: none; user-select: none; }
+  svg { display: block; }
+  :focus-visible { outline: 2px solid var(--cy); outline-offset: 2px; }
+  .wrap { max-width: 1320px; margin: 0 auto; padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 56px max(16px, env(safe-area-inset-left)); }
+  .kick { font: 600 10.5px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+  .holo { background: var(--holo); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+  /* Top: orb, name, run status, export, log out */
+  .top { display: flex; align-items: center; gap: 12px; padding: 6px 0 12px; }
+  .orb { position: relative; width: 36px; height: 36px; flex: 0 0 36px; border-radius: 50%; background: conic-gradient(from 0deg, #2ee6ff, #8b5cff, #ff4fd8, #2ee6ff); animation: spin 6s linear infinite; box-shadow: 0 0 22px rgba(46, 230, 255, .45), 0 0 40px rgba(255, 79, 216, .25); }
+  .orb::before { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #fff 0 3px, #0b0d18 4px); }
+  .brand { display: grid; gap: 3px; min-width: 0; }
+  h1 { margin: 0; font-size: 20px; font-weight: 760; letter-spacing: -.03em; white-space: nowrap; line-height: 1; }
+  .tools { margin-left: auto; display: flex; gap: 6px; }
+  .ic { height: 36px; min-width: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--glass); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; gap: 6px; font: 600 11.5px var(--mono); letter-spacing: .08em; text-decoration: none; cursor: pointer; transition: border-color .2s, box-shadow .2s; }
+  .ic:hover { border-color: var(--cy); box-shadow: 0 0 18px -4px rgba(46, 230, 255, .6); }
+  .status { display: inline-flex; align-items: center; gap: 9px; max-width: 100%; margin: 0 0 14px; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--glass); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    font: 500 11px/1.35 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .status .run { overflow-wrap: anywhere; }
+  .run b { color: var(--ink); font-weight: 700; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: 0 0 7px; }
+  .status.ok .dot { background: var(--win); box-shadow: 0 0 10px var(--win); }
+  .status.live .dot { background: var(--cy); box-shadow: 0 0 10px var(--cy); animation: blink 1.4s ease-in-out infinite; }
+  .status.warn { border-color: rgba(255, 201, 77, .35); }
+  .status.warn .dot { background: var(--amb); box-shadow: 0 0 10px var(--amb); }
+  .status.warn .run { color: var(--amb); }
+  .status.bad .dot { background: var(--bad); box-shadow: 0 0 10px var(--bad); }
+  @keyframes blink { 50% { opacity: .25; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .alert { margin: 0 0 12px; padding: 12px 14px; border-radius: 14px; font-weight: 600; font-size: 14px; overflow-wrap: anywhere; color: #fff; background: linear-gradient(110deg, rgba(255, 92, 122, .9), rgba(255, 79, 216, .75)); box-shadow: 0 0 30px -8px var(--bad); }
+  .alert.yellow { background: linear-gradient(110deg, rgba(255, 201, 77, .95), rgba(255, 150, 77, .85)); color: #1a1406; }
+
+  /* Market Radar */
+  .radar { position: relative; border-radius: 24px; padding: 18px; margin-bottom: 16px; overflow: hidden;
+    background: linear-gradient(var(--card), var(--card)) padding-box, linear-gradient(135deg, rgba(46, 230, 255, .55), rgba(139, 92, 255, .15) 45%, rgba(255, 79, 216, .5)) border-box; border: 1px solid transparent;
+    box-shadow: 0 30px 80px -40px rgba(46, 230, 255, .35); }
+  .rh { position: relative; z-index: 1; display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .rh .sub { color: var(--faint); font: 500 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+  .rh button { margin-left: auto; }
+  .rtop { position: relative; z-index: 1; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: center; padding: 4px 0 16px; border: 0; background: none; width: 100%; text-align: left; cursor: pointer; }
+  .ring { position: relative; width: 104px; height: 104px; isolation: isolate; }
+  /* The radar sweep turns around the #1 market's flag. */
+  .ring::before, .ring::after { content: ''; position: absolute; left: 50%; top: 50%; width: 300%; height: 300%; transform: translate(-50%, -50%); border-radius: 50%; z-index: -1; pointer-events: none;
+    -webkit-mask-image: radial-gradient(circle, #000 25%, transparent 68%); mask-image: radial-gradient(circle, #000 25%, transparent 68%); }
+  .ring::before { background: repeating-radial-gradient(circle, rgba(46, 230, 255, .16) 0 1px, transparent 1px 22px); }
+  .ring::after { background: conic-gradient(from 0deg, rgba(46, 230, 255, .38), transparent 20%); animation: sweep 4.5s linear infinite; }
+  @keyframes sweep { from { transform: translate(-50%, -50%) rotate(0); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring .trk { stroke: rgba(150, 160, 255, .12); }
+  .ring .val { stroke: url(#holoStroke); filter: drop-shadow(0 0 6px rgba(46, 230, 255, .6)); transition: stroke-dasharray .8s cubic-bezier(.2, .8, .2, 1); }
+  .ring .fl { position: absolute; inset: 0; display: grid; place-items: center; font-size: 38px; line-height: 1; }
+  .rnum { display: grid; gap: 4px; min-width: 0; }
+  .rnum .nm { font-size: 30px; font-weight: 800; letter-spacing: -.035em; line-height: 1.02; overflow-wrap: anywhere; }
+  .rnum .big { font-size: 15px; color: var(--ink); font-weight: 600; }
+  .rnum .big b { font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
+  .rnum .lead { color: var(--muted); font-size: 12.5px; }
+  .rlist { position: relative; z-index: 1; list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+  .mk { width: 100%; display: grid; grid-template-columns: 22px 26px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; border: 1px solid transparent; background: none; cursor: pointer; text-align: left; transition: background .2s, border-color .2s; }
+  .mk:hover { background: var(--card2); }
+  .mk[aria-pressed="true"] { border-color: var(--cy); background: rgba(46, 230, 255, .07); box-shadow: 0 0 22px -10px var(--cy); }
+  .mk .rk { font: 600 11px var(--mono); color: var(--faint); }
+  .mk .fl { font-size: 20px; line-height: 1; }
+  .mk .mid { min-width: 0; display: grid; gap: 5px; }
+  .mk .nm { font-size: 14px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mk .nm small { color: var(--faint); font: 500 11px var(--mono); margin-left: 6px; }
+  .bar { height: 5px; border-radius: 99px; background: rgba(150, 160, 255, .1); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: var(--w, 0%); border-radius: inherit; background: var(--holo); box-shadow: 0 0 10px rgba(46, 230, 255, .6); transition: width .9s cubic-bezier(.2, .8, .2, 1); }
+  .mk .vv { text-align: right; font-variant-numeric: tabular-nums; }
+  .mk .vv b { display: block; font-size: 14px; font-weight: 750; }
+  .mk .vv span { font: 500 10.5px var(--mono); color: var(--muted); }
+  .rfoot { position: relative; z-index: 1; display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-top: 10px; color: var(--faint); font: 500 10.5px/1.4 var(--mono); letter-spacing: .04em; }
+  .ghost { border: 1px solid var(--line); background: var(--card2); color: var(--ink); border-radius: 999px; height: 32px; padding: 0 13px; font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; white-space: nowrap; transition: border-color .2s; }
+  .ghost:hover { border-color: var(--cy); }
+  .radar.min .rbody, .radar.min .rfoot { display: none; }
+  .rviews { position: relative; z-index: 1; display: grid; gap: 10px; min-width: 0; }
+  .rtabs { display: inline-flex; justify-self: start; padding: 3px; border-radius: 12px; background: var(--card2); border: 1px solid var(--line); }
+  .rtabs button { border: 0; background: none; border-radius: 9px; height: 30px; padding: 0 12px; color: var(--muted); font: 600 10.5px var(--mono); letter-spacing: .12em; text-transform: uppercase; cursor: pointer; }
+  .rtabs button[aria-pressed="true"] { color: var(--ink); background: rgba(46, 230, 255, .1); box-shadow: inset 0 0 0 1px rgba(46, 230, 255, .45); }
+  .radar[data-rv="list"] .hexmap, .radar[data-rv="map"] .rlist { display: none; }
+  /* Europe as glowing hexagons: the more reach a day, the brighter. */
+  .hexmap { display: grid; place-items: center; min-width: 0; }
+  .hexmap svg { width: 100%; max-width: 360px; height: auto; overflow: visible; }
+  .hexmap .hx { cursor: pointer; transition: opacity .2s; }
+  .hexmap .hx.off { cursor: default; }
+  .hexmap .hx polygon { stroke: rgba(150, 160, 255, .2); stroke-width: 1; transition: stroke .2s; }
+  .hexmap .hx:not(.off):hover polygon { stroke: var(--cy); }
+  .hexmap .hx.on polygon { stroke: #fff; stroke-width: 1.8; }
+  .hexmap .hx.hot polygon { animation: hot 2.4s ease-in-out infinite; }
+  @keyframes hot { 50% { stroke: rgba(255, 255, 255, .9); } }
+  .hexmap text { font: 600 8.5px var(--mono); letter-spacing: .04em; fill: rgba(238, 241, 255, .9); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+  .hexmap .hx.off text { fill: rgba(150, 160, 255, .35); }
+  .hexmap .lg { display: flex; justify-content: space-between; width: 100%; max-width: 360px; margin-top: 6px; font: 500 10px var(--mono); color: var(--faint); letter-spacing: .06em; text-transform: uppercase; }
+  .hexmap .lg i { flex: 1; height: 4px; margin: 5px 10px 0; border-radius: 9px; background: linear-gradient(90deg, rgba(46, 230, 255, .15), #2ee6ff, #8b5cff, #ff4fd8); }
+  .radar.min .rh { margin: 0; }
+
+  /* The sticky rail: view, search, filters */
+  .rail { position: sticky; top: 0; z-index: 5; margin: 0 calc(-1 * max(16px, env(safe-area-inset-left))); padding: 10px max(16px, env(safe-area-inset-left)); display: grid; gap: 10px;
+    background: rgba(4, 5, 10, .72); -webkit-backdrop-filter: saturate(160%) blur(20px); backdrop-filter: saturate(160%) blur(20px); border-bottom: 1px solid var(--line); }
+  .bar2 { display: flex; gap: 8px; align-items: center; min-width: 0; }
+  .seg { display: inline-flex; padding: 3px; border-radius: 14px; background: var(--card2); border: 1px solid var(--line); flex: 0 0 auto; }
+  .seg button { border: 0; background: none; border-radius: 11px; padding: 0 12px; height: 34px; font-size: 14px; font-weight: 650; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background .2s, color .2s, box-shadow .2s; }
+  .seg button[aria-pressed="true"] { background: rgba(46, 230, 255, .1); color: var(--ink); box-shadow: inset 0 0 0 1px rgba(46, 230, 255, .5), 0 0 16px -6px var(--cy); }
+  .seg small { font: 600 11px var(--mono); color: var(--faint); }
+  .seg button[aria-pressed="true"] small { color: var(--cy); }
+  .count { color: var(--muted); font: 500 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; margin-top: -2px; }
+  .find { display: contents; }
+  .search { position: relative; display: block; min-width: 0; flex: 1 1 auto; }
+  .search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
+  input[type="search"] { width: 100%; height: 42px; border-radius: 14px; border: 1px solid var(--line); background: var(--card2); padding: 0 12px 0 36px; font-size: 15px; outline: none; transition: border-color .2s, box-shadow .2s; -webkit-appearance: none; appearance: none; }
+  input[type="search"]::placeholder { color: var(--faint); }
+  input[type="search"]:focus { border-color: var(--cy); box-shadow: 0 0 0 3px rgba(46, 230, 255, .12), 0 0 24px -8px var(--cy); }
+  .chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * max(16px, env(safe-area-inset-left))); padding: 0 max(16px, env(safe-area-inset-left)); }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: 0 0 auto; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card2); font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; transition: background .2s, color .2s, border-color .2s, box-shadow .2s; }
+  .chip:hover { border-color: var(--line2); }
+  .chip[aria-pressed="true"] { background: var(--holo); border-color: transparent; color: #06070d; box-shadow: 0 0 18px -6px var(--vi); }
+  .chip.ccx { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); border-color: var(--cy); background: rgba(46, 230, 255, .1); box-shadow: 0 0 16px -6px var(--cy); }
+  .chip.ccx b { font-size: 16px; line-height: 1; }
+  .selw { position: relative; flex: 0 0 auto; display: inline-flex; }
+  .selw::after { content: ''; position: absolute; right: 13px; top: 12px; width: 5px; height: 5px; border: solid var(--faint); border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); pointer-events: none; }
+  select.chip { -webkit-appearance: none; appearance: none; padding-right: 30px; color: var(--ink); background: var(--card2); }
+  select.chip option { background: #0b0d18; }
+
+  /* Cards */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); grid-auto-flow: row dense; gap: 14px; margin-top: 14px; }
+  .card { position: relative; border-radius: var(--r); overflow: hidden; display: flex; flex-direction: column; min-width: 0; cursor: pointer;
+    background: linear-gradient(var(--card), var(--card)) padding-box, linear-gradient(150deg, rgba(46, 230, 255, .32), rgba(139, 92, 255, .1) 38%, rgba(150, 160, 255, .06) 62%, rgba(255, 79, 216, .28)) border-box; border: 1px solid transparent;
+    box-shadow: 0 20px 50px -30px rgba(0, 0, 0, .9); animation: rise .45s cubic-bezier(.2, .8, .2, 1) backwards; transition: opacity .25s, transform .25s, box-shadow .3s;
+    transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); }
+  /* Desktop: the card leans toward the pointer, with a glare where the light hits. */
+  .card::after { content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0; transition: opacity .3s; border-radius: inherit;
+    background: radial-gradient(420px circle at var(--gx, 50%) var(--gy, 0%), rgba(255, 255, 255, .11), transparent 45%); }
+  .card.tilt::after { opacity: 1; }
+  .card.tilt { transition: opacity .25s, box-shadow .3s; }
+  @media (hover: hover) {
+    .card:hover { box-shadow: 0 0 0 1px rgba(46, 230, 255, .35), 0 24px 60px -24px rgba(46, 230, 255, .35); }
+    .card:hover .ph img { transform: scale(1.04); }
+    .acts .ok:hover { border-color: rgba(61, 255, 176, .5); box-shadow: 0 0 16px -6px var(--win); }
+    .acts .no:hover { border-color: rgba(255, 92, 122, .5); box-shadow: 0 0 16px -6px var(--bad); }
+  }
+  .card.gone { opacity: 0; transform: scale(.94) translateY(6px); pointer-events: none; }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px) scale(.985); } }
+  .ph { position: relative; aspect-ratio: 1 / 1; background: #0f1222; display: grid; place-items: center; overflow: hidden; }
+  .ph img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .6s cubic-bezier(.2, .8, .2, 1); }
+  .ph::after { content: ''; position: absolute; inset: 52% 0 0; background: linear-gradient(to top, rgba(4, 5, 12, .86), rgba(4, 5, 12, .35) 50%, rgba(4, 5, 12, 0)); pointer-events: none; }
+  .ph .dom { font: 600 12px var(--mono); color: var(--muted); padding: 12px; text-align: center; overflow-wrap: anywhere; letter-spacing: .04em; }
+  .badges { position: absolute; left: 8px; top: 8px; right: 52px; display: flex; flex-wrap: wrap; gap: 4px; z-index: 1; }
+  .tag { font: 700 9.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: #fff; background: rgba(4, 5, 12, .55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, .12); border-radius: 999px; padding: 5px 7px; white-space: nowrap; }
+  .tag.new { background: var(--holo); color: #06070d; border: 0; box-shadow: 0 0 12px rgba(46, 230, 255, .5); }
+  .tag.out { background: rgba(255, 201, 77, .9); color: #1a1406; border: 0; }
+  .tag.sp { padding: 4px 6px; opacity: .85; }
+  .tag.sp svg { display: block; }
+  .star { position: absolute; right: 8px; top: 8px; z-index: 1; width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .14); display: grid; place-items: center; cursor: pointer;
+    color: #fff; background: rgba(4, 5, 12, .45); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); transition: transform .2s, background .2s, box-shadow .2s; }
+  .star svg { fill: none; stroke: currentColor; stroke-width: 1.8; }
+  .star[aria-pressed="true"] { color: var(--amb); border-color: rgba(255, 201, 77, .6); background: rgba(40, 30, 6, .7); box-shadow: 0 0 18px rgba(255, 201, 77, .55); }
+  .star[aria-pressed="true"] svg { fill: currentColor; }
+  .star:active, .view:active { transform: scale(.88); }
+  .hero { position: absolute; left: 11px; bottom: 10px; z-index: 1; color: #fff; display: grid; line-height: 1; pointer-events: none; }
+  .hero b { font-size: 24px; font-weight: 800; letter-spacing: -.035em; font-variant-numeric: tabular-nums; text-shadow: 0 0 18px rgba(46, 230, 255, .55); }
+  .hero span { font: 600 9.5px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--cy); margin-top: 4px; }
+  .view { position: absolute; right: 9px; bottom: 9px; z-index: 1; width: 42px; height: 42px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; color: #06070d; background: var(--holo);
+    box-shadow: 0 0 0 4px rgba(46, 230, 255, .12), 0 0 24px rgba(139, 92, 255, .65); text-decoration: none; transition: transform .2s; }
+  .view svg { margin-left: 2px; }
+  .bd { padding: 12px 12px 4px; display: grid; gap: 8px; min-width: 0; align-content: start; }
+  .t { margin: 0; font-size: 14.5px; font-weight: 650; line-height: 1.28; letter-spacing: -.012em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+  .price { font-size: 14px; font-weight: 700; display: flex; gap: 6px; flex-wrap: wrap; align-items: baseline; font-variant-numeric: tabular-nums; }
+  .price s { color: var(--faint); font-size: 12px; font-weight: 500; }
+  .off { color: var(--win); font: 700 11px var(--mono); text-shadow: 0 0 10px rgba(61, 255, 176, .45); }
+  .flags { display: flex; gap: 4px; flex-wrap: wrap; min-width: 0; }
+  .flags span { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px 3px 5px; border-radius: 999px; background: var(--card2); border: 1px solid var(--line); font: 600 10.5px var(--mono); color: var(--muted); }
+  .flags span i { font-style: normal; font-size: 13px; line-height: 1; }
+  .flags span.hit { color: var(--ink); border-color: var(--cy); background: rgba(46, 230, 255, .1); }
+  .meta { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, .8fr) minmax(0, 1fr); background: var(--card2); border: 1px solid var(--line); border-radius: 13px; padding: 7px 0; }
+  .m { min-width: 0; padding: 0 9px; }
+  .m + .m { border-left: 1px solid var(--line); }
+  .m b { display: block; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .m span { display: block; font: 500 9.5px var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .who { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .copy { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink); white-space: pre-line; overflow-wrap: anywhere; }
+  .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 12px 12px; margin-top: auto; }
+  .acts button { border: 1px solid var(--line); background: var(--card2); border-radius: 12px; height: 36px; font-weight: 650; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px; transition: border-color .2s, box-shadow .2s, background .2s; }
+  .acts .ok { color: var(--win); }
+  .acts .no { color: var(--bad); }
+  .acts .un { grid-column: 1 / -1; color: var(--ink); }
+  .more, .links { display: none; }
+  .card.open { grid-column: 1 / -1; cursor: default; }
+  .card.open .more { display: grid; gap: 8px; font-size: 13px; color: var(--muted); }
+  .card.open .links { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 12px 0; }
+  .card.open .t { -webkit-line-clamp: 4; font-size: 18px; }
+  .card.open .who { white-space: normal; }
+  .links a { color: var(--ink); text-decoration: none; border: 1px solid var(--line); background: var(--card2); border-radius: 12px; padding: 9px 12px; font-weight: 650; font-size: 13px; transition: border-color .2s; }
+  .links a:hover { border-color: var(--line2); }
+  .links a.pri { background: var(--holo); color: #06070d; border-color: transparent; }
+  .links a.src { color: var(--mg); border-color: rgba(255, 79, 216, .45); }
+  .more p { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+  .facts { display: flex; flex-wrap: wrap; gap: 4px 12px; font: 500 11.5px var(--mono); }
+  .facts span b { color: var(--ink); font-weight: 700; }
+
+  /* Loading, empty, more */
+  .skel { border-radius: var(--r); overflow: hidden; background: var(--card); border: 1px solid var(--line); }
+  .skel i { display: block; background: linear-gradient(90deg, rgba(150, 160, 255, .05) 0, rgba(46, 230, 255, .14) 50%, rgba(150, 160, 255, .05) 100%) 0 0 / 200% 100%; animation: shimmer 1.4s linear infinite; }
+  .skel .p { aspect-ratio: 1 / 1; }
+  .skel .l { height: 12px; margin: 12px 12px 0; border-radius: 6px; }
+  .skel .l.s { width: 55%; margin-bottom: 14px; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  .empty { text-align: center; color: var(--muted); padding: 56px 16px; display: grid; justify-items: center; gap: 10px; }
+  .empty svg { color: var(--vi); filter: drop-shadow(0 0 10px rgba(139, 92, 255, .6)); }
+  .loadmore { display: flex; justify-content: center; margin-top: 18px; min-height: 1px; }
+  .loadmore button { background: var(--card2); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; height: 40px; padding: 0 20px; font: 600 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+  .toast { position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 10; max-width: calc(100vw - 32px);
+    background: linear-gradient(rgba(11, 13, 24, .92), rgba(11, 13, 24, .92)) padding-box, var(--holo) border-box; border: 1px solid transparent; color: var(--ink); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    border-radius: 16px; padding: 8px 8px 8px 16px; display: flex; gap: 12px; align-items: center; box-shadow: 0 0 40px -10px rgba(139, 92, 255, .7); font-weight: 600; font-size: 14px; animation: up .3s cubic-bezier(.2, .8, .2, 1); }
+  @keyframes up { from { opacity: 0; transform: translate(-50%, 14px); } }
+  .toast button { background: rgba(46, 230, 255, .14); border: 0; color: var(--cy); font: 700 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; padding: 8px 12px; border-radius: 10px; }
+
+  /* The ad viewer: a full-screen sheet over the board. */
+  html.lock, html.lock body { overflow: hidden; }
+  .sheet { position: fixed; inset: 0; z-index: 20; display: flex; justify-content: center; }
+  .scrim { position: absolute; inset: 0; background: rgba(2, 3, 8, .7); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: fade .2s; }
+  @keyframes fade { from { opacity: 0; } }
+  .panel { position: relative; width: 100%; max-width: 520px; height: 100%; background: #070812; display: flex; flex-direction: column; border-left: 1px solid var(--line); border-right: 1px solid var(--line); box-shadow: 0 0 60px rgba(139, 92, 255, .25); animation: rise .3s cubic-bezier(.2, .8, .2, 1); }
+  .sbar { display: flex; gap: 6px; align-items: center; padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left)); background: rgba(7, 8, 18, .8); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); border-bottom: 1px solid var(--line); }
+  .sbar button, .sbar a { background: var(--card2); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 0 14px; height: 36px; font: 600 11.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; text-decoration: none; display: inline-flex; align-items: center; cursor: pointer; white-space: nowrap; }
+  .sbar #sClose { margin-right: auto; }
+  .sbody { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 14px max(12px, env(safe-area-inset-right)) max(28px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
+  .sload { display: grid; justify-items: center; gap: 14px; padding: 80px 0; color: var(--muted); font: 600 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+  .spin { width: 36px; height: 36px; border-radius: 50%; background: conic-gradient(from 0deg, transparent, var(--cy), var(--mg)); -webkit-mask: radial-gradient(circle, transparent 13px, #000 14px); mask: radial-gradient(circle, transparent 13px, #000 14px); animation: spin .8s linear infinite; }
+  .serr { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: grid; gap: 14px; overflow-wrap: anywhere; }
+  .serr a { justify-self: start; background: var(--holo); color: #06070d; text-decoration: none; font-weight: 700; border-radius: 12px; padding: 11px 16px; }
+  .fb { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+  .fbh { display: flex; gap: 10px; align-items: center; padding: 12px; min-width: 0; }
+  .fbh img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex: 0 0 40px; background: var(--card2); }
+  .fbh div { min-width: 0; }
+  .fbh b { display: block; font-size: 15px; overflow-wrap: anywhere; }
+  .fbh small { display: block; color: var(--muted); font-size: 12px; }
+  .fbt { margin: 0; padding: 0 12px; font-size: 15px; line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+  .fbt.full { display: block; -webkit-line-clamp: unset; }
+  .meer { border: 0; background: none; color: var(--cy); font: 700 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: 6px 12px 0; cursor: pointer; }
+  .fbm { margin-top: 10px; display: grid; gap: 2px; }
+  .fbm img, .fbm video { display: block; width: 100%; height: auto; max-height: 78vh; object-fit: contain; background: #000; }
+  .vnote { display: block; padding: 6px 12px; font-size: 12px; color: var(--muted); }
+  .car { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 10px 12px 12px; -webkit-overflow-scrolling: touch; }
+  .cc { flex: 0 0 80%; scroll-snap-align: start; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--card); display: flex; flex-direction: column; }
+  .cc img, .cc video { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; background: #000; }
+  .lbox { display: flex; gap: 10px; align-items: center; padding: 10px 12px; background: var(--card2); }
+  .cc .lbox { flex: 1; }
+  .lt { flex: 1; min-width: 0; display: grid; gap: 2px; overflow-wrap: anywhere; }
+  .lt small { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+  .lt b { font-size: 15px; line-height: 1.25; }
+  .lt span { font-size: 13px; color: var(--muted); }
+  .cta { flex: 0 0 auto; background: var(--card2); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; font-weight: 700; font-size: 14px; text-decoration: none; white-space: nowrap; }
+  a.cta { color: var(--link); }
+  .low { padding: 8px 12px 12px; font-size: 12px; color: var(--muted); }
+  .sinfo { margin: 0 2px 12px; font: 500 11.5px/1.5 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+
+  @media (min-width: 760px) {
+    .rail { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+    .search { flex: 0 1 380px; }
+    .chips { margin: 0; padding: 0; }
+    .radar { padding: 22px 24px; }
+    .rbody { display: grid; grid-template-columns: minmax(250px, 310px) minmax(220px, 280px) minmax(0, 1fr); gap: 24px; align-items: center; }
+    .rviews { display: contents; }
+    .rtabs { display: none; }
+    .radar[data-rv] .hexmap, .radar[data-rv] .rlist { display: grid; }
+    .rtop { padding: 0; }
+    .ring, .ring svg { width: 132px; height: 132px; }
+    .ring .fl { font-size: 48px; }
+    .rnum .nm { font-size: 38px; }
+    .rlist { grid-template-columns: 1fr 1fr; column-gap: 18px; align-self: center; }
+    .rh .sub { order: 0; }
+    .card.open { flex-direction: row; flex-wrap: wrap; }
+    .card.open .ph { width: 340px; flex: 0 0 340px; }
+    .card.open .bd { flex: 1 1 300px; padding: 18px; }
+    .card.open .links, .card.open .acts { flex: 1 1 100%; }
+    .card.open .acts { grid-template-columns: 160px 160px; }
+    .card.open .meta { max-width: 440px; }
+  }
+  @media (max-width: 520px) {
+    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    :root { --r: 18px; }
+    .bd { padding: 10px 10px 2px; }
+    .acts { padding: 8px 10px 10px; }
+    .m { padding: 0 6px; }
+    .m span { font-size: 8.5px; letter-spacing: .02em; }
+    .m b { font-size: 13px; }
+    .hero b { font-size: 21px; }
+    .card.open .ph { aspect-ratio: 4 / 3; }
+    .flags span:nth-child(n+3) { display: none; }
+    .radar { padding: 14px 12px 12px; border-radius: 22px; }
+    .rh { margin-bottom: 8px; }
+    .rh .sub { order: 3; flex-basis: 100%; }
+    .rtop { gap: 14px; padding: 2px 4px 10px; }
+    .ring, .ring svg { width: 78px; height: 78px; }
+    .ring .fl { font-size: 30px; }
+    .rnum { gap: 2px; }
+    .rnum .nm { font-size: 26px; }
+    .rnum .big { font-size: 13px; }
+    .rnum .big b { font-size: 19px; }
+    .rnum .lead { font-size: 11.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .mk { padding: 6px 8px; gap: 7px; grid-template-columns: 20px 22px minmax(0, 1fr) auto; }
+    .mk .fl { font-size: 18px; }
+    .mk .nm { font-size: 13.5px; }
+    .mk .vv { display: flex; align-items: baseline; gap: 6px; }
+    .mk .vv b { display: inline; font-size: 13.5px; }
+    .rfoot span { display: none; }
+    .rfoot { justify-content: flex-end; margin-top: 6px; }
+    .card.open .flags span { display: inline-flex; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" aria-hidden="true" focusable="false"><defs><linearGradient id="holoStroke" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2ee6ff"/><stop offset=".55" stop-color="#8b5cff"/><stop offset="1" stop-color="#ff4fd8"/></linearGradient></defs></svg>
+<div class="wrap">
+  <div class="alert" id="alert" role="alert" hidden></div>
+  <header class="top">
+    <span class="orb" aria-hidden="true"></span>
+    <div class="brand"><span class="kick">EU ad intelligence</span><h1>Winner Hunter</h1></div>
+    <div class="tools">
+      <a class="ic" id="csv" href="/export.csv?view=all" download title="Export this view as CSV"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>CSV</a>
+      <a class="ic" href="/logout" title="Log out" aria-label="Log out"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3M10 16l-4-4 4-4M6 12h10"/></svg></a>
+    </div>
+  </header>
+  <div class="status" id="runbox"><i class="dot"></i><span class="run" id="run">Loading…</span></div>
+
+  <section class="radar" id="radar" aria-label="Market Radar" hidden>
+    <div class="rh"><span class="kick holo">Market Radar</span><span class="sub" id="rsub"></span><button class="ghost" id="rtog" aria-expanded="true">Hide</button></div>
+    <div class="rbody">
+      <button class="rtop" id="rtop" aria-label="Show the #1 market"></button>
+      <div class="rviews">
+        <div class="rtabs" role="group" aria-label="Radar view"><button data-rv="list" aria-pressed="true">Ranking</button><button data-rv="map" aria-pressed="false">Map</button></div>
+        <div class="hexmap" id="hexmap"></div>
+        <ol class="rlist" id="rlist"></ol>
+      </div>
+    </div>
+    <div class="rfoot"><span>EU reach a day of the products on the board, split by the countries their ads reach. Tap a country to hunt only there.</span><button class="ghost" id="rall" hidden></button></div>
+  </section>
+
+  <div class="rail">
+    <div class="bar2">
+      <div class="seg" role="group" aria-label="View">
+        <button data-view="all" aria-pressed="true">All <small id="nall"></small></button>
+        <button data-view="starred" aria-pressed="false" aria-label="Starred">★ <small id="nstar"></small></button>
+      </div>
+      <label class="search" id="allrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg>
+        <input id="q" type="search" placeholder="Search products…" aria-label="Search" maxlength="80" enterkeyhint="search"></label>
+    </div>
+    <div class="find" id="allrow2">
+      <div class="chips" id="opts" role="group" aria-label="Filters">
+        <button class="chip ccx" id="ccChip" hidden></button>
+        <span class="selw"><select id="sort" class="chip" aria-label="Sort">
+          <option value="rpd">Reach / day</option>
+          <option value="new">Newest</option>
+          <option value="scaled">Most ad copies</option>
+          <option value="ads">Most shop ads</option>
+          <option value="reach">Total reach</option>
+        </select></span>
+        <button class="chip" data-f="r2500" aria-pressed="false">2.5K+/day</button>
+        <button class="chip" data-f="r10k" aria-pressed="false">10K+/day</button>
+        <button class="chip" data-f="hidden" aria-pressed="false" title="Products you marked seen or rejected">Seen &amp; rejected</button>
+      </div>
+    </div>
+    <div class="count" id="count" aria-live="polite" hidden></div>
+  </div>
+
+  <main class="grid" id="grid" aria-busy="true"></main>
+  <div class="empty" id="empty" hidden></div>
+  <div class="loadmore" id="loadmore"><button id="moreBtn" hidden>Show more</button></div>
+</div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Ad" hidden>
+  <div class="scrim" id="scrim"></div>
+  <div class="panel">
+    <div class="sbar"><button id="sClose">✕ Close</button><a id="sLib" target="_blank" rel="noopener noreferrer">Ad Library ↗</a><a id="sShop" target="_blank" rel="noopener noreferrer">Store ↗</a></div>
+    <div class="sbody" id="sBody"></div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" hidden><span id="toastMsg"></span><button id="undo">Undo</button></div>
+
+<script nonce="__NONCE__">
+'use strict';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const safe = (u) => (typeof u === 'string' && /^https:\/\//i.test(u) ? esc(u) : '');
+const fmt = (n) => (n == null ? '–' : n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M' : n >= 1e4 ? Math.round(n / 1e3) + 'K' : n >= 1e3 ? (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K' : String(n));
+const SYM = { EUR: '€', USD: '$', GBP: '£' };
+const money = (v, c) => (v == null ? '' : (SYM[c] || (c ? c + ' ' : '')) + Number(v).toFixed(2).replace(/\.00$/, ''));
+const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
+const ago = (iso) => {
+  const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (!Number.isFinite(m)) return '';
+  return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 48 * 60 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' days ago';
+};
+const src1688 = (q) => 'https://s.1688.com/selloffer/offer_search.htm?charset=utf8&keywords=' + encodeURIComponent(q);
+const flag = (cc) => (/^[A-Z]{2}$/.test(cc) ? String.fromCodePoint(...[...cc].map((c) => 127397 + c.charCodeAt(0))) : '🏳');
+let regions = null;
+try { regions = new Intl.DisplayNames(['en'], { type: 'region' }); } catch (e) { /* old browser: codes */ }
+const land = (cc) => { try { return (regions && regions.of(cc)) || cc; } catch (e) { return cc; } };
+const ICON = {
+  star: '<svg width="18" height="18" viewBox="0 0 24 24" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>',
+  play: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 001.5.86l12-7.5a1 1 0 000-1.72l-12-7.5A1 1 0 007 4.5z"/></svg>',
+  check: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  x: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  cam: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+};
+const SORTED = { rpd: 'by reach per day', new: 'newest first', scaled: 'by ad copies', ads: 'by shop ads', reach: 'by total reach' };
+const NEW_MS = 24 * 3600e3; // found in the last day: NEW
+const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } } };
+
+const st = { view: 'all', q: '', sort: 'rpd', r2500: false, r10k: false, hidden: false, cc: '', offset: 0 };
+let ADS = [];
+let VIEWER = false; // the server can show ads in the board (Browser Run + META_TOKEN)
+let total = 0;
+let loading = false;
+let MARKETS = null;
+let showAll = false;
+const opened = new Set();
+
+function params(extra) {
+  const p = new URLSearchParams({ view: st.view });
+  if (st.view === 'all') {
+    if (st.q) p.set('q', st.q);
+    if (st.sort !== 'rpd') p.set('sort', st.sort);
+    if (st.r10k) p.set('rpd', '10000'); else if (st.r2500) p.set('rpd', '2500');
+    if (st.hidden) p.set('hidden', '1');
+    if (st.cc) p.set('cc', st.cc);
+  }
+  for (const [k, v] of Object.entries(extra || {})) p.set(k, v);
+  return p;
+}
+
+// The product title; a bare link or nothing: the product's name from its URL, else the shop.
+function nice(a) {
+  const t = String(a.title || '').trim();
+  if (t && !/^https?:\/\//i.test(t)) return t;
+  const m = String(a.product || t).match(/\/products\/([^/?#]+)/);
+  let slug = '';
+  try { slug = m ? decodeURIComponent(m[1]) : ''; } catch (e) { slug = m[1]; }
+  if (slug) return slug.replace(/[-_]+/g, ' ').trim().replace(/^./, (c) => c.toUpperCase());
+  return host(a.store) || a.adv || 'Untitled ad';
+}
+
+function card(a) {
+  const open = opened.has(a.id);
+  const isNew = Date.now() - Date.parse(a.first_seen) < NEW_MS;
+  const tags = (isNew ? '<span class="tag new">New</span>' : '')
+    + (a.hidden ? `<span class="tag">${a.hidden === 'seen' ? 'Seen' : 'Rejected'}</span>` : '')
+    + (a.pass === false ? '<span class="tag out" title="No longer passes the rules (age, active ads or reach)">Out of rules</span>' : '')
+    + (a.store_photo && safe(a.img) ? `<span class="tag sp" title="Photo from the store page, may show another product" aria-label="Store photo">${ICON.cam}</span>` : '');
+  const photo = safe(a.img)
+    ? `<img src="${safe(a.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
+    : `<div class="dom">${esc(host(a.store) || a.adv)}</div>`;
+  const price = a.price != null ? `<div class="price"><span>${esc(money(a.price, a.cur))}</span>${a.was > a.price ? `<s>${esc(money(a.was, a.cur))}</s><span class="off">−${esc(a.off)}%</span>` : ''}</div>` : '';
+  const view = VIEWER
+    ? `<button class="view" data-act="view" aria-label="View ad">${ICON.play}</button>`
+    : safe(a.ad) ? `<a class="view" href="${safe(a.ad)}" target="_blank" rel="noopener noreferrer" aria-label="View ad">${ICON.play}</a>` : '';
+  const acts = a.hidden
+    ? '<button class="un" data-act="none">Unhide</button>'
+    : `<button class="ok" data-act="seen" title="Done (made an ad): hide it">${ICON.check}Seen</button><button class="no" data-act="rejected" title="Not for me: hide it">${ICON.x}Reject</button>`;
+  const shop = host(a.store);
+  // In one market the big number is the reach a day there.
+  const inCc = st.cc && a.crpd != null;
+  const mk = (a.mk || []).slice().sort((x, y) => (y[0] === st.cc) - (x[0] === st.cc));
+  const flags = mk.length ? `<div class="flags" title="Where the ads reach (share of EU reach)">${mk.map(([c, p]) => `<span class="${c === st.cc ? 'hit' : ''}"><i>${flag(c)}</i>${esc(c)} ${esc(p)}%</span>`).join('')}</div>` : '';
+  return `<article class="card${open ? ' open' : ''}" data-id="${esc(a.id)}">
+    <div class="ph">${photo}
+      <div class="badges">${tags}</div>
+      <button class="star" data-act="star" aria-pressed="${a.star}" aria-label="Star">${ICON.star}</button>
+      <div class="hero" title="${inCc ? 'Reach per day in ' + esc(land(st.cc)) : 'EU reach per day the ad has run'}"><b>${esc(fmt(inCc ? a.crpd : a.rpd))}</b><span>${inCc ? esc(st.cc) + ' reach / day' : 'reach / day'}</span></div>
+      ${view}
+    </div>
+    <div class="bd">
+      <h2 class="t">${esc(nice(a))}</h2>
+      ${price}
+      ${flags}
+      <div class="meta">
+        <div class="m" title="Active ads of this advertiser (75+ needed)"><b>${esc(fmt(a.ads))}</b><span>shop ads</span></div>
+        <div class="m" title="Days the ad has run (7–42 days)"><b>${a.age == null ? '–' : esc(a.age) + 'd'}</b><span>live</span></div>
+        <div class="m" title="Ads running for this product"><b>${esc(fmt(a.scaled || 1))}</b><span>copies</span></div>
+      </div>
+      <div class="who">${esc(shop || a.adv)}${a.products != null ? ' · ' + esc(fmt(a.products)) + ' products' : ''}</div>
+      <div class="more">
+        ${a.copy ? `<p class="copy">${esc(a.copy)}</p>` : ''}
+        <div class="facts">
+          <span><b>${esc(fmt(a.reach))}</b> EU reach</span>
+          ${a.adv ? `<span>${esc(a.adv)}</span>` : ''}
+          ${a.myshopify ? `<span>${esc(a.myshopify)}</span>` : ''}
+          <span>search “${esc(a.kw)}”</span>
+          <span>found ${esc(String(a.first_seen || '').slice(0, 10))}</span>
+        </div>
+      </div>
+    </div>
+    <div class="links">
+      ${safe(a.ad) ? `<a class="pri" href="${safe(a.ad)}" target="_blank" rel="noopener noreferrer">Ad ↗</a>` : ''}
+      ${safe(a.product) && /\/products\//.test(a.product) ? `<a href="${safe(a.product)}" target="_blank" rel="noopener noreferrer">Product ↗</a>` : ''}
+      ${safe(a.store) ? `<a href="${safe(a.store)}" target="_blank" rel="noopener noreferrer">Store ↗</a>` : ''}
+      <a class="src" href="${esc(src1688(a.zh || a.title))}" target="_blank" rel="noopener noreferrer">Search 1688 ↗</a>
+    </div>
+    <div class="acts">${acts}</div>
+  </article>`;
+}
+
+// ---- Market Radar: which country the winning products get their reach in.
+const RING = 2 * Math.PI * 44;
+const calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Numbers count up from 0 when the radar shows (ease-out, 0.9 s).
+function countUp(el, to, show) {
+  if (!el) return;
+  if (calm) { el.textContent = show(to); return; }
+  const t0 = performance.now();
+  const step = (t) => { const k = Math.min(1, (t - t0) / 900); el.textContent = show(to * (1 - Math.pow(1 - k, 3))); if (k < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+// Countries on a hex grid, roughly where they are: [column, row]; odd rows sit half a hex to the right.
+const HEX = { IS: [0, 0], NO: [5, 0], SE: [6, 0], FI: [7, 0], IE: [1, 1], GB: [2, 1], DK: [5, 1], EE: [7, 1], NL: [3, 2], DE: [4, 2], PL: [5, 2], LV: [6, 2],
+  BE: [2, 3], LU: [3, 3], CZ: [4, 3], SK: [5, 3], LT: [6, 3], FR: [2, 4], CH: [3, 4], AT: [4, 4], HU: [5, 4], RO: [6, 4],
+  PT: [0, 5], ES: [1, 5], IT: [3, 5], SI: [4, 5], HR: [5, 5], BG: [6, 5], MT: [3, 6], GR: [5, 6], CY: [7, 6] };
+const mix = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
+function hexmap(m) {
+  const S = 17, W = Math.sqrt(3) * S, by = new Map(m.markets.map((x) => [x.cc, x]));
+  const max = m.markets[0].rpd || 1;
+  const pts = (cx, cy) => [0, 1, 2, 3, 4, 5].map((i) => { const a = Math.PI / 180 * (60 * i - 90); return `${(cx + S * Math.cos(a)).toFixed(1)},${(cy + S * Math.sin(a)).toFixed(1)}`; }).join(' ');
+  const cells = Object.entries(HEX).map(([cc, [c, r]]) => {
+    const cx = W / 2 + c * W + (r % 2 ? W / 2 : 0) + 2, cy = S + r * S * 1.5 + 2;
+    const x = by.get(cc);
+    if (!x) return `<g class="hx off"><polygon points="${pts(cx, cy)}" fill="rgba(150,160,255,.04)"/><text x="${cx}" y="${cy}">${cc}</text></g>`;
+    const k = Math.sqrt(x.rpd / max); // square root: small markets stay visible
+    const [R, G, B] = k < .5 ? mix([46, 230, 255], [139, 92, 255], k * 2) : mix([139, 92, 255], [255, 79, 216], (k - .5) * 2);
+    const hot = x.cc === m.markets[0].cc;
+    return `<g class="hx${hot ? ' hot' : ''}${st.cc === cc ? ' on' : ''}" data-cc="${cc}" role="button" tabindex="0" aria-label="${esc(land(cc))}: ${esc(String(x.share))}% of reach">
+      <title>${esc(land(cc))} · ${esc(String(x.share))}% · ${esc(fmt(x.rpd))}/day · ${esc(fmt(x.products))} products</title>
+      <polygon points="${pts(cx, cy)}" fill="rgba(${R},${G},${B},${(0.18 + 0.8 * k).toFixed(2)})"${hot ? ' filter="url(#hexGlow)"' : ''}/><text x="${cx}" y="${cy}">${cc}</text></g>`;
+  }).join('');
+  const w = 8 * W + W / 2 + 4, h = S * 2 + 6 * S * 1.5 + 4;
+  return `<svg viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}" role="group" aria-label="Map of markets"><defs><filter id="hexGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>${cells}</svg>
+    <div class="lg"><span>less</span><i></i><span>more reach</span></div>`;
+}
+let shownTop = '';
+function radar() {
+  const m = MARKETS;
+  $('radar').hidden = st.view !== 'all' || !m || !m.markets.length;
+  if ($('radar').hidden) return;
+  const min = store.get('wh-radar') === 'min';
+  $('radar').classList.toggle('min', min);
+  $('rtog').textContent = min ? 'Show' : 'Hide';
+  $('rtog').setAttribute('aria-expanded', String(!min));
+  $('rsub').textContent = `${m.markets.length} markets · ${fmt(m.total_rpd)} reach / day`;
+  const top = m.markets[0];
+  const fresh = shownTop !== top.cc + top.share;
+  shownTop = top.cc + top.share;
+  $('rtop').innerHTML = `<div class="ring"><svg viewBox="0 0 104 104"><circle class="trk" cx="52" cy="52" r="44" fill="none" stroke-width="7"/><circle class="val" id="ringVal" cx="52" cy="52" r="44" fill="none" stroke-width="7" stroke-linecap="round" stroke-dasharray="0 ${RING}"/></svg><span class="fl">${flag(top.cc)}</span></div>
+    <div class="rnum"><span class="kick">#1 market</span><span class="nm">${esc(land(top.cc))}</span>
+      <span class="big"><b class="holo" id="topShare">${esc(String(top.share))}%</b> of all reach · <span id="topRpd">${esc(fmt(top.rpd))}</span>/day</span>
+      <span class="lead">${esc(fmt(top.leads))} products have it as #1 country${top.top ? ' · best: ' + esc(top.top.title.slice(0, 48)) : ''}</span></div>`;
+  $('rtop').setAttribute('aria-pressed', String(st.cc === top.cc));
+  requestAnimationFrame(() => { const v = $('ringVal'); if (v) v.setAttribute('stroke-dasharray', `${(top.share / 100) * RING} ${RING}`); });
+  if (fresh) {
+    countUp($('topShare'), top.share, (v) => v.toFixed(1).replace(/\.0$/, '') + '%');
+    countUp($('topRpd'), top.rpd, (v) => fmt(Math.round(v)));
+  }
+  $('radar').dataset.rv = store.get('wh-rv') === 'map' ? 'map' : 'list';
+  for (const b of document.querySelectorAll('[data-rv]')) b.setAttribute('aria-pressed', String(b.dataset.rv === $('radar').dataset.rv));
+  $('hexmap').innerHTML = hexmap(m);
+  const n = showAll ? m.markets.length : Math.min(m.markets.length, window.innerWidth >= 760 ? 10 : 5);
+  const max = top.rpd || 1;
+  $('rlist').innerHTML = m.markets.slice(0, n).map((x, i) => `<li><button class="mk" data-cc="${esc(x.cc)}" aria-pressed="${st.cc === x.cc}">
+      <span class="rk">${String(i + 1).padStart(2, '0')}</span><span class="fl">${flag(x.cc)}</span>
+      <span class="mid"><span class="nm">${esc(land(x.cc))}<small>${esc(fmt(x.products))} products</small></span><span class="bar"><i></i></span></span>
+      <span class="vv"><b>${esc(fmt(x.rpd))}</b><span>${esc(String(x.share))}%</span></span></button></li>`).join('');
+  // Widths through the CSSOM (inline style attributes are blocked by the CSP); from 0 so they grow in.
+  const bars = [...$('rlist').querySelectorAll('.bar i')];
+  requestAnimationFrame(() => bars.forEach((b, i) => b.style.setProperty('--w', Math.max(2, (m.markets[i].rpd / max) * 100) + '%')));
+  $('rall').hidden = m.markets.length <= n && !showAll;
+  $('rall').textContent = showAll ? 'Top only' : `All ${m.markets.length} markets`;
+}
+async function loadMarkets() {
+  try {
+    const res = await fetch('/api/markets', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    if (!res.ok) return;
+    MARKETS = await res.json();
+    radar();
+  } catch (e) { /* the radar is extra: the board works without it */ }
+}
+function pickMarket(cc) {
+  st.cc = st.cc === cc ? '' : cc;
+  radar();
+  load();
+  if (st.cc) {
+    const y = $('grid').getBoundingClientRect().top + window.scrollY - document.querySelector('.rail').offsetHeight - 12;
+    window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+  }
+}
+$('rlist').addEventListener('click', (e) => { const b = e.target.closest('[data-cc]'); if (b) pickMarket(b.dataset.cc); });
+$('hexmap').addEventListener('click', (e) => { const g = e.target.closest('[data-cc]'); if (g) pickMarket(g.dataset.cc); });
+$('hexmap').addEventListener('keydown', (e) => { const g = e.target.closest('[data-cc]'); if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pickMarket(g.dataset.cc); } });
+for (const b of document.querySelectorAll('.rtabs [data-rv]')) b.addEventListener('click', () => { store.set('wh-rv', b.dataset.rv); radar(); });
+$('rtop').addEventListener('click', () => MARKETS && pickMarket(MARKETS.markets[0].cc));
+$('rall').addEventListener('click', () => { showAll = !showAll; radar(); });
+$('rtog').addEventListener('click', () => { store.set('wh-radar', $('radar').classList.contains('min') ? '' : 'min'); radar(); });
+$('ccChip').addEventListener('click', () => pickMarket(st.cc));
+
+const SKELETON = '<div class="skel" aria-hidden="true"><i class="p"></i><i class="l"></i><i class="l s"></i></div>'.repeat(8);
+const EMPTY_ICON = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg>';
+
+function render(append, fresh) {
+  if (append) $('grid').insertAdjacentHTML('beforeend', fresh.map(card).join(''));
+  else $('grid').innerHTML = ADS.map(card).join('');
+  $('grid').setAttribute('aria-busy', 'false');
+  for (const b of document.querySelectorAll('[data-view]')) b.setAttribute('aria-pressed', String(b.dataset.view === st.view));
+  for (const b of document.querySelectorAll('[data-f]')) b.setAttribute('aria-pressed', String(!!st[b.dataset.f]));
+  $('allrow').hidden = $('allrow2').hidden = st.view !== 'all';
+  $('ccChip').hidden = !st.cc;
+  $('ccChip').innerHTML = st.cc ? `<b>${flag(st.cc)}</b>${esc(land(st.cc))} ✕` : '';
+  $('ccChip').setAttribute('aria-label', st.cc ? `Market ${land(st.cc)}: tap to show all markets` : '');
+  const filtered = st.view === 'all' && (st.q || st.r2500 || st.r10k || st.hidden || st.cc);
+  $('count').hidden = !filtered;
+  const sorted = st.cc && st.sort === 'rpd' ? `by ${st.cc} reach per day` : SORTED[st.sort] || '';
+  $('count').textContent = filtered ? `${total.toLocaleString('en-US')} ${total === 1 ? 'match' : 'matches'} · ${sorted}` : '';
+  $('empty').hidden = ADS.length > 0;
+  const msg = st.view === 'starred' ? 'No starred products yet. Tap ☆ on a card to keep it here.'
+    : filtered ? 'No products match.' : 'Nothing yet: products need a Shopify store, 75+ active ads, 7–42 days live and 500+ EU reach a day.';
+  $('empty').innerHTML = `${EMPTY_ICON}<div>${esc(msg)}</div>`;
+  $('moreBtn').hidden = st.view !== 'all' || ADS.length >= total;
+  $('csv').href = '/export.csv?' + params().toString();
+}
+
+function header(j) {
+  $('nall').textContent = j.counts.all;
+  $('nstar').textContent = j.counts.starred || '';
+  const al = j.alert;
+  $('alert').hidden = !al;
+  $('alert').className = 'alert' + (al && al.level === 'yellow' ? ' yellow' : '');
+  $('alert').textContent = al ? al.text : '';
+  const r = j.last_run;
+  const box = $('runbox');
+  if (!r) { box.className = 'status'; $('run').textContent = 'No run yet'; return; }
+  if (r.status === 'running') {
+    // last_run is saved after every batch: no update for 45 minutes is a run that does not move.
+    const still = Date.now() - Date.parse(r.updated_at || r.started_at) > 45 * 60000;
+    box.className = 'status ' + (still ? 'warn' : 'live');
+    const prev = j.prev_run ? ` · run before: ${fmt(j.prev_run.winners ?? 0)} new winners, ${ago(j.prev_run.finished_at)}` : '';
+    const since = ago(r.updated_at || r.started_at).replace(' ago', '');
+    $('run').textContent = still
+      ? `Run stuck? Started ${ago(r.started_at)} · ${r.ads_checked ? `${fmt(r.ads_checked)} ads, no progress for ${since}` : 'no ads checked yet'}${prev}`
+      : `Hunting now · started ${ago(r.started_at)} · ${fmt(r.ads_checked)} ads so far${prev}`;
+    return;
+  }
+  box.className = 'status ' + (r.health === 'failed' ? 'bad' : r.health === 'warning' ? 'warn' : 'ok');
+  const why = { 'meta-block': ' · Meta limit', token: ' · Meta token expired!', time: '', done: '' }[r.status] || '';
+  $('run').innerHTML = `Last run <b>${esc(ago(r.finished_at || r.updated_at))}</b> · ${esc(fmt(r.ads_checked))} ads · <b>${esc(r.new_winners ?? 0)}</b> new winners${esc(why)}`;
+}
+
+let seq = 0;
+async function load(append) {
+  const my = ++seq;
+  if (!append) {
+    st.offset = 0;
+    if (!ADS.length) $('grid').innerHTML = SKELETON;
+  }
+  loading = true;
+  try {
+    const res = await fetch('/api/ads?' + params({ offset: String(st.offset) }).toString(), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    if (res.status === 401) { location.reload(); return; }
+    const j = await res.json();
+    if (my !== seq) return;
+    if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+    ADS = append ? ADS.concat(j.ads) : j.ads;
+    VIEWER = !!j.viewer;
+    total = j.total;
+    header(j);
+    render(append, j.ads);
+    radar();
+  } catch (e) {
+    if (my !== seq) return;
+    if (!append) $('grid').innerHTML = '';
+    $('empty').hidden = false;
+    $('empty').textContent = 'Could not load the products: ' + e.message;
+    $('count').textContent = '';
+  } finally {
+    if (my === seq) loading = false;
+  }
+}
+
+async function setStatus(id, status) {
+  const res = await fetch('/api/hide', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ad_id: id, status }) });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+}
+
+let undoId = '';
+let toastTimer = 0;
+function toast(msg, id) {
+  undoId = id;
+  $('toastMsg').textContent = msg;
+  $('undo').hidden = !id;
+  $('toast').hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $('toast').hidden = true; }, 5000);
+}
+$('undo').addEventListener('click', async () => {
+  $('toast').hidden = true;
+  if (!undoId) return;
+  try { await setStatus(undoId, 'none'); } catch (e) { /* shown by the reload */ }
+  load();
+  loadMarkets();
+});
+
+$('grid').addEventListener('click', async (e) => {
+  const c = e.target.closest('.card');
+  if (!c) return;
+  const id = c.dataset.id;
+  const a = ADS.find((x) => x.id === id);
+  const b = e.target.closest('[data-act]');
+  if (b && a) {
+    const act = b.dataset.act;
+    if (act === 'view') { openAd(a); return; }
+    try {
+      if (act === 'star') {
+        await setStatus(id, a.star ? 'unstarred' : 'starred');
+        a.star = !a.star;
+        b.setAttribute('aria-pressed', String(a.star));
+        const n = Math.max(0, (Number($('nstar').textContent) || 0) + (a.star ? 1 : -1));
+        $('nstar').textContent = n || '';
+        if (st.view === 'starred' && !a.star) load();
+        return;
+      }
+      c.classList.add('gone'); // right away; back if saving fails
+      try { await setStatus(id, act); } catch (err) { c.classList.remove('gone'); throw err; }
+      if (act !== 'none') toast(act === 'seen' ? 'Marked seen' : 'Rejected', id);
+      setTimeout(load, 220);
+      loadMarkets();
+    } catch (err) {
+      toast('Could not save: ' + err.message, '');
+    }
+    return;
+  }
+  if (e.target.closest('a, button, input, select')) return;
+  opened.has(id) ? opened.delete(id) : opened.add(id);
+  c.classList.toggle('open', opened.has(id));
+});
+
+// ---- The ad viewer: the ▶ button opens the ad (video, images, text, CTA) in a sheet on this page.
+const link = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) ? esc(u) : '');
+const VIEWS = new Map();
+let shown = null;
+function mediaHtml(m) {
+  if (!m) return '';
+  if (m.type === 'video' && safe(m.src)) {
+    return `<video controls playsinline preload="metadata" referrerpolicy="no-referrer"${safe(m.poster) ? ` poster="${safe(m.poster)}"` : ''} src="${safe(m.src)}"></video>`;
+  }
+  const src = m.type === 'video' ? m.poster : m.src;
+  if (!safe(src)) return '';
+  return `<img src="${safe(src)}" alt="" referrerpolicy="no-referrer">${m.type === 'video' ? '<span class="vnote">The video only plays in the Ad Library ↗</span>' : ''}`;
+}
+function boxHtml(b) {
+  if (!b || !(b.caption || b.title || b.description || b.cta || b.url)) return '';
+  const u = link(b.url);
+  const cta = u ? `<a class="cta" href="${u}" target="_blank" rel="noopener noreferrer">${esc(b.cta || 'Open ↗')}</a>` : b.cta ? `<span class="cta">${esc(b.cta)}</span>` : '';
+  return `<div class="lbox"><div class="lt">${b.caption ? `<small>${esc(b.caption)}</small>` : ''}${b.title ? `<b>${esc(b.title)}</b>` : ''}${b.description ? `<span>${esc(b.description)}</span>` : ''}</div>${cta}</div>`;
+}
+function adHtml(d) {
+  const media = d.cards && d.cards.length
+    ? `<div class="car">${d.cards.map((c) => `<div class="cc">${mediaHtml(c.media)}${boxHtml(c)}</div>`).join('')}</div>`
+    : `<div class="fbm">${(d.media || []).map(mediaHtml).join('')}</div>${boxHtml(d.link)}`;
+  return `<article class="fb">
+    <div class="fbh">${safe(d.avatar) ? `<img src="${safe(d.avatar)}" alt="" referrerpolicy="no-referrer">` : ''}<div><b>${esc(d.name || 'Advertiser')}</b><small>Sponsored · Library ID: ${esc(d.library_id || d.id)}</small></div></div>
+    ${d.body ? `<p class="fbt" id="fbt">${esc(d.body)}</p><button class="meer" id="meer" hidden>more</button>` : ''}
+    ${media}
+    ${d.low_impressions ? '<div class="low">Low impression count</div>' : ''}
+  </article>`;
+}
+function errHtml(msg, a) {
+  return `<div class="serr"><div>${esc(msg)}</div>${safe(a.ad) ? `<a href="${safe(a.ad)}" target="_blank" rel="noopener noreferrer">Open in Ad Library ↗</a>` : ''}</div>`;
+}
+function setLink(el, u) {
+  el.hidden = !u;
+  if (u) el.href = u; else el.removeAttribute('href');
+}
+async function openAd(a) {
+  shown = a;
+  setLink($('sLib'), safe(a.ad) ? a.ad : '');
+  setLink($('sShop'), safe(a.product) && /\/products\//.test(a.product) ? a.product : safe(a.store) ? a.store : '');
+  $('sBody').innerHTML = '<div class="sload"><i class="spin"></i>Loading the ad… (±4 s)</div>';
+  $('sheet').hidden = false;
+  document.documentElement.classList.add('lock');
+  if (!(history.state && history.state.sheet)) history.pushState({ sheet: 1 }, '');
+  $('sClose').focus();
+  let html;
+  try {
+    let d = VIEWS.get(a.id);
+    if (!d) {
+      const res = await fetch('/api/ad/' + encodeURIComponent(a.id), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      if (res.status === 401) { location.reload(); return; }
+      d = await res.json().catch(() => ({ error: 'HTTP ' + res.status }));
+      if (!res.ok || d.error) throw new Error(d.error || 'HTTP ' + res.status);
+      VIEWS.set(a.id, d);
+    }
+    html = adHtml(d);
+  } catch (e) {
+    html = errHtml(e.message, a);
+  }
+  if (shown !== a) return;
+  const shopLine = `${host(a.store)}${a.products != null ? ' · ' + fmt(a.products) + ' products' : ''} · ${a.scaled > 1 ? fmt(a.scaled) + ' ads for this product' : '1 ad for this product'} · ${fmt(a.reach)} EU reach`;
+  $('sBody').innerHTML = `<p class="sinfo">${esc(shopLine)}</p>` + html;
+  const t = $('fbt');
+  if (t && t.scrollHeight > t.clientHeight + 2) $('meer').hidden = false;
+}
+function hideAd() {
+  shown = null;
+  $('sheet').hidden = true;
+  $('sBody').innerHTML = ''; // stops a playing video
+  document.documentElement.classList.remove('lock');
+}
+function closeAd() {
+  if (history.state && history.state.sheet) history.back(); // popstate hides it; an iOS back-swipe does the same
+  else hideAd();
+}
+window.addEventListener('popstate', () => { if (!$('sheet').hidden) hideAd(); });
+$('sClose').addEventListener('click', closeAd);
+$('scrim').addEventListener('click', closeAd);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('sheet').hidden) closeAd();
+  // "/" jumps to the search (not while typing somewhere)
+  if (e.key === '/' && $('sheet').hidden && st.view === 'all' && !e.target.closest('input, select, textarea')) { e.preventDefault(); $('q').focus(); }
+});
+$('sBody').addEventListener('click', (e) => {
+  if (e.target.id !== 'meer') return;
+  $('fbt').classList.add('full');
+  e.target.hidden = true;
+});
+$('sBody').addEventListener('error', (e) => { if (e.target instanceof HTMLImageElement) e.target.remove(); }, true);
+
+// A photo the store no longer serves: show the shop name instead.
+$('grid').addEventListener('error', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  const ph = img.closest('.ph');
+  const a = ADS.find((x) => x.id === img.closest('.card').dataset.id);
+  const d = document.createElement('div');
+  d.className = 'dom';
+  d.textContent = (a && (host(a.store) || a.adv)) || '';
+  img.remove();
+  for (const t of ph.querySelectorAll('.tag.sp')) t.remove();
+  ph.prepend(d);
+}, true);
+
+for (const b of document.querySelectorAll('[data-view]')) b.addEventListener('click', () => { if (st.view === b.dataset.view) return; st.view = b.dataset.view; ADS = []; load(); window.scrollTo({ top: 0 }); });
+for (const b of document.querySelectorAll('[data-f]')) {
+  b.addEventListener('click', () => {
+    const f = b.dataset.f;
+    st[f] = !st[f];
+    if (f === 'r10k' && st.r10k) st.r2500 = false;
+    if (f === 'r2500' && st.r2500) st.r10k = false;
+    load();
+  });
+}
+let qTimer = 0;
+$('q').addEventListener('input', (e) => { clearTimeout(qTimer); qTimer = setTimeout(() => { st.q = e.target.value.trim(); load(); }, 300); });
+$('sort').addEventListener('change', (e) => { st.sort = e.target.value; load(); });
+const more = () => { if (loading || $('moreBtn').hidden) return; st.offset = ADS.length; load(true); };
+$('moreBtn').addEventListener('click', more);
+// Endless scroll: the next page loads before you reach the end.
+if ('IntersectionObserver' in window) new IntersectionObserver((es) => { if (es.some((x) => x.isIntersecting)) more(); }, { rootMargin: '900px 0px' }).observe($('loadmore'));
+// Desktop: cards lean toward the pointer (CSS variables through the CSSOM: the CSP blocks style attributes).
+if (!calm && window.matchMedia && matchMedia('(hover: hover) and (pointer: fine)').matches) {
+  let lean = null;
+  const flat = () => { if (!lean) return; for (const k of ['--rx', '--ry', '--gx', '--gy']) lean.style.removeProperty(k); lean.classList.remove('tilt'); lean = null; };
+  $('grid').addEventListener('pointermove', (e) => {
+    const c = e.target.closest('.card:not(.open)');
+    if (c !== lean) flat();
+    if (!c) return;
+    lean = c;
+    const r = c.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    c.classList.add('tilt');
+    c.style.setProperty('--rx', ((0.5 - y) * 7).toFixed(2) + 'deg');
+    c.style.setProperty('--ry', ((x - 0.5) * 7).toFixed(2) + 'deg');
+    c.style.setProperty('--gx', (x * 100).toFixed(0) + '%');
+    c.style.setProperty('--gy', (y * 100).toFixed(0) + '%');
+  });
+  $('grid').addEventListener('pointerleave', flat);
+}
+load();
+loadMarkets();
+</script>
+</body>
+</html>

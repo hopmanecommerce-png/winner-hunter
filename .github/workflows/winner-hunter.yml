@@ -1,0 +1,67 @@
+# Winner Hunter v2: every night, active Meta Ad Library ads from Shopify stores, scored with the dropshipping
+# checklist. Winners and promising ads (score 55+) go into the Cloudflare D1 database after every batch of 2
+# keywords; the board (deploy-board.yml) shows them live. Each run goes on where the last one stopped.
+# Run it by hand: Actions → Winner Hunter → Run workflow (also in the GitHub app).
+# Secrets: META_TOKEN, CF_API_TOKEN, CF_ACCOUNT_ID (see winner-hunter/README.md). Optional: META_TOKEN_2, META_TOKEN_3.
+name: Winner Hunter
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: 'Minutes the hunt may take (max 300; it stops in time and keeps what it found)'
+        required: false
+        default: '120'
+      keywords:
+        description: 'Only these keywords (empty = next ones from keywords.txt; several: dog | cat)'
+        required: false
+        default: ''
+  schedule:
+    - cron: '17 1 * * *' # every night ~03:00 Amsterdam time
+
+permissions:
+  contents: read
+
+concurrency:
+  group: winner-hunter
+  cancel-in-progress: false
+
+jobs:
+  hunt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      META_TOKEN: ${{ secrets.META_TOKEN }}
+      META_TOKEN_2: ${{ secrets.META_TOKEN_2 }}
+      META_TOKEN_3: ${{ secrets.META_TOKEN_3 }}
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID || '8934aca9-51d3-4f87-9c62-e897843149a1' }}
+      COUNTRIES: ${{ vars.HUNT_COUNTRIES || 'NL,BE,DE,FR,AT,ES,IT,IE,DK,SE,PL' }}
+      MINUTES: ${{ inputs.minutes || '120' }}
+      KEYWORDS: ${{ inputs.keywords }}
+    steps:
+      - name: Check secrets
+        run: |
+          missing=""
+          [ -n "$META_TOKEN" ] || missing="$missing META_TOKEN"
+          [ -n "$CF_API_TOKEN" ] || missing="$missing CF_API_TOKEN"
+          [ -n "$CF_ACCOUNT_ID" ] || missing="$missing CF_ACCOUNT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing GitHub secret(s):$missing (Settings → Secrets and variables → Actions; see winner-hunter/README.md)"
+            exit 1
+          fi
+          case "$MINUTES" in ''|*[!0-9]*) echo "::error::minutes must be a number"; exit 1;; esac
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Database tables
+        run: node winner-hunter/migrate.mjs
+
+      - name: Hunt
+        run: |
+          [ "$MINUTES" -gt 300 ] && export MINUTES=300
+          node winner-hunter/run.mjs

@@ -1,0 +1,28 @@
+# The Winner Hunter board: deployed by .github/workflows/deploy-board.yml (npx wrangler@4 deploy).
+name = "winner-hunter-clean"
+main = "src/index.mjs"
+compatibility_date = "2025-09-01"
+workers_dev = true
+# @cloudflare/puppeteer (the ad viewer) imports node:buffer.
+compatibility_flags = ["nodejs_compat"]
+# No __name() helpers in the bundle: the ad extractor is sent to the browser as source text.
+keep_names = false
+
+# board.html is bundled as text (imported in src/index.mjs).
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "winner-hunter-clean"
+database_id = "8934aca9-51d3-4f87-9c62-e897843149a1"
+migrations_dir = "migrations"
+
+# Browser Run (headless Chromium) for the ad viewer: GET /api/ad/:id opens Meta's render_ad page.
+# Free plan: 10 browser minutes a day.
+[browser]
+binding = "BROWSER"
+
+# Secrets (not in this file): BOARD_PIN and META_TOKEN, set by the deploy workflow from the GitHub secrets.

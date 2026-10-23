@@ -1,0 +1,10 @@
+{
+  "name": "winner-hunter-board",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The Winner Hunter board (Cloudflare Worker). Deployed by .github/workflows/deploy-board.yml.",
+  "dependencies": {
+    "@cloudflare/puppeteer": "1.4.0"
+  }
+}
