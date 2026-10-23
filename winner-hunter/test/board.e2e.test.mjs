@@ -102,7 +102,7 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     await page.fill('input[name=pin]', '482913');
     await Promise.all([page.waitForURL(base + '/'), page.click('button[type=submit]')]);
     await page.waitForSelector('.card');
-    assert.strictEqual(await page.locator('[data-view]').count(), 3, 'Inbox, Browse and ★ (no Top 20)');
+    assert.strictEqual(await page.locator('[data-view]').count(), 4, 'Inbox, Browse, ★ and 🧠 (no Top 20)');
     assert.strictEqual(await page.getAttribute('[data-view=inbox]', 'aria-pressed'), 'true', 'Inbox is the start view');
     assert.strictEqual(await page.locator('.card').count(), 1, 'one product at a time');
     assert.strictEqual(await page.locator('.card.open').count(), 1, 'with its details open');
@@ -246,12 +246,30 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     await page.click('[data-tri=seen]');
     await page.waitForFunction((x) => document.querySelector('.card') && document.querySelector('.card').dataset.id !== x, first);
     assert.strictEqual(await left(), n0 - 1);
-    await page.waitForFunction((x) => document.querySelector('#toast:not([hidden])') && /Made ad/.test(document.querySelector('#toastMsg').textContent), null);
-    await page.waitForTimeout(150);
+    // Why? strip: the reasons for a yes; one tap saves it
+    await page.waitForSelector('#why:not([hidden])');
+    assert.match(await page.textContent('#why .wh'), /✓ Made ad/);
+    assert.deepStrictEqual(await page.locator('#why [data-r]').allInnerTexts(), ['Wow product', 'Good margin', 'Strong ad', 'My niche', 'Easy to ship']);
+    await page.click('#why [data-r=wow]');
+    await page.waitForFunction(() => document.querySelector('#why [data-r=wow]').getAttribute('aria-pressed') === 'true');
+    await page.waitForTimeout(200);
     assert.strictEqual(env.db.prepare('SELECT status FROM hidden WHERE ad_id = ?').get(first).status, 'seen');
+    assert.strictEqual(env.db.prepare('SELECT reasons FROM feedback WHERE ad_id = ?').get(first).reasons, '["wow"]');
+    await noSideScroll('Why strip');
+    await shot('8a-why');
     const second = await page.locator('.card').getAttribute('data-id');
     await page.keyboard.press('r');
     await page.waitForFunction((x) => document.querySelector('.card').dataset.id !== x, second);
+    // a reject asks why not: key 1 = Too expensive; a note
+    assert.match(await page.textContent('#why .wq'), /Why not\?/);
+    await page.keyboard.press('1');
+    await page.waitForFunction(() => document.querySelector('#why [data-r=price]').getAttribute('aria-pressed') === 'true');
+    await page.click('#why [data-w=note]');
+    await page.fill('#wnote', 'Te duur <b>voor</b> NL');
+    await page.press('#wnote', 'Enter');
+    await page.waitForFunction(() => /Note ✓/.test(document.querySelector('#why [data-w=note]').textContent));
+    await page.waitForTimeout(200);
+    assert.deepStrictEqual({ ...env.db.prepare('SELECT reasons, note FROM feedback WHERE ad_id = ?').get(second) }, { reasons: '["price"]', note: 'Te duur <b>voor</b> NL' });
     const third = await page.locator('.card').getAttribute('data-id');
     const stars0 = Number(await page.textContent('#nstar')) || 0;
     await page.keyboard.press('k');
@@ -261,7 +279,7 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     assert.ok(env.db.prepare('SELECT 1 FROM stars WHERE ad_id = ?').get(third), 'Keep = ★');
     assert.strictEqual(Number(await page.textContent('#nstar')), stars0 + 1);
     assert.strictEqual(await left(), n0 - 3);
-    await page.click('#undo');
+    await page.click('#why [data-w=undo]');
     await page.waitForFunction((x) => document.querySelector('.card') && document.querySelector('.card').dataset.id === x, third);
     assert.ok(!env.db.prepare('SELECT 1 FROM stars WHERE ad_id = ?').get(third), 'Undo Keep takes the star off');
     assert.strictEqual(await left(), n0 - 2);
@@ -287,6 +305,20 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     assert.ok(await page.locator('#tri').isHidden());
     await noSideScroll('Inbox zero');
     await shot('9-inbox-zero');
+    // 🧠 what the board learned: reasons, the note (as text), and a note about the board
+    await page.click('[data-view=learned]');
+    await page.waitForSelector('#learn:not([hidden]) h2');
+    assert.match(await page.textContent('#learn'), /From \d+ decisions/);
+    assert.match(await page.textContent('#learn'), /Why you say no\s*Too expensive\s*1/);
+    assert.match(await page.textContent('#learn'), /Why you say yes\s*Wow product\s*1/);
+    assert.match(await page.textContent('#learn .lnotes'), /Te duur <b>voor<\/b> NL/);
+    assert.strictEqual(await page.locator('#learn .lnotes b').count(), 0, 'notes stay text');
+    await page.fill('#lgen', 'More pet products please');
+    await page.click('#lnote button');
+    await page.waitForFunction(() => /More pet products please/.test(document.querySelector('#learn .lnotes').textContent));
+    assert.ok(await page.locator('#grid .card').count() === 0 && await page.locator('#dock').isHidden());
+    await noSideScroll('Learned');
+    await shot('9b-learned');
     await page.waitForTimeout(300);
     assert.strictEqual((await (await fetch(base + '/api/ads?view=inbox', { headers: { cookie: (await page.context().cookies()).map((c) => `${c.name}=${c.value}`).join('; ') } })).json()).total, 0, 'saved: nothing left on the server');
     // a failed run: red banner on top, on a phone

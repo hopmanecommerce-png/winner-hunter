@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
-import { handle, makeToken, csvCell, toCsv, boardAlert, PREFETCH_SQL } from '../worker/src/app.mjs';
+import { handle, makeToken, csvCell, toCsv, boardAlert, PREFETCH_SQL, tasteOf, fitOf } from '../worker/src/app.mjs';
 import { landingUrl, cleanAd } from '../worker/src/adview.mjs';
 import { seededEnv, NOW } from './helpers/seed.mjs';
 
@@ -236,6 +236,83 @@ test('/api/ads: counts.fresh = inbox products found in the last day', async () =
     await s.post('/api/hide', { ad_id: fresh[0].id, status: 'seen' });
     assert.strictEqual((await (await s.get('/api/ads?view=inbox')).json()).counts.fresh, fresh.length - 1);
   }
+});
+
+test('feedback: every decision is logged, reasons and a note added after, undo takes it out; /api/learned sums it up', async () => {
+  const env = await seededEnv();
+  const s = await loggedIn(env);
+  const inbox = async () => (await s.get('/api/ads?view=inbox&limit=100')).json();
+  const fb = () => env.db.prepare("SELECT ad_id, action, reasons, note, keyword, title FROM feedback WHERE action != 'general' ORDER BY id").all();
+  const [a, b, c] = (await inbox()).ads;
+  assert.strictEqual((await s.post('/api/feedback', { ad_id: a.id, reasons: ['price'] })).status, 404, 'decide first');
+  await s.post('/api/hide', { ad_id: a.id, status: 'rejected' });
+  await s.post('/api/hide', { ad_id: b.id, status: 'starred' });
+  await s.post('/api/hide', { ad_id: c.id, status: 'seen' });
+  assert.deepStrictEqual(fb().map((f) => [f.ad_id, f.action, f.reasons]), [[a.id, 'rejected', '[]'], [b.id, 'keep', '[]'], [c.id, 'seen', '[]']]);
+  assert.strictEqual(fb()[0].keyword, a.kw, "the product's facts are copied in");
+  assert.strictEqual((await s.post('/api/feedback', { ad_id: a.id, reasons: ['price', 'niche', 'wow', '<script>'] })).status, 200);
+  assert.strictEqual((await s.post('/api/feedback', { ad_id: a.id, note: '  Te duur\u0000 voor NL  ' })).status, 200);
+  assert.deepStrictEqual([fb()[0].reasons, fb()[0].note], ['["price","niche"]', 'Te duur  voor NL'], 'only reasons that fit a reject; note cleaned');
+  await s.post('/api/feedback', { ad_id: b.id, reasons: ['wow', 'price'] });
+  assert.strictEqual(fb()[1].reasons, '["wow"]');
+  // a new decision replaces the old one; undo takes it out
+  await s.post('/api/hide', { ad_id: c.id, status: 'rejected' });
+  assert.deepStrictEqual(fb().filter((f) => f.ad_id === c.id).map((f) => f.action), ['rejected']);
+  await s.post('/api/hide', { ad_id: c.id, status: 'none' });
+  await s.post('/api/hide', { ad_id: b.id, status: 'unstarred' });
+  assert.deepStrictEqual(fb().map((f) => f.ad_id), [a.id]);
+  assert.strictEqual((await s.post('/api/feedback', { general: 'Meer dierenproducten graag' })).status, 200);
+  assert.strictEqual((await s.post('/api/feedback', { general: '   ' })).status, 400);
+  assert.strictEqual((await s.post('/api/feedback', { ad_id: '../x', reasons: [] })).status, 400);
+  const l = await (await s.get('/api/learned')).json();
+  assert.strictEqual(l.decisions, 1);
+  assert.deepStrictEqual(l.by_action, { rejected: 1, keep: 0, seen: 0 });
+  assert.deepStrictEqual(l.reasons.bad.map((x) => [x.key, x.label, x.n]), [['price', 'Too expensive', 1], ['niche', 'Not my niche', 1]]);
+  assert.deepStrictEqual(l.niches, [{ kw: String(a.kw).toLowerCase(), good: 0, bad: 2, weight: 0.33 }], '"not my niche" counts double');
+  assert.deepStrictEqual(l.notes.map((n) => n.note), ['Meer dierenproducten graag', 'Te duur  voor NL']);
+  assert.strictEqual((await s.get('/api/learned')).status, 200);
+  assert.strictEqual((await call(env, '/api/learned')).status, 401, 'PIN needed');
+});
+
+test('tasteOf / fitOf: niches you like go up, rejected niches and too-expensive prices go down, bad stores leave', () => {
+  const t = tasteOf([
+    { action: 'seen', reasons: '[]', keyword: 'Dog', store: 'https://a.com', price: 20 },
+    { action: 'keep', reasons: '["niche"]', keyword: 'dog', store: 'https://a.com', price: 25 },
+    { action: 'rejected', reasons: '["niche"]', keyword: 'cat', store: 'https://b.com', price: 30 },
+    { action: 'rejected', reasons: '["price","store"]', keyword: 'cat', store: 'https://www.Bad.com/x', price: 60 },
+    { action: 'rejected', reasons: '["price"]', keyword: '', store: '', price: 45 },
+    { action: 'rejected', reasons: 'not json', keyword: 'fish', store: '', price: null },
+  ]);
+  assert.deepStrictEqual(Object.fromEntries(t.weights), { dog: 3, cat: 0.3, fish: 0.5 });
+  assert.deepStrictEqual([...t.blocked.keys()], ['bad.com']);
+  assert.strictEqual(t.maxPrice, 45, 'the cheapest product you still found too expensive');
+  assert.strictEqual(fitOf({ keyword: 'DOG ', price: 10 }, t), 3);
+  assert.strictEqual(fitOf({ keyword: 'dog', price: 50 }, t), 1.5, 'too expensive: half');
+  assert.strictEqual(fitOf({ keyword: 'new', price: 10 }, t), 1, 'no opinion yet');
+  assert.strictEqual(tasteOf([]).maxPrice, null);
+});
+
+test('inbox learns: a liked niche comes first, a bad store leaves (and comes back with unblock)', async () => {
+  const env = await seededEnv();
+  const s = await loggedIn(env);
+  const inbox = async () => (await s.get('/api/ads?view=inbox&limit=100')).json();
+  const before = await inbox();
+  const last = before.ads[before.ads.length - 1];
+  const other = before.ads.find((x) => x.kw !== last.kw && x.store && x.store !== last.store);
+  // like the niche of the last product twice, through products of the same keyword
+  env.db.prepare("INSERT INTO feedback (action, reasons, keyword, at) VALUES ('seen', '[\"niche\"]', ?, 'x'), ('keep', '[]', ?, 'x')").run(last.kw, last.kw);
+  const after = await inbox();
+  assert.strictEqual(after.ads[0].kw, last.kw, 'a liked niche jumps up');
+  assert.ok(after.ads[0].fit > 1);
+  await s.post('/api/hide', { ad_id: other.id, status: 'rejected' });
+  await s.post('/api/feedback', { ad_id: other.id, reasons: ['store'] });
+  const host = new URL(other.store).hostname.replace(/^www\./, '');
+  const blocked = await inbox();
+  assert.ok(!blocked.ads.some((x) => x.store && new URL(x.store).hostname.replace(/^www\./, '') === host), 'nothing from a bad store');
+  assert.strictEqual(blocked.counts.inbox, blocked.total);
+  assert.deepStrictEqual((await (await s.get('/api/learned')).json()).blocked.map((x) => x.store), [host]);
+  assert.strictEqual((await s.post('/api/feedback', { unblock: host })).status, 200);
+  assert.deepStrictEqual((await (await s.get('/api/learned')).json()).blocked, []);
 });
 
 test('/api/ads: while a run hunts, the run before it comes along', async () => {

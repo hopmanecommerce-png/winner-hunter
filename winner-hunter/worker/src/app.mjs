@@ -130,12 +130,61 @@ export function products(rows, hidden = [], stars = [], now = Date.now()) {
 
 /** The board from D1: winners (cached), seen / rejected and stars (fresh). */
 async function board(env, now) {
-  const [rows, h, s] = await Promise.all([
+  const [rows, h, s, f] = await Promise.all([
     snapshot(env.DB, now),
     env.DB.prepare('SELECT ad_id, status FROM hidden').all(),
     env.DB.prepare('SELECT ad_id FROM stars').all(),
+    env.DB.prepare("SELECT action, reasons, keyword, store, price FROM feedback WHERE action != 'general'").all(),
   ]);
-  return products(rows, h.results, s.results, now);
+  return Object.assign(products(rows, h.results, s.results, now), { taste: tasteOf(f.results) });
+}
+
+// ---------------------------------------------------------------------------
+// Feedback: why you reject, keep or make an ad for a product. The board learns from it (tasteOf).
+// ---------------------------------------------------------------------------
+
+export const REASONS = {
+  bad: { price: 'Too expensive', saturated: 'Saturated', niche: 'Not my niche', quality: 'Looks low quality', store: 'Bad store', ship: 'Hard to ship', ad: 'Weak ad' },
+  good: { wow: 'Wow product', margin: 'Good margin', ad: 'Strong ad', niche: 'My niche', easy: 'Easy to ship' },
+};
+const ACTION_OF = { seen: 'seen', rejected: 'rejected', starred: 'keep' };
+const reasonsOf = (s) => { try { const r = JSON.parse(s || '[]'); return Array.isArray(r) ? r.map(String) : []; } catch (e) { return []; } };
+export const storeOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, '').toLowerCase(); } catch (e) { return ''; } };
+const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+
+/**
+ * What your decisions say. Per search keyword (niche): weight = (liked + 1) / (rejected + 1), between 0.3 and 3
+ * ("not my niche" / "my niche" count double). Stores rejected as "Bad store" leave the inbox. Price: once two
+ * products were "too expensive", everything from the cheapest of those up ranks at half.
+ */
+export function tasteOf(fb = []) {
+  const kw = new Map();
+  const blocked = new Map();
+  const pricey = [];
+  for (const f of fb) {
+    const r = reasonsOf(f.reasons);
+    const bad = f.action === 'rejected';
+    const k = String(f.keyword || '').trim().toLowerCase();
+    if (k) {
+      const x = kw.get(k) || { good: 0, bad: 0 };
+      if (bad) x.bad += r.includes('niche') ? 2 : 1;
+      else x.good += r.includes('niche') ? 2 : 1;
+      kw.set(k, x);
+    }
+    if (bad && r.includes('store') && storeOf(f.store)) blocked.set(storeOf(f.store), (blocked.get(storeOf(f.store)) || 0) + 1);
+    if (bad && r.includes('price') && Number(f.price) > 0) pricey.push(Number(f.price));
+  }
+  const weights = new Map([...kw].map(([k, x]) => [k, Math.round(clamp((x.good + 1) / (x.bad + 1), 0.3, 3) * 100) / 100]));
+  pricey.sort((a, b) => a - b);
+  return { kw, weights, blocked, maxPrice: pricey.length >= 2 ? pricey[0] : null };
+}
+
+/** How well a product fits your taste (1 = no opinion yet): the inbox sorts by reach a day × this. */
+export function fitOf(r, taste) {
+  if (!taste) return 1;
+  let w = taste.weights.get(String(r.keyword || '').trim().toLowerCase()) ?? 1;
+  if (taste.maxPrice != null && Number(r.price) >= taste.maxPrice) w *= 0.5;
+  return w;
 }
 
 const SORTS = {
@@ -157,7 +206,9 @@ export function viewOf(p, list, { csv = false } = {}) {
     out = list.k.filter((r) => r.star); // seen, rejected or out of the rules too: a star is kept until you take it off
     limit = csv ? 5000 : 100;
   } else if (view === 'inbox') {
-    out = list.v.filter(inInbox); // not decided yet: not seen, rejected or kept (★)
+    out = list.v.filter((r) => inInbox(r) && !blockedBy(r, list.taste)) // not decided yet: not seen, rejected or kept (★)
+      .map((r) => Object.assign({}, r, { fit: fitOf(r, list.taste) }));
+    sort = (a, b) => b.rpd * b.fit - a.rpd * a.fit || cmp(a.ad_id, b.ad_id);
     limit = csv ? 5000 : Math.min(Math.max(parseInt(p.get('limit'), 10) || 20, 1), 100);
   } else {
     const hidden = p.get('hidden') === '1';
@@ -183,12 +234,13 @@ export function viewOf(p, list, { csv = false } = {}) {
 }
 
 const inInbox = (r) => r.hid === 0 && !r.star;
+const blockedBy = (r, taste) => !!(taste && taste.blocked.size && taste.blocked.has(storeOf(r.store_url)));
 const NEW_MS = 864e5; // found in the last day: new
 
 export const countsOf = (list, now = Date.now()) => ({
   all: list.v.filter((r) => r.hid === 0).length,
-  inbox: list.v.filter(inInbox).length,
-  fresh: list.v.filter((r) => inInbox(r) && now - Date.parse(r.first_seen) < NEW_MS).length,
+  inbox: list.v.filter((r) => inInbox(r) && !blockedBy(r, list.taste)).length,
+  fresh: list.v.filter((r) => inInbox(r) && !blockedBy(r, list.taste) && now - Date.parse(r.first_seen) < NEW_MS).length,
   starred: list.k.filter((r) => r.star).length,
   hidden: list.v.filter((r) => r.hid > 0).length,
 });
@@ -384,6 +436,7 @@ export function toAd(r) {
     mk: parseCountries(d.top_countries).slice(0, 5),
     crpd: r.crpd == null ? null : Math.round(r.crpd),
     hidden: r.hid === 2 ? 'rejected' : r.hid === 1 ? 'seen' : '',
+    fit: r.fit == null ? null : r.fit,
   };
 }
 
@@ -494,8 +547,99 @@ async function hide(req, url, env, now) {
   const at = new Date(now).toISOString();
   if (status === 'starred') steps.push(env.DB.prepare('INSERT INTO stars (ad_id, at) VALUES (?, ?) ON CONFLICT(ad_id) DO UPDATE SET at = excluded.at').bind(id, at));
   else if (!star && status !== 'none') steps.push(env.DB.prepare('INSERT INTO hidden (ad_id, status, at) VALUES (?, ?, ?) ON CONFLICT(ad_id) DO UPDATE SET status = excluded.status, at = excluded.at').bind(id, status, at));
+  // The decision goes into feedback (reasons and a note come later from /api/feedback); undo takes it out.
+  const gone = star ? ['keep'] : ['seen', 'rejected']; // one decision per product: a new one replaces the old
+  for (let i = 0; i < ids.length && gone.length; i += 90) {
+    const part = ids.slice(i, i + 90);
+    steps.push(env.DB.prepare(`DELETE FROM feedback WHERE action IN (${gone.map(() => '?').join(', ')}) AND ad_id IN (${part.map(() => '?').join(', ')})`).bind(...gone, ...part));
+  }
+  if (ACTION_OF[status]) {
+    steps.push(env.DB.prepare('INSERT INTO feedback (ad_id, action, reasons, note, keyword, store, advertiser, title, price, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, ACTION_OF[status], '[]', '', me.keyword ?? '', me.store_url ?? '', me.advertiser ?? '', String(me.product_title ?? '').slice(0, 200), me.price ?? null, at));
+  }
   await env.DB.batch(steps);
   return json({ ok: true, ad_id: id, status });
+}
+
+async function readJson(req, url, max = 2000) {
+  const origin = req.headers.get('origin');
+  if (origin && origin !== url.origin) return { err: json({ error: 'Wrong origin' }, 403) };
+  if (!/^application\/json/.test(req.headers.get('content-type') || '')) return { err: json({ error: 'Send JSON' }, 415) };
+  const body = await req.text();
+  if (body.length > max) return { err: json({ error: 'Too big' }, 413) };
+  try {
+    return { j: JSON.parse(body) || {} };
+  } catch (e) {
+    return { err: json({ error: 'Bad JSON' }, 400) };
+  }
+}
+
+/**
+ * POST /api/feedback. {ad_id, reasons?, note?}: why you made that decision (on its latest feedback row).
+ * {general: "…"}: a note about the board. {unblock: "shop.com"}: that store may come back in the inbox.
+ */
+async function feedback(req, url, env, now) {
+  const { j, err } = await readJson(req, url);
+  if (err) return err;
+  const at = new Date(now).toISOString();
+  const clean = (s, n) => String(s ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, n);
+  if (j.general != null) {
+    const note = clean(j.general, 1000);
+    if (!note) return json({ error: 'Empty note' }, 400);
+    await env.DB.prepare("INSERT INTO feedback (action, reasons, note, at) VALUES ('general', '[]', ?, ?)").bind(note, at).run();
+    return json({ ok: true });
+  }
+  if (j.unblock != null) {
+    const host = String(j.unblock).toLowerCase();
+    const { results } = await env.DB.prepare("SELECT id, reasons, store FROM feedback WHERE action = 'rejected' AND reasons LIKE '%\"store\"%'").all();
+    const steps = results.filter((f) => storeOf(f.store) === host)
+      .map((f) => env.DB.prepare('UPDATE feedback SET reasons = ? WHERE id = ?').bind(JSON.stringify(reasonsOf(f.reasons).filter((x) => x !== 'store')), f.id));
+    if (steps.length) await env.DB.batch(steps);
+    return json({ ok: true, unblocked: steps.length });
+  }
+  const id = String(j.ad_id || '');
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) return json({ error: 'Bad ad_id' }, 400);
+  const row = await env.DB.prepare("SELECT id, action FROM feedback WHERE ad_id = ? AND action != 'general' ORDER BY id DESC LIMIT 1").bind(id).first();
+  if (!row) return json({ error: 'Decide first' }, 404);
+  const allowed = REASONS[row.action === 'rejected' ? 'bad' : 'good'];
+  const sets = [];
+  const vals = [];
+  if (Array.isArray(j.reasons)) {
+    sets.push('reasons = ?');
+    vals.push(JSON.stringify([...new Set(j.reasons.map(String))].filter((r) => r in allowed)));
+  }
+  if (j.note != null) {
+    sets.push('note = ?');
+    vals.push(clean(j.note, 500));
+  }
+  if (!sets.length) return json({ error: 'Nothing to save' }, 400);
+  await env.DB.prepare(`UPDATE feedback SET ${sets.join(', ')} WHERE id = ?`).bind(...vals, row.id).run();
+  return json({ ok: true });
+}
+
+/** GET /api/learned: what the board learned from your feedback, for the 🧠 page (and for Claude to read). */
+async function learned(env) {
+  const { results } = await env.DB.prepare('SELECT ad_id, action, reasons, note, keyword, store, advertiser, title, price, at FROM feedback ORDER BY id DESC LIMIT 5000').all();
+  const taste = tasteOf(results.filter((f) => f.action !== 'general'));
+  const by = { rejected: 0, keep: 0, seen: 0 };
+  const count = { bad: {}, good: {} };
+  for (const f of results) {
+    if (!(f.action in by)) continue;
+    by[f.action]++;
+    const side = f.action === 'rejected' ? 'bad' : 'good';
+    for (const r of reasonsOf(f.reasons)) if (r in REASONS[side]) count[side][r] = (count[side][r] || 0) + 1;
+  }
+  const list = (side) => Object.entries(count[side]).map(([key, n]) => ({ key, label: REASONS[side][key], n })).sort((a, b) => b.n - a.n);
+  return json({
+    decisions: by.rejected + by.keep + by.seen,
+    by_action: by,
+    reasons: { bad: list('bad'), good: list('good') },
+    reason_labels: REASONS,
+    niches: [...taste.kw].map(([kw, x]) => ({ kw, good: x.good, bad: x.bad, weight: taste.weights.get(kw) })).sort((a, b) => b.weight - a.weight || b.good - a.good),
+    blocked: [...taste.blocked].map(([store, n]) => ({ store, n })),
+    max_price: taste.maxPrice,
+    notes: results.filter((f) => f.note).slice(0, 50).map((f) => ({ action: f.action, title: f.title || '', note: f.note, reasons: reasonsOf(f.reasons), at: f.at })),
+  });
 }
 
 async function csv(url, env, now) {
@@ -524,13 +668,15 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       if (!ok) return pinPage(nonce);
       return secure(new Response(html.replaceAll('__NONCE__', nonce), { headers: { 'Content-Type': 'text/html; charset=utf-8' } }), { nonce, html: true });
     }
-    if (path === '/api/ads' || path === '/api/hide' || path === '/api/markets' || path === '/export.csv') {
+    if (path === '/api/ads' || path === '/api/hide' || path === '/api/markets' || path === '/export.csv' || path === '/api/feedback' || path === '/api/learned') {
       if (!ok) return path === '/export.csv' ? text('Log in first.', 401) : json({ error: 'Log in first' }, 401);
       if (path === '/api/markets' && method === 'GET') {
         return json(marketsOf((await board(env, now)).v.filter((r) => r.hid === 0)));
       }
       if (path === '/api/ads' && method === 'GET') return await ads(url, env, now, !!(launch && env.BROWSER && String(env.META_TOKEN || '').trim()));
       if (path === '/api/hide' && method === 'POST') return await hide(req, url, env, now);
+      if (path === '/api/feedback' && method === 'POST') return await feedback(req, url, env, now);
+      if (path === '/api/learned' && method === 'GET') return await learned(env);
       if (path === '/export.csv' && method === 'GET') return await csv(url, env, now);
       return json({ error: 'Method not allowed' }, 405);
     }
