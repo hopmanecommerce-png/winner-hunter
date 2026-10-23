@@ -148,7 +148,7 @@ const SORTS = {
 
 /** One view of the board: filters, one market (?cc=FR: best first by the reach a day there), sort and page. */
 export function viewOf(p, list, { csv = false } = {}) {
-  const view = p.get('view') === 'starred' ? 'starred' : 'all';
+  const view = ['starred', 'inbox'].includes(p.get('view')) ? p.get('view') : 'all';
   let out;
   let sort = SORTS.rpd;
   let limit = 100;
@@ -156,6 +156,9 @@ export function viewOf(p, list, { csv = false } = {}) {
   if (view === 'starred') {
     out = list.k.filter((r) => r.star); // seen, rejected or out of the rules too: a star is kept until you take it off
     limit = csv ? 5000 : 100;
+  } else if (view === 'inbox') {
+    out = list.v.filter(inInbox); // not decided yet: not seen, rejected or kept (★)
+    limit = csv ? 5000 : Math.min(Math.max(parseInt(p.get('limit'), 10) || 20, 1), 100);
   } else {
     const hidden = p.get('hidden') === '1';
     out = list.v.filter((r) => (hidden ? r.hid > 0 : r.hid === 0));
@@ -179,8 +182,13 @@ export function viewOf(p, list, { csv = false } = {}) {
   return { view, total: out.length, offset, rows: out.slice(offset, offset + limit) };
 }
 
-export const countsOf = (list) => ({
+const inInbox = (r) => r.hid === 0 && !r.star;
+const NEW_MS = 864e5; // found in the last day: new
+
+export const countsOf = (list, now = Date.now()) => ({
   all: list.v.filter((r) => r.hid === 0).length,
+  inbox: list.v.filter(inInbox).length,
+  fresh: list.v.filter((r) => inInbox(r) && now - Date.parse(r.first_seen) < NEW_MS).length,
   starred: list.k.filter((r) => r.star).length,
   hidden: list.v.filter((r) => r.hid > 0).length,
 });
@@ -435,7 +443,7 @@ async function login(req, env, now) {
 async function ads(url, env, now, viewer) {
   const list = await board(env, now);
   const q = viewOf(url.searchParams, list);
-  const counts = countsOf(list);
+  const counts = countsOf(list, now);
   const run = await stateJson(env.DB, 'last_run');
   // While a run hunts, the board also shows what the run before it found.
   const prev = run && run.status === 'running'

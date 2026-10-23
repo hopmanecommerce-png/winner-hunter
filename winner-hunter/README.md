@@ -12,8 +12,10 @@ GitHub Actions (every night)  →  Cloudflare D1 (the database)  →  Board (Clo
 
 - Only ads that pass **all four hard rules** (no points, no score): **Shopify store**, advertiser has **75+ active ads**,
   ad live **7 to 42 days**, **500+ EU reach per day**. Anything else is never saved and never shown.
-- **Top 20**: the 20 with the most EU reach per day, seen in the last 14 days.
-- **All**: everything that passes, most reach per day first, with search, sort and filters. **★**: your starred products.
+- **Inbox** (start screen): every product you have not decided on, one at a time, best first. **✗ Reject**, **★ Keep**
+  or **✓ Made ad** (buttons, swipe left/right, or keys R / K / D). Each one leaves the inbox; **Undo** brings it back.
+  When none are left: **🎉 Inbox zero**. "New today" = found in the last 24 hours.
+- **Browse**: everything that passes, most reach per day first, with search, sort and filters. **★**: your kept products.
 - Per product: photo, price/discount, a ✓ per rule (active ads, days live, reach per day), ads for this product,
   the store's product count, shop. **▶ Bekijk ad** opens the ad itself (video, images, text, button) on the board, at once: `ad-prefetch.yml` opens every board ad ahead of time (every 8 hours and after each hunt).
   Tap a card for more: ad text, checklist and the buttons **Ad ↗ · Product ↗ · Store ↗ · Search 1688 ↗**.

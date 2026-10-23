@@ -289,6 +289,37 @@
   .low { padding: 8px 12px 12px; font-size: 12px; color: var(--muted); }
   .sinfo { margin: 0 2px 12px; font: 500 11.5px/1.5 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
 
+  /* Inbox: one product at a time until none are left */
+  .ibox { max-width: 760px; margin: 14px auto 0; display: grid; gap: 8px; }
+  .ihead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .ihead b { font-size: 26px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  .ihead span { font: 600 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--cy); }
+  .ibar { height: 6px; border-radius: 9px; background: var(--card2); border: 1px solid var(--line); overflow: hidden; }
+  .ibar i { display: block; height: 100%; width: var(--w, 0%); background: var(--holo); box-shadow: 0 0 12px rgba(46, 230, 255, .5); transition: width .4s; }
+  .grid.one { grid-template-columns: minmax(0, 1fr); max-width: 760px; margin-left: auto; margin-right: auto; }
+  .grid.one .card { touch-action: pan-y; transition: transform .18s ease-in, opacity .18s, box-shadow .2s; }
+  .grid.one .card.drag { transition: none; }
+  .grid.one .card img { -webkit-user-drag: none; }
+  .grid.one .ph { -webkit-user-select: none; user-select: none; }
+  .grid.one .card .acts, .grid.one .card .star { display: none; }
+  .grid.one .card[data-lean="seen"] { box-shadow: 0 0 0 2px var(--win), 0 0 30px -8px var(--win); }
+  .grid.one .card[data-lean="rejected"] { box-shadow: 0 0 0 2px var(--bad), 0 0 30px -8px var(--bad); }
+  .tri { position: sticky; bottom: 0; z-index: 4; max-width: 760px; margin: 12px auto 0; padding: 10px 0 max(10px, env(safe-area-inset-bottom));
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; background: linear-gradient(transparent, var(--bg) 35%); }
+  .tri button { height: 58px; border-radius: 16px; border: 1px solid var(--line2); background: var(--glass); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    font-weight: 750; font-size: 15px; cursor: pointer; display: grid; place-content: center; gap: 2px; }
+  .tri small { font: 600 10px var(--mono); letter-spacing: .1em; color: var(--faint); }
+  .tri .no { color: var(--bad); }
+  .tri .keep { color: var(--amb); }
+  .tri .ok { color: var(--win); }
+  body.inbox .toast { bottom: calc(86px + env(safe-area-inset-bottom)); }
+  .zero { text-align: center; padding: 64px 16px; display: grid; justify-items: center; gap: 8px; }
+  .zero .big { font-size: 64px; line-height: 1; filter: drop-shadow(0 0 24px rgba(255, 79, 216, .5)); }
+  .zero h2 { margin: 6px 0 0; font-size: 30px; letter-spacing: -.03em; }
+  .zero p { margin: 0; color: var(--muted); }
+  .zero .zb { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .zero button { height: 42px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--line2); background: var(--card2); font-weight: 650; cursor: pointer; }
+  .zero .kept { color: var(--amb); border-color: rgba(255, 201, 77, .4); }
   @media (min-width: 760px) {
     .rail { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
     .search { flex: 0 1 380px; }
@@ -377,7 +408,8 @@
   <div class="rail">
     <div class="bar2">
       <div class="seg" role="group" aria-label="View">
-        <button data-view="all" aria-pressed="true">All <small id="nall"></small></button>
+        <button data-view="inbox" aria-pressed="true">Inbox <small id="nin"></small></button>
+        <button data-view="all" aria-pressed="false">Browse <small id="nall"></small></button>
         <button data-view="starred" aria-pressed="false" aria-label="Starred">★ <small id="nstar"></small></button>
       </div>
       <label class="search" id="allrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg>
@@ -401,7 +433,17 @@
     <div class="count" id="count" aria-live="polite" hidden></div>
   </div>
 
+  <section class="ibox" id="ibox" aria-label="Inbox" hidden>
+    <div class="ihead"><b id="ileft" aria-live="polite"></b><span id="inew"></span></div>
+    <div class="ibar"><i id="iprog"></i></div>
+  </section>
   <main class="grid" id="grid" aria-busy="true"></main>
+  <div class="tri" id="tri" role="group" aria-label="Decide" hidden>
+    <button class="no" data-tri="rejected">✗ Reject<small>R · ←</small></button>
+    <button class="keep" data-tri="keep">★ Keep<small>K · ↑</small></button>
+    <button class="ok" data-tri="seen">✓ Made ad<small>D · →</small></button>
+  </div>
+  <div class="zero" id="zero" hidden></div>
   <div class="empty" id="empty" hidden></div>
   <div class="loadmore" id="loadmore"><button id="moreBtn" hidden>Show more</button></div>
 </div>
@@ -444,7 +486,7 @@ const SORTED = { rpd: 'by reach per day', new: 'newest first', scaled: 'by ad co
 const NEW_MS = 24 * 3600e3; // found in the last day: NEW
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } } };
 
-const st = { view: 'all', q: '', sort: 'rpd', r2500: false, r10k: false, hidden: false, cc: '', offset: 0 };
+const st = { view: 'inbox', q: '', sort: 'rpd', r2500: false, r10k: false, hidden: false, cc: '', offset: 0 };
 let ADS = [];
 let VIEWER = false; // the server can show ads in the board (Browser Run + META_TOKEN)
 let total = 0;
@@ -452,6 +494,10 @@ let loading = false;
 let MARKETS = null;
 let showAll = false;
 const opened = new Set();
+const DONE = new Set(); // decided in the inbox here: skipped even if the server list is a moment behind
+let FRESH = 0; // inbox products found in the last day
+let STARS = 0;
+let marketsStale = false;
 
 function params(extra) {
   const p = new URLSearchParams({ view: st.view });
@@ -477,8 +523,8 @@ function nice(a) {
   return host(a.store) || a.adv || 'Untitled ad';
 }
 
-function card(a) {
-  const open = opened.has(a.id);
+function card(a, force) {
+  const open = force || opened.has(a.id);
   const isNew = Date.now() - Date.parse(a.first_seen) < NEW_MS;
   const tags = (isNew ? '<span class="tag new">New</span>' : '')
     + (a.hidden ? `<span class="tag">${a.hidden === 'seen' ? 'Seen' : 'Rejected'}</span>` : '')
@@ -640,8 +686,19 @@ const SKELETON = '<div class="skel" aria-hidden="true"><i class="p"></i><i class
 const EMPTY_ICON = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg>';
 
 function render(append, fresh) {
-  if (append) $('grid').insertAdjacentHTML('beforeend', fresh.map(card).join(''));
-  else $('grid').innerHTML = ADS.map(card).join('');
+  const inbox = st.view === 'inbox';
+  document.body.classList.toggle('inbox', inbox);
+  $('grid').classList.toggle('one', inbox);
+  if (inbox) {
+    for (const b of document.querySelectorAll('[data-view]')) b.setAttribute('aria-pressed', String(b.dataset.view === st.view));
+    $('allrow').hidden = $('allrow2').hidden = $('count').hidden = $('empty').hidden = $('moreBtn').hidden = true;
+    $('csv').href = '/export.csv?' + params().toString();
+    renderInbox();
+    return;
+  }
+  $('ibox').hidden = $('tri').hidden = $('zero').hidden = true;
+  if (append) $('grid').insertAdjacentHTML('beforeend', fresh.map((a) => card(a)).join(''));
+  else $('grid').innerHTML = ADS.map((a) => card(a)).join('');
   $('grid').setAttribute('aria-busy', 'false');
   for (const b of document.querySelectorAll('[data-view]')) b.setAttribute('aria-pressed', String(b.dataset.view === st.view));
   for (const b of document.querySelectorAll('[data-f]')) b.setAttribute('aria-pressed', String(!!st[b.dataset.f]));
@@ -661,15 +718,129 @@ function render(append, fresh) {
   $('csv').href = '/export.csv?' + params().toString();
 }
 
+// ---- Inbox: every product you have not decided on, one at a time. Reject, Keep (★) or Made ad until none are left.
+const today = () => new Date().toLocaleDateString('sv'); // YYYY-MM-DD, this phone's day
+function cleared(add) {
+  let c = {};
+  try { c = JSON.parse(store.get('wh-done') || '{}') || {}; } catch (e) { c = {}; }
+  const n = c.d === today() ? Number(c.n) || 0 : 0;
+  if (!add) return n;
+  store.set('wh-done', JSON.stringify({ d: today(), n: Math.max(0, n + add) }));
+  return Math.max(0, n + add);
+}
+// The nightly hunt starts 01:17 UTC (winner-hunter.yml); GitHub can start it a little later.
+function nextHunt() {
+  const n = new Date();
+  const t = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate(), 1, 17));
+  if (t <= n) t.setUTCDate(t.getUTCDate() + 1);
+  const day = t.toLocaleDateString('sv') === today() ? 'today' : 'tomorrow';
+  return `Next hunt: ${day} ~${t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+}
+let HUNTING = false;
+function renderInbox() {
+  const a = ADS[0];
+  const done = cleared();
+  $('nin').textContent = total || '';
+  if (!a && total > 0) { $('grid').innerHTML = SKELETON; $('zero').hidden = true; return; } // the next page is on its way
+  $('ibox').hidden = $('tri').hidden = !a;
+  $('zero').hidden = !!a;
+  if (!a) {
+    $('grid').innerHTML = '';
+    $('zero').innerHTML = `<div class="big">🎉</div><h2>Inbox zero</h2>
+      <p>${done ? `${esc(done)} cleared today` : 'Nothing left to decide'}</p>
+      <p>${HUNTING ? 'Hunting now: new products are coming in' : esc(nextHunt())}</p>
+      <div class="zb">${STARS ? `<button class="kept" data-go="starred">★ ${esc(STARS)} kept → make ads</button>` : ''}<button data-go="all">Browse all</button></div>`;
+    return;
+  }
+  $('grid').innerHTML = card(a, true);
+  $('ileft').textContent = `${total.toLocaleString('en-US')} left`;
+  $('inew').textContent = FRESH ? `${FRESH} new today` : '';
+  $('iprog').style.setProperty('--w', (done + total ? (done / (done + total)) * 100 : 0) + '%');
+}
+const isNew = (a) => Date.now() - Date.parse(a.first_seen) < NEW_MS;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let deciding = false;
+async function decide(kind, dir) {
+  const a = ADS[0];
+  if (st.view !== 'inbox' || !a || deciding || !$('sheet').hidden) return;
+  deciding = true;
+  const c = $('grid').querySelector('.card');
+  if (c && !calm) {
+    const dx = dir != null ? dir : kind === 'seen' ? 1 : kind === 'rejected' ? -1 : 0;
+    c.classList.remove('drag');
+    c.style.transform = `translate(${dx * 120}%, ${kind === 'keep' ? '-60px' : '0'}) rotate(${dx * 10}deg)`;
+    c.style.opacity = '0';
+    await sleep(170);
+  }
+  DONE.add(a.id);
+  ADS.shift();
+  total = Math.max(0, total - 1);
+  if (isNew(a)) FRESH = Math.max(0, FRESH - 1);
+  if (kind === 'keep') { STARS++; $('nstar').textContent = STARS; } else $('nall').textContent = Math.max(0, (Number($('nall').textContent) || 0) - 1); // kept ones stay in Browse
+  cleared(1);
+  marketsStale = true;
+  renderInbox();
+  deciding = false;
+  toast(kind === 'seen' ? '✓ Made ad' : kind === 'keep' ? '★ Kept' : '✗ Rejected', a.id, kind === 'keep' ? 'unstarred' : 'none');
+  try {
+    await setStatus(a.id, kind === 'keep' ? 'starred' : kind);
+  } catch (err) {
+    DONE.delete(a.id);
+    cleared(-1);
+    toast('Could not save: ' + err.message, '');
+    load();
+    return;
+  }
+  if (ADS.length < 4 && total > ADS.length) load();
+}
+$('tri').addEventListener('click', (e) => { const b = e.target.closest('[data-tri]'); if (b) decide(b.dataset.tri); });
+$('zero').addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b) goView(b.dataset.go); });
+// Swipe the card: right = made ad, left = reject (up and down still scroll).
+let drag = null;
+$('grid').addEventListener('pointerdown', (e) => {
+  if (st.view !== 'inbox' || e.button > 0 || e.target.closest('a, button, video')) return;
+  const c = e.target.closest('.card');
+  if (c) drag = { c, x: e.clientX, y: e.clientY, dx: 0, on: false, id: e.pointerId };
+});
+$('grid').addEventListener('pointermove', (e) => {
+  if (!drag || e.pointerId !== drag.id) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (!drag.on) {
+    if (Math.abs(dx) < 12) return;
+    if (Math.abs(dy) > Math.abs(dx)) { drag = null; return; }
+    drag.on = true;
+    drag.c.classList.add('drag');
+    try { drag.c.setPointerCapture(e.pointerId); } catch (err) { /* fine without */ }
+  }
+  drag.dx = dx;
+  drag.c.style.transform = `translateX(${dx}px) rotate(${(dx / 24).toFixed(1)}deg)`;
+  drag.c.dataset.lean = dx > 70 ? 'seen' : dx < -70 ? 'rejected' : '';
+});
+const drop = () => {
+  const d = drag;
+  drag = null;
+  if (!d || !d.on) return;
+  if (Math.abs(d.dx) > 100) { decide(d.dx > 0 ? 'seen' : 'rejected', d.dx > 0 ? 1 : -1); return; }
+  d.c.classList.remove('drag');
+  d.c.style.transform = '';
+  delete d.c.dataset.lean;
+};
+$('grid').addEventListener('pointerup', drop);
+$('grid').addEventListener('pointercancel', drop);
+
 function header(j) {
+  $('nin').textContent = j.counts.inbox || '';
   $('nall').textContent = j.counts.all;
   $('nstar').textContent = j.counts.starred || '';
+  FRESH = j.counts.fresh || 0;
+  STARS = j.counts.starred || 0;
   const al = j.alert;
   $('alert').hidden = !al;
   $('alert').className = 'alert' + (al && al.level === 'yellow' ? ' yellow' : '');
   $('alert').textContent = al ? al.text : '';
   const r = j.last_run;
   const box = $('runbox');
+  HUNTING = !!r && r.status === 'running';
   if (!r) { box.className = 'status'; $('run').textContent = 'No run yet'; return; }
   if (r.status === 'running') {
     // last_run is saved after every batch: no update for 45 minutes is a run that does not move.
@@ -701,11 +872,13 @@ async function load(append) {
     const j = await res.json();
     if (my !== seq) return;
     if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
-    ADS = append ? ADS.concat(j.ads) : j.ads;
+    const got = st.view === 'inbox' ? j.ads.filter((a) => !DONE.has(a.id)) : j.ads;
+    ADS = append ? ADS.concat(got) : got;
     VIEWER = !!j.viewer;
-    total = j.total;
+    total = j.total - (j.ads.length - got.length);
     header(j);
-    render(append, j.ads);
+    if (st.view === 'inbox') FRESH = Math.max(0, FRESH - j.ads.filter((a) => DONE.has(a.id) && isNew(a)).length);
+    render(append, got);
     radar();
   } catch (e) {
     if (my !== seq) return;
@@ -724,9 +897,11 @@ async function setStatus(id, status) {
 }
 
 let undoId = '';
+let undoStatus = 'none';
 let toastTimer = 0;
-function toast(msg, id) {
+function toast(msg, id, back) {
   undoId = id;
+  undoStatus = back || 'none';
   $('toastMsg').textContent = msg;
   $('undo').hidden = !id;
   $('toast').hidden = false;
@@ -736,7 +911,9 @@ function toast(msg, id) {
 $('undo').addEventListener('click', async () => {
   $('toast').hidden = true;
   if (!undoId) return;
-  try { await setStatus(undoId, 'none'); } catch (e) { /* shown by the reload */ }
+  const id = undoId;
+  if (DONE.delete(id)) cleared(-1);
+  try { await setStatus(id, undoStatus); } catch (e) { /* shown by the reload */ }
   load();
   loadMarkets();
 });
@@ -770,7 +947,7 @@ $('grid').addEventListener('click', async (e) => {
     }
     return;
   }
-  if (e.target.closest('a, button, input, select')) return;
+  if (e.target.closest('a, button, input, select') || st.view === 'inbox') return;
   opened.has(id) ? opened.delete(id) : opened.add(id);
   c.classList.toggle('open', opened.has(id));
 });
@@ -858,6 +1035,11 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !$('sheet').hidden) closeAd();
   // "/" jumps to the search (not while typing somewhere)
   if (e.key === '/' && $('sheet').hidden && st.view === 'all' && !e.target.closest('input, select, textarea')) { e.preventDefault(); $('q').focus(); }
+  // Inbox: R / ← reject, K / ↑ keep, D / → made ad, Enter or V: view the ad
+  if (st.view !== 'inbox' || !$('sheet').hidden || e.metaKey || e.ctrlKey || e.altKey || e.target.closest('input, select, textarea')) return;
+  const kind = { r: 'rejected', ArrowLeft: 'rejected', k: 'keep', ArrowUp: 'keep', d: 'seen', ArrowRight: 'seen' }[e.key.length === 1 ? e.key.toLowerCase() : e.key];
+  if (kind) { e.preventDefault(); decide(kind); return; }
+  if ((e.key === 'Enter' || e.key.toLowerCase() === 'v') && ADS[0] && !e.target.closest('a, button')) { e.preventDefault(); VIEWER ? openAd(ADS[0]) : safe(ADS[0].ad) && window.open(ADS[0].ad, '_blank', 'noopener'); }
 });
 $('sBody').addEventListener('click', (e) => {
   if (e.target.id !== 'meer') return;
@@ -880,7 +1062,15 @@ $('grid').addEventListener('error', (e) => {
   ph.prepend(d);
 }, true);
 
-for (const b of document.querySelectorAll('[data-view]')) b.addEventListener('click', () => { if (st.view === b.dataset.view) return; st.view = b.dataset.view; ADS = []; load(); window.scrollTo({ top: 0 }); });
+function goView(v) {
+  if (st.view === v) return;
+  st.view = v;
+  ADS = [];
+  load();
+  if (v === 'all' && marketsStale) { marketsStale = false; loadMarkets(); }
+  window.scrollTo({ top: 0 });
+}
+for (const b of document.querySelectorAll('[data-view]')) b.addEventListener('click', () => goView(b.dataset.view));
 for (const b of document.querySelectorAll('[data-f]')) {
   b.addEventListener('click', () => {
     const f = b.dataset.f;

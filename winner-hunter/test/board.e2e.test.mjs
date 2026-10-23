@@ -102,9 +102,19 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     await page.fill('input[name=pin]', '482913');
     await Promise.all([page.waitForURL(base + '/'), page.click('button[type=submit]')]);
     await page.waitForSelector('.card');
-    assert.strictEqual(await page.locator('[data-view]').count(), 2, 'All and ★ only (no Top 20)');
-    assert.strictEqual(await page.getAttribute('[data-view=all]', 'aria-pressed'), 'true', 'All is the start view');
-    assert.ok(await page.locator('#q').isVisible(), 'search right away');
+    assert.strictEqual(await page.locator('[data-view]').count(), 3, 'Inbox, Browse and ★ (no Top 20)');
+    assert.strictEqual(await page.getAttribute('[data-view=inbox]', 'aria-pressed'), 'true', 'Inbox is the start view');
+    assert.strictEqual(await page.locator('.card').count(), 1, 'one product at a time');
+    assert.strictEqual(await page.locator('.card.open').count(), 1, 'with its details open');
+    assert.strictEqual(await page.textContent('#ileft'), '27 left');
+    assert.strictEqual(await page.textContent('#nin'), '27');
+    assert.ok(await page.locator('#tri').isVisible() && (await page.locator('#q').isHidden()) && (await page.locator('#radar').isHidden()));
+    await page.waitForFunction(imagesInView);
+    await noSideScroll('Inbox');
+    await shot('2a-inbox');
+    await page.click('[data-view=all]');
+    await page.waitForFunction(() => document.querySelectorAll('.card').length === 27);
+    assert.ok(await page.locator('#q').isVisible(), 'search right away in Browse');
     assert.strictEqual(await page.locator('.card').count(), 27);
     assert.strictEqual(await page.locator('.score').count(), 0, 'no score on the cards');
     assert.match(await page.locator('.card').first().locator('.meta').innerText(), /81[\s\S]*shop ads[\s\S]*41d[\s\S]*live[\s\S]*3[\s\S]*copies/i);
@@ -226,6 +236,59 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     await page.setViewportSize({ width: 1280, height: 900 });
     await noSideScroll('desktop');
     await shot('6-desktop-dark');
+    // Inbox: Made ad / Reject / Keep by button, key and swipe; Undo; Inbox zero at the end
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.click('[data-view=inbox]');
+    await page.waitForSelector('#tri:not([hidden])');
+    const left = async () => Number((await page.textContent('#ileft')).replace(/\D/g, ''));
+    const n0 = await left();
+    const first = await page.locator('.card').getAttribute('data-id');
+    await page.click('[data-tri=seen]');
+    await page.waitForFunction((x) => document.querySelector('.card') && document.querySelector('.card').dataset.id !== x, first);
+    assert.strictEqual(await left(), n0 - 1);
+    await page.waitForFunction((x) => document.querySelector('#toast:not([hidden])') && /Made ad/.test(document.querySelector('#toastMsg').textContent), null);
+    await page.waitForTimeout(150);
+    assert.strictEqual(env.db.prepare('SELECT status FROM hidden WHERE ad_id = ?').get(first).status, 'seen');
+    const second = await page.locator('.card').getAttribute('data-id');
+    await page.keyboard.press('r');
+    await page.waitForFunction((x) => document.querySelector('.card').dataset.id !== x, second);
+    const third = await page.locator('.card').getAttribute('data-id');
+    const stars0 = Number(await page.textContent('#nstar')) || 0;
+    await page.keyboard.press('k');
+    await page.waitForFunction((x) => document.querySelector('.card').dataset.id !== x, third);
+    await page.waitForTimeout(150);
+    assert.strictEqual(env.db.prepare('SELECT status FROM hidden WHERE ad_id = ?').get(second).status, 'rejected');
+    assert.ok(env.db.prepare('SELECT 1 FROM stars WHERE ad_id = ?').get(third), 'Keep = ★');
+    assert.strictEqual(Number(await page.textContent('#nstar')), stars0 + 1);
+    assert.strictEqual(await left(), n0 - 3);
+    await page.click('#undo');
+    await page.waitForFunction((x) => document.querySelector('.card') && document.querySelector('.card').dataset.id === x, third);
+    assert.ok(!env.db.prepare('SELECT 1 FROM stars WHERE ad_id = ?').get(third), 'Undo Keep takes the star off');
+    assert.strictEqual(await left(), n0 - 2);
+    // swipe right = made ad
+    const box0 = await page.locator('.card .bd').boundingBox();
+    await page.mouse.move(box0.x + 60, box0.y + 20);
+    await page.mouse.down();
+    for (let i = 1; i <= 8; i++) await page.mouse.move(box0.x + 60 + i * 25, box0.y + 22);
+    await page.mouse.up();
+    await page.waitForFunction((x) => !document.querySelector('.card') || document.querySelector('.card').dataset.id !== x, third);
+    await page.waitForTimeout(150);
+    assert.strictEqual(env.db.prepare('SELECT status FROM hidden WHERE ad_id = ?').get(third).status, 'seen');
+    await noSideScroll('Inbox after decisions');
+    await shot('8-inbox');
+    // clear the rest: Inbox zero
+    for (let k = await left(); k > 0; k--) {
+      const cur = await page.locator('.card').getAttribute('data-id');
+      await page.keyboard.press('d');
+      await page.waitForFunction((x) => !document.querySelector('.card') || document.querySelector('.card').dataset.id !== x, cur);
+    }
+    await page.waitForSelector('#zero:not([hidden])');
+    assert.match(await page.textContent('#zero'), /Inbox zero[\s\S]*cleared today[\s\S]*Next hunt/);
+    assert.ok(await page.locator('#tri').isHidden());
+    await noSideScroll('Inbox zero');
+    await shot('9-inbox-zero');
+    await page.waitForTimeout(300);
+    assert.strictEqual((await (await fetch(base + '/api/ads?view=inbox', { headers: { cookie: (await page.context().cookies()).map((c) => `${c.name}=${c.value}`).join('; ') } })).json()).total, 0, 'saved: nothing left on the server');
     // a failed run: red banner on top, on a phone
     env.db.prepare("UPDATE state SET value = ? WHERE key = 'last_run'").run(JSON.stringify({ status: 'done', health: 'failed', finished_at: new Date(NOW - 3600e3).toISOString(), ads_checked: 0, new_winners: 0,
       alert: 'Run mislukt: 0 ads gecheckt (Meta token?) / Run failed: 0 ads checked (Meta token?) <b>x</b>' }));

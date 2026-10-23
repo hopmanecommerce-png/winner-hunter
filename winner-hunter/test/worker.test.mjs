@@ -94,7 +94,8 @@ test('/api/ads: All is the default view (no Top 20): ads that pass the rules, on
   assert.ok(!ids.includes('9100'), 'second ad of the same product collapsed');
   assert.ok(!ids.includes('9300'), 'too young');
   assert.ok(!ids.includes('9200'), '272 reach a day');
-  assert.deepStrictEqual(Object.keys(j.counts), ['all', 'starred', 'hidden']);
+  assert.deepStrictEqual(Object.keys(j.counts), ['all', 'inbox', 'fresh', 'starred', 'hidden']);
+  assert.strictEqual(j.counts.inbox, 27, 'nothing decided yet: everything is in the inbox');
   assert.strictEqual(j.counts.all, 27);
   assert.strictEqual(j.last_run.new_winners, 23);
   const a = j.ads.find((x) => x.id === '9002');
@@ -198,6 +199,43 @@ test('/api/hide: seen and rejected leave All, Hidden shows them, none brings the
   assert.deepStrictEqual(out.ads.map((a) => [a.id, a.pass]).sort(), [['9000', true], ['9900', false]]);
   assert.strictEqual(out.counts.starred, 2);
   assert.ok(!(await (await s.get('/api/ads?view=all&limit=100')).json()).ads.some((a) => a.id === '9900'), 'never in All');
+});
+
+test('/api/ads?view=inbox: not seen, rejected or kept (★), best first; Inbox zero when all are decided', async () => {
+  const env = await seededEnv();
+  const s = await loggedIn(env);
+  const inbox = async () => (await s.get('/api/ads?view=inbox&limit=100')).json();
+  const j = await inbox();
+  assert.strictEqual(j.view, 'inbox');
+  assert.strictEqual(j.total, 27);
+  assert.strictEqual((await (await s.get('/api/ads?view=inbox')).json()).ads.length, 20, '20 at a time');
+  for (let i = 1; i < j.ads.length; i++) assert.ok(j.ads[i - 1].rpd >= j.ads[i].rpd, 'best first');
+  const [a, b, c] = j.ads.map((x) => x.id);
+  await s.post('/api/hide', { ad_id: a, status: 'seen' });
+  await s.post('/api/hide', { ad_id: b, status: 'rejected' });
+  await s.post('/api/hide', { ad_id: c, status: 'starred' });
+  const after = await inbox();
+  assert.strictEqual(after.total, 24);
+  assert.ok(!after.ads.some((x) => [a, b, c].includes(x.id)), 'decided products leave the inbox');
+  assert.strictEqual(after.counts.inbox, 24);
+  assert.ok((await (await s.get('/api/ads?view=all&limit=100')).json()).ads.some((x) => x.id === c), 'a kept product is still in Browse');
+  await s.post('/api/hide', { ad_id: c, status: 'unstarred' });
+  assert.strictEqual((await inbox()).total, 25, 'undo Keep: back in the inbox');
+  for (const x of (await inbox()).ads) await s.post('/api/hide', { ad_id: x.id, status: 'seen' });
+  const zero = await inbox();
+  assert.deepStrictEqual([zero.total, zero.ads.length, zero.counts.inbox, zero.counts.fresh], [0, 0, 0, 0], 'Inbox zero');
+});
+
+test('/api/ads: counts.fresh = inbox products found in the last day', async () => {
+  const env = await seededEnv();
+  const s = await loggedIn(env);
+  const j = await (await s.get('/api/ads?view=inbox&limit=100')).json();
+  const fresh = j.ads.filter((a) => NOW - Date.parse(a.first_seen) < 864e5);
+  assert.strictEqual(j.counts.fresh, fresh.length);
+  if (fresh.length) {
+    await s.post('/api/hide', { ad_id: fresh[0].id, status: 'seen' });
+    assert.strictEqual((await (await s.get('/api/ads?view=inbox')).json()).counts.fresh, fresh.length - 1);
+  }
 });
 
 test('/api/ads: while a run hunts, the run before it comes along', async () => {
