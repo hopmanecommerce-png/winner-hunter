@@ -42,6 +42,13 @@ jobs:
       - name: Database tables
         run: node winner-hunter/migrate.mjs
 
+      # Trustpilot's pages sit behind a bot check: the runner's Google Chrome passes it once (lib/trust.mjs).
+      - name: Install Playwright
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        working-directory: winner-hunter
+        run: npm install --no-save --no-package-lock playwright-core@1.56.1
+
       # Fill the store best-seller ranks now, so the test link shows them before the next nightly run.
       - name: Store best sellers
         continue-on-error: true

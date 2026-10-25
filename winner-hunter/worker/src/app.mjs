@@ -148,9 +148,13 @@ export function bestOf(b) {
   return { rank: b.rank == null ? null : Number(b.rank), move: m ? { from: m.from, days: m.days } : null };
 }
 
-/** For the card: the store's Trustpilot facts { status: 'widget' | 'badge' | 'none', score, reviews, profile }, or null. */
+/**
+ * For the card: the store's Trustpilot facts { status, score, reviews, profile }, or null. status: 'page' (its
+ * Trustpilot page) or 'widget' (a real widget on the store) with a score; 'nopage': not on Trustpilot; 'badge' and
+ * 'none': only the store was checked (it names Trustpilot without a real widget, or not at all).
+ */
 export function trustOf(t) {
-  if (!t || !['widget', 'badge', 'none'].includes(t.status)) return null;
+  if (!t || !['page', 'widget', 'nopage', 'badge', 'none'].includes(t.status)) return null;
   const n = (x) => (x == null || !Number.isFinite(Number(x)) ? null : Number(x));
   return { status: t.status, score: n(t.score), reviews: n(t.reviews), profile: t.profile || '' };
 }

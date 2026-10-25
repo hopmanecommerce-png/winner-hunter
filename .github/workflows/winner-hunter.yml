@@ -66,6 +66,13 @@ jobs:
           [ "$MINUTES" -gt 300 ] && export MINUTES=300
           node winner-hunter/run.mjs
 
+      # Trustpilot's pages sit behind a bot check: the runner's Google Chrome passes it once (lib/trust.mjs).
+      - name: Install Playwright
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        working-directory: winner-hunter
+        run: npm install --no-save --no-package-lock playwright-core@1.56.1
+
       # Proof that the board's products sell: each one's rank in its store's own best-seller list (top 50).
       # Also after a red hunt: whatever is on the board gets its rank.
       - name: Store best sellers

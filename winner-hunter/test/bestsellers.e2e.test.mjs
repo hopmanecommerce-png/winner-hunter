@@ -49,9 +49,11 @@ test('store best sellers and Trustpilot on the cards: rank and weekly move, Trus
   env.db.prepare(`INSERT INTO bestseller (product_key, store, product_id, rank, ok, checked_at, history) VALUES
     ('shop1.test/products/item-1', 'shop1.test', '12', 2, 1, 'x', '[["2026-10-09",5],["2026-10-17",2]]'),
     ('shop3.test/products/item-3', 'shop3.test', '30', NULL, 1, 'x', '[["2026-10-17",null]]')`).run();
-  // Trustpilot: shop1 has a real widget (4.2 from 1,252 reviews); shop3 only shows a Trustpilot logo.
+  // Trustpilot: shop1 from its Trustpilot page (4.2 from 1,252 reviews), shop2 by its widget; shop3 only shows a
+  // Trustpilot logo (checked without a token); shop5 is not on Trustpilot.
   env.db.prepare(`INSERT INTO store_trust (store, status, score, reviews, profile, checked_at) VALUES
-    ('shop1.test', 'widget', 4.2, 1252, 'shop1.test', 'x'), ('shop3.test', 'badge', NULL, NULL, NULL, 'x')`).run();
+    ('shop1.test', 'page', 4.2, 1252, 'shop1.test', 'x'), ('shop2.test', 'widget', 2.4, 31, 'shop2.test', 'x'),
+    ('shop3.test', 'badge', NULL, NULL, NULL, 'x'), ('shop5.test', 'nopage', NULL, NULL, NULL, 'x')`).run();
   const server = await serve(env);
   const base = `http://localhost:${server.address().port}`;
   const errors = [];
@@ -75,6 +77,10 @@ test('store best sellers and Trustpilot on the cards: rank and weekly move, Trus
     await page.waitForFunction(() => document.querySelectorAll('.card').length === 27);
     assert.strictEqual(await page.locator('.bs.no').first().innerText(), "Not in its store's top 50");
     assert.match(await page.locator('.mtp.mid').first().innerText(), /Badge only\s+Trustpilot named, no real widget/i);
+    const card = (shop) => page.locator('.card', { has: page.locator(`text=${shop}`) }).first().locator('.mtp');
+    assert.match(await card('shop5.test').innerText(), /^–\s+Not on Trustpilot$/i, 'no Trustpilot page');
+    assert.match(await card('shop2.test').innerText(), /^2\.4 ★\s+trustpilot\s+31\s+reviews$/i, 'a widget still shows its score');
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/trust-browse.png` });
     await page.selectOption('#sort', 'best');
     await page.waitForFunction(() => /#\d+ best seller/.test(document.querySelector('.card .bs')?.textContent || ''));
     assert.match(await page.locator('.card').first().locator('.bs').innerText(), /#2 best seller/);
