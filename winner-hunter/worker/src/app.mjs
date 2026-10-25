@@ -64,6 +64,8 @@ export const parseCountries = (s) => [...String(s || '').matchAll(/\b([A-Z]{2}) 
 const SNAP_SQL = `SELECT w.ad_id, ${KEY} AS gk, w.product_title, w.price, w.compare_at_price, w.currency, w.advertiser, w.active_ads,
   w.ad_age_days, w.reach_eu, w.scaled_count, w.keyword, w.store_url, w.product_url, w.ad_library_url, w.image_url,
   w.first_seen, w.last_seen, w.data FROM winners w`;
+// Store best sellers (bestsellers.mjs, once a day), read with the winners and kept on each row as w.bs.
+const BS_SQL = 'SELECT product_key, rank, ok, history FROM bestseller';
 const VERSION_SQL = `SELECT (SELECT MAX(rowid) FROM winners) AS r, (SELECT updated_at FROM state WHERE key = 'last_run') AS u`;
 const SNAP_MS = 15 * 60000; // read again after this long anyway
 const SNAPS = new WeakMap(); // per D1 binding
@@ -76,13 +78,78 @@ export async function snapshot(DB, now = Date.now()) {
   const shared = typeof navigator !== 'undefined' && navigator.userAgent === 'Cloudflare-Workers';
   let s = SNAPS.get(DB) || (shared ? LAST : null);
   if (!s || s.ver !== ver || now - s.at > SNAP_MS || now < s.at) {
-    const { results } = await DB.prepare(SNAP_SQL).all();
+    const [{ results }, bs] = await Promise.all([
+      DB.prepare(SNAP_SQL).all(),
+      DB.prepare(BS_SQL).all().then((r) => r.results || [], () => []), // no table yet: no ranks, the board still works
+    ]);
+    const best = new Map(bs.map((b) => [b.product_key, b]));
+    for (const w of results) {
+      const b = best.get(productKey(w.product_url));
+      if (b) w.bs = b;
+    }
     s = { ver, at: now, rows: results };
     SNAPS.set(DB, s);
     if (shared) LAST = s;
   }
   return s.rows;
 }
+
+// ---------------------------------------------------------------------------
+// Store best sellers: proof that a product sells (its rank in its own store's best-seller list, top 50).
+// productKey and movement are the same as in lib/bestsellers.mjs.
+// ---------------------------------------------------------------------------
+
+/** 'store.com/products/handle' for a product page (locale prefix and query dropped), else ''. */
+export function productKey(u) {
+  let x;
+  try {
+    x = new URL(u);
+  } catch (e) {
+    return '';
+  }
+  if (!/^https?:$/.test(x.protocol)) return '';
+  const m = /\/products\/([^/?#]+)/.exec(x.pathname);
+  if (!m) return '';
+  let handle = m[1];
+  try {
+    handle = decodeURIComponent(handle);
+  } catch (e) {
+    // keep it as it is
+  }
+  handle = handle.replace(/\.(js|json)$/i, '').toLowerCase();
+  const host = x.hostname.toLowerCase().replace(/\.$/, '').replace(/^www\d?\./, '');
+  return handle && host ? `${host}/products/${handle}` : '';
+}
+
+/** How the rank moved over about a week: { from, to, days } (from null: it was not in the top 50 then), or null. */
+export function movement(history) {
+  const h = Array.isArray(history) ? history : [];
+  if (h.length < 2) return null;
+  const last = h[h.length - 1];
+  const daysBack = (e) => Math.round((Date.parse(last[0]) - Date.parse(e[0])) / 864e5);
+  const base = [...h].reverse().find((e) => daysBack(e) >= 7) || (daysBack(h[0]) >= 2 ? h[0] : null);
+  return base ? { from: base[1], to: last[1], days: daysBack(base) } : null;
+}
+
+/** For the card: { rank (null: not in the store's top 50), move: { from, days } | null }, or null when unknown. */
+export function bestOf(b) {
+  if (!b || !Number(b.ok)) return null;
+  let h = [];
+  try {
+    h = JSON.parse(b.history || '[]');
+  } catch (e) {
+    h = [];
+  }
+  const m = movement(h);
+  return { rank: b.rank == null ? null : Number(b.rank), move: m ? { from: m.from, days: m.days } : null };
+}
+
+const bsRank = (r) => (r.bs && Number(r.bs.ok) && r.bs.rank != null ? Number(r.bs.rank) : null);
+/** The inbox puts products that sell first: × 1.5 in the store's top 10, × 1.2 in its top 50. */
+export const sellsBoost = (r) => {
+  const k = bsRank(r);
+  return k == null ? 1 : k <= 10 ? 1.5 : 1.2;
+};
 
 const num = (x) => Number(x) || 0;
 const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -195,6 +262,7 @@ const SORTS = {
   scaled: (a, b) => num(b.scaled_count) - num(a.scaled_count) || b.rpd - a.rpd,
   ads: (a, b) => num(b.active_ads) - num(a.active_ads) || b.rpd - a.rpd,
   reach: (a, b) => num(b.reach_eu) - num(a.reach_eu) || b.rpd - a.rpd,
+  best: (a, b) => (bsRank(a) ?? 999) - (bsRank(b) ?? 999) || better(a, b),
 };
 
 /** One view of the board: filters, one market (?cc=FR: best first by the reach a day there), sort and page. */
@@ -209,8 +277,8 @@ export function viewOf(p, list, { csv = false } = {}) {
     limit = csv ? 5000 : 100;
   } else if (view === 'inbox') {
     out = list.v.filter((r) => inInbox(r) && !blockedBy(r, list.taste)) // not decided yet: not seen, rejected or kept (★)
-      .map((r) => Object.assign({}, r, { fit: fitOf(r, list.taste) }));
-    sort = (a, b) => b.rpd * b.fit - a.rpd * a.fit || cmp(a.ad_id, b.ad_id);
+      .map((r) => Object.assign({}, r, { fit: fitOf(r, list.taste), boost: sellsBoost(r) }));
+    sort = (a, b) => b.rpd * b.fit * b.boost - a.rpd * a.fit * a.boost || cmp(a.ad_id, b.ad_id);
     limit = csv ? 5000 : Math.min(Math.max(parseInt(p.get('limit'), 10) || 20, 1), 100);
   } else {
     const hidden = p.get('hidden') === '1';
@@ -439,6 +507,7 @@ export function toAd(r) {
     crpd: r.crpd == null ? null : Math.round(r.crpd),
     hidden: r.hid === 2 ? 'rejected' : r.hid === 1 ? 'seen' : '',
     fit: r.fit == null ? null : r.fit,
+    best: bestOf(r.bs),
   };
 }
 

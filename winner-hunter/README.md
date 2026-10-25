@@ -24,6 +24,10 @@ GitHub Actions (every night)  →  Cloudflare D1 (the database)  →  Board (Clo
 - **🧠**: what the board learned, your notes, and a box to tell the board something. Everything is in the D1
   table `feedback`; ask Claude "learn from my Winner Hunter feedback" to turn it into better keywords and rules.
 - **Browse**: everything that passes, most reach per day first, with search, sort and filters. **★**: your kept products.
+- **🏆 Store best seller**: proof that a product sells. Once a day (after the hunt) every board product gets its rank in
+  its own store's best-seller list (Shopify's sales order, top 50) and how it moved in a week: "#2 best seller in its
+  store · ↑3 in 8d". The Inbox puts sellers first (× 1.5 in the store's top 10, × 1.2 in its top 50); Browse can sort
+  by it. No line = the store gives no list (headless shop); "Not in its store's top 50" = checked, not selling much.
 - Per product: photo, price/discount, a ✓ per rule (active ads, days live, reach per day), ads for this product,
   the store's product count, shop. **▶ Bekijk ad** opens the ad itself (video, images, text, button) on the board, at once: `ad-prefetch.yml` opens every board ad ahead of time (every 8 hours and after each hunt).
   Tap a card for more: ad text, checklist and the buttons **Ad ↗ · Product ↗ · Store ↗ · Search 1688 ↗**.
@@ -72,6 +76,7 @@ Other countries: add a repository variable `HUNT_COUNTRIES` (default `NL,BE,DE,F
 
 ```
 run.mjs          nightly run (batches, cursor, time budget)
+bestsellers.mjs  store best-seller ranks for the board's products (after the hunt; lib/bestsellers.mjs)
 migrate.mjs      creates the D1 tables (safe to run every time)
 import.mjs       one-time import of the old winners
 keywords.txt     the search words

@@ -10,6 +10,8 @@ on:
     branches-ignore: [main]
     paths:
       - 'winner-hunter/worker/**'
+      - 'winner-hunter/bestsellers.mjs'
+      - 'winner-hunter/lib/**'
       - '.github/workflows/preview-board.yml'
   workflow_dispatch:
 
@@ -27,11 +29,23 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID || '8934aca9-51d3-4f87-9c62-e897843149a1' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+
+      # The test version may need new tables (all idempotent, the live board ignores tables it does not use).
+      - name: Database tables
+        run: node winner-hunter/migrate.mjs
+
+      # Fill the store best-seller ranks now, so the test link shows them before the next nightly run.
+      - name: Store best sellers
+        continue-on-error: true
+        run: node winner-hunter/bestsellers.mjs
 
       - name: Worker packages
         working-directory: winner-hunter/worker
