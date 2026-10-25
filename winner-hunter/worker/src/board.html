@@ -302,6 +302,16 @@
   .tags { display: flex; flex-wrap: wrap; gap: 4px; }
   .meta.m4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .grid.one .links { padding-bottom: 14px; }
+  /* Inbox: your note on this product, below the card */
+  .pnote { max-width: 760px; margin: 12px auto 0; display: grid; gap: 8px; }
+  body.noting .dock { position: static; } /* while you type, the buttons do not cover the note */
+  .pnote textarea { width: 100%; min-height: 64px; resize: vertical; border-radius: 14px; border: 1px solid var(--line2); background: var(--card2); color: var(--ink); padding: 10px 12px; font: inherit; font-size: 16px; line-height: 1.4; }
+  .pnote textarea:focus { outline: none; border-color: var(--cy); box-shadow: 0 0 0 3px rgba(46, 230, 255, .15); }
+  .pns { justify-self: end; margin-top: -4px; min-height: 1em; font: 600 10.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+  .pold { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+  .pold b { color: var(--ink); font-weight: 650; }
+  .pold div { border-left: 3px solid var(--vi); padding-left: 10px; color: var(--ink); overflow-wrap: anywhere; }
+  .pold small { display: block; color: var(--faint); font-size: 12px; }
   .grid.one .card[data-lean="seen"] { box-shadow: 0 0 0 2px var(--win), 0 0 30px -8px var(--win); }
   .grid.one .card[data-lean="rejected"] { box-shadow: 0 0 0 2px var(--bad), 0 0 30px -8px var(--bad); }
   .dock { position: sticky; bottom: 0; z-index: 4; max-width: 760px; margin: 12px auto 0; padding: 10px 0 max(10px, env(safe-area-inset-bottom));
@@ -317,10 +327,8 @@
   .wc { display: flex; flex-wrap: wrap; gap: 6px; }
   .rc { border: 1px solid var(--line2); background: var(--card2); border-radius: 999px; height: 32px; padding: 0 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
   .rc[aria-pressed="true"] { background: rgba(46, 230, 255, .16); border-color: var(--cy); color: var(--ink); box-shadow: 0 0 12px -4px var(--cy); }
-  .rc.nt { color: var(--link); }
-  .wn { display: flex; gap: 6px; }
-  .wn input, .lnote textarea { flex: 1; min-width: 0; height: 38px; border-radius: 10px; border: 1px solid var(--line2); background: var(--card2); padding: 0 10px; font-size: 16px; }
-  .wn button, .lnote button, .lblk button { border: 0; border-radius: 10px; padding: 0 14px; height: 38px; font-weight: 700; background: var(--holo); color: #06070d; cursor: pointer; }
+  .lnote textarea { flex: 1; min-width: 0; height: 38px; border-radius: 10px; border: 1px solid var(--line2); background: var(--card2); padding: 0 10px; font-size: 16px; }
+  .lnote button, .lblk button { border: 0; border-radius: 10px; padding: 0 14px; height: 38px; font-weight: 700; background: var(--holo); color: #06070d; cursor: pointer; }
   .tag.fit { background: rgba(61, 255, 176, .16); color: var(--win); border-color: rgba(61, 255, 176, .4); }
   /* 🧠 Learned */
   .learn { max-width: 760px; margin: 18px auto 0; display: grid; gap: 14px; }
@@ -483,6 +491,11 @@
     <div class="ibar"><i id="iprog"></i></div>
   </section>
   <main class="grid" id="grid" aria-busy="true"></main>
+  <section class="pnote" id="pnote" aria-label="Your note on this product" hidden>
+    <textarea id="pn" maxlength="500" placeholder="📝 Note: the ad, the competitor, the product… (key N)" aria-label="Your note on this product" enterkeyhint="done"></textarea>
+    <small class="pns" id="pns" aria-live="polite"></small>
+    <div class="pold" id="pold"></div>
+  </section>
   <div class="dock" id="dock" hidden>
     <div class="why" id="why" aria-label="Why? The board learns from it" hidden></div>
     <div class="tri" id="tri" role="group" aria-label="Decide">
@@ -754,7 +767,7 @@ function render(append, fresh) {
     renderInbox();
     return;
   }
-  $('ibox').hidden = $('dock').hidden = $('zero').hidden = true;
+  $('ibox').hidden = $('dock').hidden = $('zero').hidden = $('pnote').hidden = true;
   if (append) $('grid').insertAdjacentHTML('beforeend', fresh.map((a) => card(a)).join(''));
   else $('grid').innerHTML = ADS.map((a) => card(a)).join('');
   $('grid').setAttribute('aria-busy', 'false');
@@ -795,9 +808,51 @@ function nextHunt() {
   return `Next hunt: ${day} ~${t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 }
 let HUNTING = false;
+// Your note on the Inbox product: the ad, the competitor, the product. Saved as you type (and when you decide).
+// Below it: your notes on other products of the same store or advertiser.
+const NOTE = { id: '', saved: '', timer: 0 };
+async function loadNote(a) {
+  clearTimeout(NOTE.timer);
+  Object.assign(NOTE, { id: a.id, saved: '' });
+  $('pn').value = '';
+  $('pns').textContent = '';
+  $('pold').innerHTML = '';
+  try {
+    const res = await fetch('/api/note?ad_id=' + encodeURIComponent(a.id), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    const j = await res.json();
+    if (!res.ok || NOTE.id !== a.id) return;
+    NOTE.saved = j.note || '';
+    if (!$('pn').value) $('pn').value = NOTE.saved; // unless you started typing already
+    $('pold').innerHTML = j.others.length ? `<b>Your notes on ${esc(host(a.store) || a.adv)}</b>${j.others.map((n) => `<div>${esc(n.note)}<small>${esc(n.title)}${n.title ? ' · ' : ''}${esc(ago(n.at))}</small></div>`).join('')}` : '';
+  } catch (e) {
+    // the box still works without the old notes
+  }
+}
+async function saveNote() {
+  clearTimeout(NOTE.timer);
+  const id = NOTE.id;
+  const t = $('pn').value.trim();
+  if (!id || t === NOTE.saved) return;
+  NOTE.saved = t;
+  $('pns').textContent = 'Saving…';
+  try {
+    const res = await fetch('/api/note', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ad_id: id, note: t }) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (NOTE.id === id) $('pns').textContent = t ? 'Saved ✓' : '';
+  } catch (e) {
+    if (NOTE.saved === t) NOTE.saved = null; // try again on the next change
+    if (NOTE.id === id) $('pns').textContent = '';
+    toast('Could not save the note: ' + e.message, '');
+  }
+}
+$('pn').addEventListener('input', () => { clearTimeout(NOTE.timer); $('pns').textContent = ''; NOTE.timer = setTimeout(saveNote, 800); });
+$('pn').addEventListener('focus', () => document.body.classList.add('noting'));
+$('pn').addEventListener('blur', () => { document.body.classList.remove('noting'); saveNote(); });
+$('pn').addEventListener('keydown', (e) => { if (e.key === 'Escape' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); $('pn').blur(); } });
 function renderInbox() {
   const a = ADS[0];
   const done = cleared();
+  $('pnote').hidden = !a;
   $('nin').textContent = total || '';
   if (!a && total > 0) { $('grid').innerHTML = SKELETON; $('zero').hidden = true; return; } // the next page is on its way
   $('ibox').hidden = $('tri').hidden = !a;
@@ -813,6 +868,7 @@ function renderInbox() {
     return;
   }
   $('grid').innerHTML = card(a, true);
+  if (NOTE.id !== a.id) { saveNote(); loadNote(a); }
   $('ileft').textContent = `${total.toLocaleString('en-US')} left`;
   $('inew').textContent = FRESH ? `${FRESH} new today` : '';
   $('iprog').style.setProperty('--w', (done + total ? (done / (done + total)) * 100 : 0) + '%');
@@ -824,6 +880,7 @@ async function decide(kind, dir) {
   const a = ADS[0];
   if (st.view !== 'inbox' || !a || deciding || !$('sheet').hidden) return;
   deciding = true;
+  saveNote(); // what you typed goes with this product
   const c = $('grid').querySelector('.card');
   if (c && !calm) {
     const dx = dir != null ? dir : kind === 'seen' ? 1 : kind === 'rejected' ? -1 : 0;
@@ -840,7 +897,7 @@ async function decide(kind, dir) {
   cleared(1);
   marketsStale = true;
   const saved = setStatus(a.id, kind === 'keep' ? 'starred' : kind);
-  LAST = { a, kind, reasons: new Set(), note: '', noteOpen: false, saved: saved.catch(() => {}) };
+  LAST = { a, kind, reasons: new Set(), saved: saved.catch(() => {}) };
   renderInbox();
   deciding = false;
   try {
@@ -896,8 +953,8 @@ const REASON_LABELS = {
   bad: { price: 'Too expensive', saturated: 'Saturated', niche: 'Not my niche', quality: 'Looks low quality', store: 'Bad store', ship: 'Hard to ship', ad: 'Weak ad' },
   good: { wow: 'Wow product', margin: 'Good margin', ad: 'Strong ad', niche: 'My niche', easy: 'Easy to ship' },
 };
-const VERB = { seen: '✓ Made ad', keep: '★ Kept', rejected: '✗ Rejected' };
-let LAST = null; // the last decision: { a, kind, reasons, note, noteOpen, saved }
+const VERB = { seen: '✓ Made ad', keep: '★ Kept', rejected: '✗ Rejected', note: '📝 Note' };
+let LAST = null; // the last decision: { a, kind, reasons, saved }
 function renderWhy() {
   const w = LAST;
   $('why').hidden = !w;
@@ -905,9 +962,7 @@ function renderWhy() {
   const labels = REASON_LABELS[w.kind === 'rejected' ? 'bad' : 'good'];
   $('why').innerHTML = `<div class="wh"><span><b>${esc(VERB[w.kind])}</b> · ${esc(nice(w.a))}</span><button data-w="undo">Undo</button></div>
     <div class="wq">${w.kind === 'rejected' ? 'Why not?' : 'Why?'}<small>tap: the board learns</small></div>
-    <div class="wc">${Object.entries(labels).map(([k, l], i) => `<button class="rc" data-r="${k}" aria-pressed="${w.reasons.has(k)}" title="Key ${i + 1}">${esc(l)}</button>`).join('')}
-      <button class="rc nt" data-w="note" aria-expanded="${w.noteOpen}">${w.note ? '✎ Note ✓' : '✎ Note'}</button></div>
-    <form class="wn" id="wn"${w.noteOpen ? '' : ' hidden'}><input id="wnote" maxlength="300" placeholder="Your note…" aria-label="Note" value="${esc(w.note)}" enterkeyhint="done"><button>Save</button></form>`;
+    <div class="wc">${Object.entries(labels).map(([k, l], i) => `<button class="rc" data-r="${k}" aria-pressed="${w.reasons.has(k)}" title="Key ${i + 1}">${esc(l)}</button>`).join('')}</div>`;
 }
 async function sendFeedback(body) {
   const res = await fetch('/api/feedback', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -936,17 +991,6 @@ $('why').addEventListener('click', (e) => {
   if (r) { toggleReason(r.dataset.r); return; }
   const b = e.target.closest('[data-w]');
   if (b && b.dataset.w === 'undo') undoLast();
-  if (b && b.dataset.w === 'note' && LAST) { LAST.noteOpen = !LAST.noteOpen; renderWhy(); if (LAST.noteOpen) $('wnote').focus(); }
-});
-$('why').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const w = LAST;
-  if (!w) return;
-  w.note = $('wnote').value.trim();
-  w.noteOpen = false;
-  renderWhy();
-  await w.saved;
-  try { await sendFeedback({ ad_id: w.a.id, note: w.note }); toast('Note saved', ''); } catch (err) { toast('Could not save the note: ' + err.message, ''); }
 });
 
 // ---- 🧠 Learned: what your decisions taught the board.
@@ -957,7 +1001,7 @@ async function loadLearned() {
   $('grid').classList.remove('one');
   $('grid').innerHTML = '';
   $('grid').setAttribute('aria-busy', 'false');
-  for (const id of ['allrow', 'allrow2', 'count', 'empty', 'moreBtn', 'ibox', 'dock', 'zero']) $(id).hidden = true;
+  for (const id of ['allrow', 'allrow2', 'count', 'empty', 'moreBtn', 'ibox', 'dock', 'zero', 'pnote']) $(id).hidden = true;
   radar();
   $('learn').hidden = false;
   if (!LEARNED) $('learn').innerHTML = '<div class="sload"><i class="spin"></i>Loading…</div>';
@@ -1227,7 +1271,7 @@ document.addEventListener('keydown', (e) => {
     if (k) { e.preventDefault(); toggleReason(k); }
     return;
   }
-  if (LAST && e.key.toLowerCase() === 'n') { e.preventDefault(); LAST.noteOpen = true; renderWhy(); $('wnote').focus(); return; }
+  if (e.key.toLowerCase() === 'n' && ADS[0]) { e.preventDefault(); $('pn').focus(); return; }
   const kind = { r: 'rejected', ArrowLeft: 'rejected', k: 'keep', ArrowUp: 'keep', d: 'seen', ArrowRight: 'seen' }[e.key.length === 1 ? e.key.toLowerCase() : e.key];
   if (kind) { e.preventDefault(); decide(kind); return; }
   if ((e.key === 'Enter' || e.key.toLowerCase() === 'v') && ADS[0] && !e.target.closest('a, button')) { e.preventDefault(); if (safe(ADS[0].ad)) window.open(ADS[0].ad, '_blank', 'noopener'); }

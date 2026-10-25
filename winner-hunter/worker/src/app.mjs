@@ -148,6 +148,7 @@ export const REASONS = {
   good: { wow: 'Wow product', margin: 'Good margin', ad: 'Strong ad', niche: 'My niche', easy: 'Easy to ship' },
 };
 const ACTION_OF = { seen: 'seen', rejected: 'rejected', starred: 'keep' };
+const DECISIONS = new Set(Object.values(ACTION_OF));
 const reasonsOf = (s) => { try { const r = JSON.parse(s || '[]'); return Array.isArray(r) ? r.map(String) : []; } catch (e) { return []; } };
 export const storeOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, '').toLowerCase(); } catch (e) { return ''; } };
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
@@ -162,6 +163,7 @@ export function tasteOf(fb = []) {
   const blocked = new Map();
   const pricey = [];
   for (const f of fb) {
+    if (!DECISIONS.has(f.action)) continue; // notes and board notes are not decisions
     const r = reasonsOf(f.reasons);
     const bad = f.action === 'rejected';
     const k = String(f.keyword || '').trim().toLowerCase();
@@ -574,6 +576,8 @@ async function readJson(req, url, max = 2000) {
   }
 }
 
+const clean = (s, n) => String(s ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, n);
+
 /**
  * POST /api/feedback. {ad_id, reasons?, note?}: why you made that decision (on its latest feedback row).
  * {general: "…"}: a note about the board. {unblock: "shop.com"}: that store may come back in the inbox.
@@ -582,7 +586,6 @@ async function feedback(req, url, env, now) {
   const { j, err } = await readJson(req, url);
   if (err) return err;
   const at = new Date(now).toISOString();
-  const clean = (s, n) => String(s ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, n);
   if (j.general != null) {
     const note = clean(j.general, 1000);
     if (!note) return json({ error: 'Empty note' }, 400);
@@ -615,6 +618,49 @@ async function feedback(req, url, env, now) {
   if (!sets.length) return json({ error: 'Nothing to save' }, 400);
   await env.DB.prepare(`UPDATE feedback SET ${sets.join(', ')} WHERE id = ?`).bind(...vals, row.id).run();
   return json({ ok: true });
+}
+
+/**
+ * Your note on a product (the ad, the competitor, the product), before or after you decide. One per product: a
+ * feedback row with action 'note' and the product's facts, so 🧠 lists it and Claude can learn from it.
+ *   GET /api/note?ad_id=…        { note, others }: others = your notes on other products of the same store or advertiser
+ *   POST /api/note {ad_id, note}  saves it ('' takes it out)
+ */
+async function note(req, url, env, now) {
+  const post = req.method === 'POST';
+  let id = url.searchParams.get('ad_id') || '';
+  let text = '';
+  if (post) {
+    const { j, err } = await readJson(req, url);
+    if (err) return err;
+    id = String(j.ad_id || '');
+    text = clean(j.note, 500);
+  }
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) return json({ error: 'Bad ad_id' }, 400);
+  const rows = await snapshot(env.DB, now);
+  const me = rows.find((w) => w.ad_id === id);
+  if (!me) return json({ error: 'Unknown ad' }, 404);
+  const ids = rows.filter((w) => w.gk === me.gk).map((w) => w.ad_id); // every ad of this product
+  if (post) {
+    const steps = [];
+    for (let i = 0; i < ids.length; i += 90) {
+      const part = ids.slice(i, i + 90);
+      steps.push(env.DB.prepare(`DELETE FROM feedback WHERE action = 'note' AND ad_id IN (${part.map(() => '?').join(', ')})`).bind(...part));
+    }
+    if (text) {
+      steps.push(env.DB.prepare("INSERT INTO feedback (ad_id, action, reasons, note, keyword, store, advertiser, title, price, at) VALUES (?, 'note', '[]', ?, ?, ?, ?, ?, ?, ?)")
+        .bind(id, text, me.keyword ?? '', me.store_url ?? '', me.advertiser ?? '', String(me.product_title ?? '').slice(0, 200), me.price ?? null, new Date(now).toISOString()));
+    }
+    await env.DB.batch(steps);
+    return json({ ok: true });
+  }
+  const { results } = await env.DB.prepare("SELECT ad_id, action, note, store, advertiser, title, at FROM feedback WHERE ad_id IS NOT NULL AND note != '' ORDER BY id DESC LIMIT 2000").all();
+  const mine = new Set(ids);
+  const own = results.find((f) => f.action === 'note' && mine.has(f.ad_id));
+  const shop = storeOf(me.store_url);
+  const others = results.filter((f) => !mine.has(f.ad_id) && ((shop && storeOf(f.store) === shop) || (me.advertiser && f.advertiser === me.advertiser)))
+    .slice(0, 5).map((f) => ({ title: f.title || '', note: f.note, at: f.at }));
+  return json({ note: own ? own.note : '', others });
 }
 
 /** GET /api/learned: what the board learned from your feedback, for the 🧠 page (and for Claude to read). */
@@ -668,7 +714,7 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       if (!ok) return pinPage(nonce);
       return secure(new Response(html.replaceAll('__NONCE__', nonce), { headers: { 'Content-Type': 'text/html; charset=utf-8' } }), { nonce, html: true });
     }
-    if (path === '/api/ads' || path === '/api/hide' || path === '/api/markets' || path === '/export.csv' || path === '/api/feedback' || path === '/api/learned') {
+    if (path === '/api/ads' || path === '/api/hide' || path === '/api/markets' || path === '/export.csv' || path === '/api/feedback' || path === '/api/learned' || path === '/api/note') {
       if (!ok) return path === '/export.csv' ? text('Log in first.', 401) : json({ error: 'Log in first' }, 401);
       if (path === '/api/markets' && method === 'GET') {
         return json(marketsOf((await board(env, now)).v.filter((r) => r.hid === 0)));
@@ -677,6 +723,7 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       if (path === '/api/hide' && method === 'POST') return await hide(req, url, env, now);
       if (path === '/api/feedback' && method === 'POST') return await feedback(req, url, env, now);
       if (path === '/api/learned' && method === 'GET') return await learned(env);
+      if (path === '/api/note' && (method === 'GET' || method === 'POST')) return await note(req, url, env, now);
       if (path === '/export.csv' && method === 'GET') return await csv(url, env, now);
       return json({ error: 'Method not allowed' }, 405);
     }

@@ -274,6 +274,35 @@ test('feedback: every decision is logged, reasons and a note added after, undo t
   assert.strictEqual((await call(env, '/api/learned')).status, 401, 'PIN needed');
 });
 
+test('notes: one per product, before or after deciding; notes on the same store come back; a note is not a decision', async () => {
+  const env = await seededEnv();
+  const s = await loggedIn(env);
+  const notes = () => env.db.prepare("SELECT ad_id, note, store FROM feedback WHERE action = 'note' ORDER BY id").all();
+  assert.deepStrictEqual(await (await s.get('/api/note?ad_id=9001')).json(), { note: '', others: [] });
+  assert.strictEqual((await s.post('/api/note', { ad_id: '9001', note: '  Gratis\u0000 verzending  ' })).status, 200);
+  assert.strictEqual((await s.post('/api/note', { ad_id: '9001', note: 'Competitor: 3 video ads, UGC' })).status, 200);
+  assert.deepStrictEqual(notes().map((n) => [n.ad_id, n.note]), [['9001', 'Competitor: 3 video ads, UGC']], 'one note per product: a new one replaces it');
+  assert.strictEqual(notes()[0].store, 'https://shop1.test/', "the product's facts are copied in");
+  assert.strictEqual((await (await s.get('/api/note?ad_id=9001')).json()).note, 'Competitor: 3 video ads, UGC');
+  // another product of the same store shows it
+  const o = await (await s.get('/api/note?ad_id=9400')).json();
+  assert.deepStrictEqual([o.note, o.others.map((n) => [n.title, n.note])], ['', [['Posture Corrector Pro', 'Competitor: 3 video ads, UGC']]]);
+  // deciding and undo keep the note; it does not count as a decision or a niche; 🧠 lists it
+  await s.post('/api/hide', { ad_id: '9001', status: 'rejected' });
+  await s.post('/api/hide', { ad_id: '9001', status: 'none' });
+  assert.strictEqual(notes().length, 1);
+  const l = await (await s.get('/api/learned')).json();
+  assert.deepStrictEqual([l.decisions, l.niches], [0, []]);
+  assert.deepStrictEqual(l.notes.map((n) => [n.action, n.note]), [['note', 'Competitor: 3 video ads, UGC']]);
+  // empty takes it out; bad input
+  assert.strictEqual((await s.post('/api/note', { ad_id: '9001', note: '   ' })).status, 200);
+  assert.deepStrictEqual(notes(), []);
+  assert.strictEqual((await s.post('/api/note', { ad_id: '../x', note: 'x' })).status, 400);
+  assert.strictEqual((await s.post('/api/note', { ad_id: '123456', note: 'x' })).status, 404);
+  assert.strictEqual((await s.get('/api/note?ad_id=')).status, 400);
+  assert.strictEqual((await call(env, '/api/note?ad_id=9001')).status, 401, 'PIN needed');
+});
+
 test('tasteOf / fitOf: niches you like go up, rejected niches and too-expensive prices go down, bad stores leave', () => {
   const t = tasteOf([
     { action: 'seen', reasons: '[]', keyword: 'Dog', store: 'https://a.com', price: 20 },

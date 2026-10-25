@@ -264,18 +264,27 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     await noSideScroll('Why strip');
     await shot('8a-why');
     const second = await page.locator('.card').getAttribute('data-id');
+    // a note on the product, below the card (key N): saved as you type, it stays with the product
+    assert.ok(await page.locator('#pnote').isVisible(), 'note box under the Inbox card');
+    await page.keyboard.press('n');
+    assert.strictEqual(await page.evaluate(() => document.activeElement.id), 'pn');
+    await page.keyboard.type('Te duur <b>voor</b> NL');
+    await page.keyboard.press('r'); // typing, not a decision
+    await page.keyboard.press('Backspace');
+    await page.keyboard.press('Enter'); // done: saves
+    await page.waitForFunction(() => document.querySelector('#pns').textContent === 'Saved ✓');
+    assert.strictEqual(env.db.prepare("SELECT note FROM feedback WHERE ad_id = ? AND action = 'note'").get(second).note, 'Te duur <b>voor</b> NL');
+    await noSideScroll('Note');
+    await shot('8b-note');
     await page.keyboard.press('r');
     await page.waitForFunction((x) => document.querySelector('.card').dataset.id !== x, second);
-    // a reject asks why not: key 1 = Too expensive; a note
+    assert.strictEqual(await page.inputValue('#pn'), '', 'the next product starts with an empty note');
+    // a reject asks why not: key 1 = Too expensive
     assert.match(await page.textContent('#why .wq'), /Why not\?/);
     await page.keyboard.press('1');
     await page.waitForFunction(() => document.querySelector('#why [data-r=price]').getAttribute('aria-pressed') === 'true');
-    await page.click('#why [data-w=note]');
-    await page.fill('#wnote', 'Te duur <b>voor</b> NL');
-    await page.press('#wnote', 'Enter');
-    await page.waitForFunction(() => /Note ✓/.test(document.querySelector('#why [data-w=note]').textContent));
     await page.waitForTimeout(200);
-    assert.deepStrictEqual({ ...env.db.prepare('SELECT reasons, note FROM feedback WHERE ad_id = ?').get(second) }, { reasons: '["price"]', note: 'Te duur <b>voor</b> NL' });
+    assert.strictEqual(env.db.prepare("SELECT reasons FROM feedback WHERE ad_id = ? AND action = 'rejected'").get(second).reasons, '["price"]');
     const third = await page.locator('.card').getAttribute('data-id');
     const stars0 = Number(await page.textContent('#nstar')) || 0;
     await page.keyboard.press('k');
