@@ -4,7 +4,7 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import { productKey, storeTop, productId, rankOf, addDay, movement } from '../lib/bestsellers.mjs';
 import { refresh } from '../bestsellers.mjs';
-import { storeTrust, trustIdIn } from '../lib/trust.mjs';
+import { storeTrust, trustIdIn, trustPage, businessUnitIn, UA } from '../lib/trust.mjs';
 import { handle, makeToken, productKey as boardKey, movement as boardMovement, bestOf, sellsBoost } from '../worker/src/app.mjs';
 import { d1Client } from '../lib/d1.mjs';
 import { d1Rest } from './helpers/sqlite-d1.mjs';
@@ -100,7 +100,7 @@ test('bestsellers.mjs: ranks for the board products, kept per day; the board sho
   assert.strictEqual(t1.ranked, 2, 'item-1 (#3, by handle) and item-2 (#1, by id)');
   assert.ok(t1.noList >= 1 && t1.stores === t1.noList + 3);
   assert.match(logs[0], /^Store best sellers: \d+ products in \d+ stores · 2 in their store's top 50/);
-  assert.ok(!w1.calls.some((u) => /shop0\.test|\/collections/.test(u)), 'store-root links (no product page) are never checked');
+  assert.ok(!w1.calls.some((u) => /shop0\.test\/(?!$)|\/collections/.test(u)), 'store-root links (no product page): no best-seller list');
   const row = (k) => env.db.prepare('SELECT * FROM bestseller WHERE product_key = ?').get(k);
   assert.deepStrictEqual({ ...row('shop1.test/products/item-1') }, { product_key: 'shop1.test/products/item-1', store: 'shop1.test', product_id: '12', rank: 3, ok: 1,
     checked_at: new Date(NOW).toISOString(), history: '[["2026-10-17",3]]' });
@@ -159,11 +159,23 @@ test('workflows: ranks after every hunt (also a red one) and before every test l
   assert.ok(at('run: node winner-hunter/bestsellers.mjs') < at('versions upload'));
 });
 
-// ---- Trustpilot (lib/trust.mjs): only from a real widget on the store ----
+// ---- Trustpilot (lib/trust.mjs): the store's Trustpilot page, else a real widget on the store ----
 const WIDGET = (score, total, name) => json({ businessUnit: { trustScore: score, stars: 4, displayName: name, identifyingName: name, numberOfReviews: { total } } });
+// Trustpilot's own pages, behind its bot check: only the token 'aws-waf-token=good' (or 'fresh') passes.
+const TP_PAGE = (bu) => new Response(`<html><head><title>Reviews</title></head><body><script id="__NEXT_DATA__" type="application/json">${JSON.stringify({ props: { pageProps: { businessUnit: bu } } })}</script></body></html>`, { status: 200, headers: { 'content-type': 'text/html' } });
+const BOT_PAGE = () => new Response('<!doctype html><title>Verifying Connection</title><script src="https://x.edge.sdk.awswaf.com/x/challenge.js"></script>', { status: 403 });
+function trustpilot(u, init = {}) {
+  const h = init.headers || {};
+  if (!['aws-waf-token=good', 'aws-waf-token=fresh'].includes(h.Cookie) || h['User-Agent'] !== UA) return BOT_PAGE();
+  const domain = decodeURIComponent(u.pathname.replace(/^\/review\//, ''));
+  if (domain === 'shop1.test') return TP_PAGE({ id: 'a'.repeat(24), identifyingName: 'shop1.test', trustScore: 4.6, stars: 4.5, numberOfReviews: 980 });
+  if (domain === 'shop3.test') return TP_PAGE({ id: 'd'.repeat(24), identifyingName: 'www.shop3.test', trustScore: 3.1, stars: 3, numberOfReviews: 12 });
+  if (domain === 'new.test') return TP_PAGE({ id: 'e'.repeat(24), identifyingName: 'new.test', trustScore: 0, stars: 0, numberOfReviews: 0 });
+  return new Response('<html>Page not found</html>', { status: 404 });
+}
 function trustStores() {
   const calls = [];
-  const doFetch = async (url) => {
+  const doFetch = async (url, init) => {
     calls.push(url);
     const u = new URL(url);
     const page = (html) => new Response(`<html><body>${html}</body></html>`, { status: 200, headers: { 'content-type': 'text/html' } });
@@ -174,6 +186,7 @@ function trustStores() {
       if (id === 'bbbbbbbbbbbbbbbbbbbbbbbb') return WIDGET(2.4, 31, 'shop2.test');
       return new Response('<!DOCTYPE html><title>Trustpilot Custom Widget</title>', { status: 200 });
     }
+    if (u.host === 'www.trustpilot.com') return trustpilot(u, init);
     if (u.host === 'shop1.test' && u.pathname === '/') return page('<div class="trustpilot-widget" data-locale="nl-NL" data-template-id="x" data-businessunit-id="aaaaaaaaaaaaaaaaaaaaaaaa"></div>');
     if (u.host === 'shop2.test' && u.pathname === '/') return page('<footer>no widget here</footer>');
     if (u.host === 'shop2.test' && u.pathname === '/products/item-2') return page('<script>window.tp = {"businessUnitId":"bbbbbbbbbbbbbbbbbbbbbbbb"}</script>');
@@ -205,7 +218,7 @@ test('bestsellers.mjs + board: Trustpilot per store every 3 days; the card gets 
   const s1 = trustStores();
   const t1 = await refresh({ db, doFetch: s1.doFetch, now: () => NOW, log: (m) => logs.push(m) });
   assert.deepStrictEqual({ widget: t1.trust.widget, badge: t1.trust.badge, none: t1.trust.none }, { widget: 2, badge: 1, none: 1 });
-  assert.match(logs[1], /^Trustpilot: \d+ stores checked · 2 with a real widget · 1 name it without one · 1 without · \d+ not reachable$/);
+  assert.match(logs[1], /^Trustpilot: \d+ stores checked · 0 on Trustpilot · 0 not on Trustpilot · 2 by their widget · 2 store only \(no token\) · \d+ not reachable$/);
   const row = (s) => env.db.prepare('SELECT status, score, reviews, profile FROM store_trust WHERE store = ?').get(s);
   assert.deepStrictEqual({ ...row('shop1.test') }, { status: 'widget', score: 4.2, reviews: 1252, profile: 'shop1.test' });
   assert.strictEqual(row('shop3.test').status, 'badge');
@@ -227,4 +240,72 @@ test('bestsellers.mjs + board: Trustpilot per store every 3 days; the card gets 
   assert.deepStrictEqual(trust('9003'), { status: 'badge', score: null, reviews: null, profile: '' });
   assert.deepStrictEqual(trust('9005'), { status: 'none', score: null, reviews: null, profile: '' });
   assert.strictEqual(trust('9007'), null, 'never checked: nothing shown');
+});
+
+test('trustPage: score and reviews from the store\'s Trustpilot page; no page; the bot check', async () => {
+  const doFetch = async (url, init) => trustpilot(new URL(url), init);
+  assert.deepStrictEqual(await trustPage('shop1.test', { cookie: 'aws-waf-token=good', doFetch }), { status: 'page', score: 4.6, reviews: 980, profile: 'shop1.test' });
+  assert.deepStrictEqual(await trustPage('nothere.test', { cookie: 'aws-waf-token=good', doFetch }), { status: 'nopage' });
+  assert.deepStrictEqual(await trustPage('new.test', { cookie: 'aws-waf-token=good', doFetch }), { status: 'page', score: null, reviews: 0, profile: 'new.test' }, 'no reviews yet: no score');
+  assert.deepStrictEqual(await trustPage('shop1.test', { cookie: 'aws-waf-token=old', doFetch }), { error: 'Trustpilot bot check HTTP 403', blocked: true });
+  assert.deepStrictEqual(await trustPage('shop1.test', { cookie: 'aws-waf-token=good', doFetch: async () => new Response('busy', { status: 503 }) }), { error: 'Trustpilot HTTP 503' });
+  assert.deepStrictEqual(await trustPage('shop1.test', { cookie: 'aws-waf-token=good', doFetch: async () => { throw new Error('reset'); } }), { error: 'Trustpilot HTTP 0' });
+  assert.strictEqual(businessUnitIn('<script id="__NEXT_DATA__" type="application/json">{oops</script>'), null);
+});
+
+test('storeTrust with the Trustpilot page: its score first; no page: a real widget still counts, else "not on Trustpilot"', async () => {
+  const { doFetch, calls } = trustStores();
+  const page = (store) => trustPage(store, { cookie: 'aws-waf-token=good', doFetch });
+  assert.deepStrictEqual(await storeTrust('shop1.test', '', { doFetch, page }), { status: 'page', score: 4.6, reviews: 980, profile: 'shop1.test' });
+  assert.ok(!calls.some((u) => /shop1\.test\/$/.test(u)), 'found on Trustpilot: the store itself is not asked');
+  assert.deepStrictEqual(await storeTrust('shop2.test', 'https://shop2.test/products/item-2', { doFetch, page }), { status: 'widget', score: 2.4, reviews: 31, profile: 'shop2.test' }, 'its page is on another domain: the widget finds it');
+  assert.deepStrictEqual(await storeTrust('shop5.test', '', { doFetch, page }), { status: 'nopage' });
+  assert.deepStrictEqual(await storeTrust('down.test', '', { doFetch, page }), { status: 'nopage' }, 'store down, but Trustpilot says it has no page');
+  assert.deepStrictEqual(await storeTrust('shop5.test', '', { doFetch, page: async () => null }), { status: 'none' }, 'no token: the store only, as before');
+});
+
+test('bestsellers.mjs: one token a run, a new one once when Trustpilot stops taking it; old store-only answers asked again', async () => {
+  const env = await seededEnv();
+  const db = d1Client({ accountId: 'a', databaseId: 'd', token: 't' }, { doFetch: d1Rest(env.db).doFetch, retryMs: 0 });
+  // Checked yesterday from the store only: 'none' for shop1 and shop3 (the old way)
+  env.db.prepare("INSERT INTO store_trust (store, status, checked_at) VALUES ('shop1.test', 'none', ?), ('shop3.test', 'badge', ?)").run(new Date(NOW - DAY).toISOString(), new Date(NOW - DAY).toISOString());
+  const row = (s) => ({ ...env.db.prepare('SELECT status, score, reviews, profile FROM store_trust WHERE store = ?').get(s) });
+
+  const off = trustStores();
+  await refresh({ db, doFetch: off.doFetch, now: () => NOW, log: () => {} });
+  assert.strictEqual(row('shop1.test').status, 'none', 'no token (no browser): a day-old answer waits its 3 days');
+
+  let asked = 0;
+  const tokens = ['aws-waf-token=old', 'aws-waf-token=fresh'];
+  const on = trustStores();
+  const logs = [];
+  const t = await refresh({ db, doFetch: on.doFetch, now: () => NOW, log: (m) => logs.push(m), cookie: async () => tokens[asked++] || '' });
+  assert.strictEqual(asked, 2, 'the first token is turned away: one new token, then it holds for the run');
+  assert.deepStrictEqual(row('shop1.test'), { status: 'page', score: 4.6, reviews: 980, profile: 'shop1.test' }, 'a store-only answer is asked again with a token');
+  assert.deepStrictEqual(row('shop3.test'), { status: 'page', score: 3.1, reviews: 12, profile: 'www.shop3.test' });
+  assert.strictEqual(row('shop5.test').status, 'nopage');
+  assert.ok(t.trust.page >= 2 && t.trust.nopage >= 1 && t.trust.badge + t.trust.none === 0);
+  assert.match(logs[1], /^Trustpilot: \d+ stores checked · \d+ on Trustpilot · \d+ not on Trustpilot/);
+
+  const again = trustStores();
+  let asked2 = 0;
+  await refresh({ db, doFetch: again.doFetch, now: () => NOW + DAY, log: () => {}, cookie: async () => (asked2++, 'aws-waf-token=good') });
+  assert.ok(!again.calls.some((u) => /trustpilot\.com\/review\/shop1\.test/.test(u)), 'a Trustpilot answer holds its 3 days');
+
+  // The board: the score from the page; "not on Trustpilot"
+  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, NOW)}`;
+  const ads = (await (await handle(new Request('https://wh.example.workers.dev/api/ads', { headers: { cookie } }), env, { html: '', now: NOW })).json()).ads;
+  const trust = (id) => ads.find((a) => a.id === id).trust;
+  assert.deepStrictEqual(trust('9001'), { status: 'page', score: 4.6, reviews: 980, profile: 'shop1.test' });
+  assert.deepStrictEqual(trust('9005'), { status: 'nopage', score: null, reviews: null, profile: '' });
+});
+
+test('bestsellers.mjs: a store whose ads link to its home page gets its Trustpilot check too (no best-seller rank)', async () => {
+  const env = await seededEnv();
+  env.db.prepare("UPDATE winners SET product_url = 'https://shop1.test/', store_url = 'https://www.shop1.test/' WHERE store_url LIKE '%shop1.test%'").run();
+  const db = d1Client({ accountId: 'a', databaseId: 'd', token: 't' }, { doFetch: d1Rest(env.db).doFetch, retryMs: 0 });
+  const s = trustStores();
+  await refresh({ db, doFetch: s.doFetch, now: () => NOW, log: () => {}, cookie: async () => 'aws-waf-token=good' });
+  assert.strictEqual(env.db.prepare("SELECT status FROM store_trust WHERE store = 'shop1.test'").get().status, 'page');
+  assert.ok(!s.calls.some((u) => /shop1\.test\/api\/.*graphql/.test(u)), 'no product page: no best-seller list asked');
 });

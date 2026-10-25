@@ -1,29 +1,35 @@
 #!/usr/bin/env node
 /*
- * Store signals for every product on the board (and every ★ product), once a day after the hunt (winner-hunter.yml)
- * and for a test link (preview-board.yml); the board shows them on the card:
- *   - its rank in its own store's best-seller list (top 50, lib/bestsellers.mjs) → D1 table `bestseller`
- *   - its store's Trustpilot score and number of reviews, from a real Trustpilot widget on the store (lib/trust.mjs),
- *     checked again every TRUST_DAYS days → D1 table `store_trust`
+ * Store signals for every product on the board (and every ★ and ✓ Made ad product), once a day after the hunt
+ * (winner-hunter.yml) and for a test link (preview-board.yml); the board shows them on the card:
+ *   - its rank in its own store's best-seller list (top 50, lib/bestsellers.mjs) → D1 table `bestseller`; only for
+ *     ads that link to a product page
+ *   - its store's Trustpilot score and number of reviews, from the store's own Trustpilot page, else from a real
+ *     Trustpilot widget on the store (lib/trust.mjs), checked again every TRUST_DAYS days → D1 table `store_trust`;
+ *     for every store, also when the ad links to the store's home page (most do)
  *   CF_API_TOKEN=… CF_ACCOUNT_ID=… [BS_MINUTES=15] node winner-hunter/bestsellers.mjs
  *
- * One request per store for its list, plus one per product the first time (its Shopify id), plus up to three for
- * Trustpilot every few days. A store without a list or widget is no warning: it simply gets no rank or score.
- * Only a D1 failure ends red.
+ * One request per store for its list, plus one per product the first time (its Shopify id), plus one to four for
+ * Trustpilot every few days (a browser passes Trustpilot's bot check once per run: Playwright, the runner's Chrome).
+ * A store without a list or Trustpilot is no warning: it simply gets no rank or score. Only a D1 failure ends red.
  */
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { d1Client, d1Settings, chunks, STRICT } from './lib/d1.mjs';
 import { pool } from './lib/meta.mjs';
 import { productKey, storeTop, productId, rankOf, addDay } from './lib/bestsellers.mjs';
-import { storeTrust } from './lib/trust.mjs';
+import { storeTrust, trustCookie, trustPage } from './lib/trust.mjs';
+import { storeOf } from './worker/src/app.mjs';
 
 const DAY = 864e5;
 const KEEP_DAYS = 60; // rows not checked for this long are removed
 const TRUST_DAYS = 3; // a store's Trustpilot score is checked again after this long
+// Answers that need no new look: 'badge' and 'none' come from the store alone, so they are asked again as soon as
+// Trustpilot's own page can be read.
+const SETTLED = new Set(['page', 'nopage', 'widget']);
 
-const WANTED_SQL = `SELECT DISTINCT product_url FROM winners
-WHERE product_url LIKE '%/products/%' AND ((${STRICT} AND last_seen >= ?1) OR ad_id IN (SELECT ad_id FROM stars))`;
+const WANTED_SQL = `SELECT DISTINCT product_url, store_url FROM winners
+WHERE (${STRICT} AND last_seen >= ?1) OR ad_id IN (SELECT ad_id FROM stars) OR ad_id IN (SELECT ad_id FROM hidden WHERE status = 'seen')`;
 export const SAVE_SQL = `INSERT INTO bestseller (product_key, store, product_id, rank, ok, checked_at, history)
 SELECT json_extract(value, '$.key'), json_extract(value, '$.store'), json_extract(value, '$.id'), json_extract(value, '$.rank'),
   json_extract(value, '$.ok'), ?2, json_extract(value, '$.history') FROM json_each(?1) WHERE true
@@ -36,39 +42,71 @@ ON CONFLICT(store) DO UPDATE SET status = excluded.status, score = excluded.scor
   profile = excluded.profile, checked_at = excluded.checked_at`;
 
 /**
- * deps: { db, doFetch, now, log, deadline (ms) }. Returns { products, stores, ranked, noList, saved, trust: { widget, badge, none, failed } }.
- * Throws only when D1 cannot be read or written.
+ * deps: { db, doFetch, now, log, deadline (ms), cookie: async () => Trustpilot token or '' (trustCookie; asked again
+ * once when Trustpilot stops taking it) }. Returns { products, stores, ranked, noList, saved,
+ * trust: { page, nopage, widget, badge, none, failed } }. Throws only when D1 cannot be read or written.
  */
-export async function refresh({ db, doFetch = globalThis.fetch, now = Date.now, log = console.log, deadline = Infinity }) {
+export async function refresh({ db, doFetch = globalThis.fetch, now = Date.now, log = console.log, deadline = Infinity, cookie = async () => '' }) {
   const start = now();
   const day = new Date(start).toISOString().slice(0, 10);
   const wanted = await db.query(WANTED_SQL, [new Date(start - 45 * DAY).toISOString()]);
   const known = new Map((await db.query('SELECT product_key, product_id, history FROM bestseller')).map((r) => [r.product_key, r]));
-  const trusted = new Map((await db.query('SELECT store, checked_at FROM store_trust')).map((r) => [r.store, Date.parse(r.checked_at) || 0]));
+  const trusted = new Map((await db.query('SELECT store, status, checked_at FROM store_trust')).map((r) => [r.store, r]));
 
-  // Products by store; one product page once.
+  // Products by store; one product page once. A store whose ads link elsewhere (home page, collection) gets no products,
+  // only its Trustpilot check.
   const byStore = new Map();
-  for (const { product_url: url } of wanted) {
+  for (const { product_url: url, store_url: storeUrl } of wanted) {
     const key = productKey(url);
-    if (!key) continue;
-    const store = key.split('/')[0];
+    const store = key ? key.split('/')[0] : storeOf(storeUrl); // the board looks a home-page ad's store up by storeOf
+    if (!store) continue;
     if (!byStore.has(store)) byStore.set(store, new Map());
-    byStore.get(store).set(key, url);
+    if (key) byStore.get(store).set(key, url);
   }
+
+  // Trustpilot's own pages: one token for the run, asked for when the first store needs it and once more when
+  // Trustpilot stops taking it. No token: the widget on the store only, and 'badge' and 'none' wait TRUST_DAYS.
+  let token = null;
+  let renewed = false;
+  const tokenNow = () => (token = token || Promise.resolve().then(cookie).catch(() => ''));
+  const page = async (store) => {
+    const c = await tokenNow();
+    if (!c) return null;
+    const r = await trustPage(store, { cookie: c, doFetch });
+    if (!r.blocked) return r;
+    if (!renewed) {
+      renewed = true;
+      token = null;
+    }
+    const again = await tokenNow();
+    return again && again !== c ? trustPage(store, { cookie: again, doFetch }) : r;
+  };
+  // 'badge' and 'none' are asked again only when a token comes: without one the answer would be the same.
+  if ([...byStore.keys()].some((s) => trusted.has(s) && !SETTLED.has(trusted.get(s).status))) await tokenNow();
+  const tokenOk = !!(await (token || ''));
+  const due = (store) => {
+    const row = trusted.get(store);
+    if (!row) return true;
+    return start - (Date.parse(row.checked_at) || 0) >= TRUST_DAYS * DAY || (tokenOk && !SETTLED.has(row.status));
+  };
 
   const rows = [];
   const trustRows = [];
-  const t = { products: 0, stores: byStore.size, ranked: 0, noList: 0, saved: 0, trust: { widget: 0, badge: 0, none: 0, failed: 0 } };
-  await pool([...byStore], 6, async ([store, products]) => {
+  const t = { products: 0, stores: [...byStore.values()].filter((p) => p.size).length, ranked: 0, noList: 0, saved: 0,
+    trust: { page: 0, nopage: 0, widget: 0, badge: 0, none: 0, failed: 0 } };
+  // Stores with product pages first: their best-seller ranks must not wait behind the Trustpilot-only stores.
+  const order = [...byStore].sort(([, a], [, b]) => (b.size > 0) - (a.size > 0));
+  await pool(order, 6, async ([store, products]) => {
     if (now() > deadline) return;
-    if (start - (trusted.get(store) || 0) >= TRUST_DAYS * DAY) {
-      const tr = await storeTrust(store, [...products.values()][0], { doFetch });
+    if (due(store)) {
+      const tr = await storeTrust(store, [...products.values()][0], { doFetch, page });
       if (tr.error) t.trust.failed++;
       else {
         t.trust[tr.status]++;
         trustRows.push({ store, status: tr.status, score: tr.score ?? null, reviews: tr.reviews ?? null, profile: tr.profile || null });
       }
     }
+    if (!products.size) return; // no product page: no best-seller rank to look up
     const { top, error } = await storeTop(store, { doFetch });
     if (!top) t.noList++;
     for (const [key, url] of products) {
@@ -109,7 +147,7 @@ export async function refresh({ db, doFetch = globalThis.fetch, now = Date.now, 
   await db.query('DELETE FROM store_trust WHERE checked_at < ?1', [old]);
   log(`Store best sellers: ${t.products} products in ${t.stores} stores · ${t.ranked} in their store's top 50 · ${t.noList} stores give no list`);
   const tt = t.trust;
-  log(`Trustpilot: ${tt.widget + tt.badge + tt.none + tt.failed} stores checked · ${tt.widget} with a real widget · ${tt.badge} name it without one · ${tt.none} without · ${tt.failed} not reachable`);
+  log(`Trustpilot: ${Object.values(tt).reduce((a, b) => a + b, 0)} stores checked · ${tt.page} on Trustpilot · ${tt.nopage} not on Trustpilot · ${tt.widget} by their widget · ${tt.badge + tt.none} store only (no token) · ${tt.failed} not reachable`);
   return t;
 }
 
@@ -117,11 +155,17 @@ async function main() {
   const s = d1Settings();
   if (!s) throw new Error('No CF_API_TOKEN / CF_ACCOUNT_ID: add them as GitHub secrets (see winner-hunter/README.md)');
   const minutes = Math.min(Math.max(Number(process.env.BS_MINUTES) || 15, 1), 60);
-  const t = await refresh({ db: d1Client(s), deadline: Date.now() + minutes * 60000 });
+  const t = await refresh({ db: d1Client(s), deadline: Date.now() + minutes * 60000, cookie: () => trustCookie({ launch }) });
   if (process.env.GITHUB_STEP_SUMMARY) {
     fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `\n**Store best sellers:** ${t.products} products in ${t.stores} stores, ${t.ranked} in their store's top 50, ${t.noList} stores give no list.\n`
-      + `**Trustpilot:** ${t.trust.widget} stores with a real widget, ${t.trust.badge} name it without one, ${t.trust.none} without.\n`);
+      + `**Trustpilot:** ${t.trust.page} stores on Trustpilot, ${t.trust.nopage} not, ${t.trust.widget} by their widget, ${t.trust.badge + t.trust.none} store only (no token), ${t.trust.failed} not reachable.\n`);
   }
+}
+
+// The runner's Google Chrome (playwright-core, as in ad-prefetch.yml); here Playwright's own Chromium.
+async function launch() {
+  const { chromium } = await import('playwright-core').catch(() => import('playwright'));
+  return chromium.launch({ channel: 'chrome' }).catch(() => chromium.launch());
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === fs.realpathSync(process.argv[1])) {

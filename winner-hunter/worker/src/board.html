@@ -627,22 +627,25 @@ function bestText(b) {
   const mv = !m ? '' : m.from == null ? ' · new in top 50' : m.from > b.rank ? ` · ↑${m.from - b.rank} in ${m.days}d` : m.from < b.rank ? ` · ↓${b.rank - m.from} in ${m.days}d` : '';
   return `#${b.rank} best seller in its store${mv}`;
 }
-// The store's Trustpilot score and number of reviews, from a real Trustpilot widget on the store (checked every few
-// days): a second row in the stats block. "Badge only": the store names Trustpilot but shows no real widget.
+// The store's Trustpilot score and number of reviews, from its Trustpilot page or a real Trustpilot widget on the
+// store (checked every few days): a second row in the stats block. "Not on Trustpilot": Trustpilot has no page for it.
+// "Badge only" and "No Trustpilot on the store": only the store itself was checked so far.
+const TRUST_NO = { nopage: 'Not on Trustpilot', badge: 'Trustpilot named, no real widget', none: 'No Trustpilot on the store' };
+const scored = (t) => t.status === 'page' || t.status === 'widget';
 function trustText(t) {
   if (!t) return '';
-  if (t.status === 'widget') return `Trustpilot ${t.score == null ? '–' : t.score.toFixed(1)} from ${(t.reviews ?? 0).toLocaleString('en-US')} reviews`;
-  return t.status === 'badge' ? 'Trustpilot named, no real widget' : 'No Trustpilot on the store';
+  if (scored(t)) return `Trustpilot ${t.score == null ? '–' : t.score.toFixed(1)} from ${(t.reviews ?? 0).toLocaleString('en-US')} reviews`;
+  return TRUST_NO[t.status] || TRUST_NO.none;
 }
 function trustRow(a) {
   const t = a.trust;
   if (!t) return '';
-  if (t.status === 'widget') {
+  if (scored(t)) {
     const tone = t.score == null ? '' : t.score >= 4 ? ' good' : t.score >= 3 ? ' mid' : ' low';
     return `<div class="mtp" title="${esc(trustText(t))} (Trustpilot profile ${esc(t.profile)})"><div class="m${tone}"><b>${t.score == null ? '–' : esc(t.score.toFixed(1))} ★</b><span>Trustpilot</span></div><div class="m"><b>${esc(fmt(t.reviews ?? 0))}</b><span>reviews</span></div></div>`;
   }
   const badge = t.status === 'badge';
-  return `<div class="mtp one${badge ? ' mid' : ''}" title="${esc(trustText(t))}"><div class="m"><b>${badge ? 'Badge only' : '–'}</b><span>${badge ? 'Trustpilot named, no real widget' : 'No Trustpilot on the store'}</span></div></div>`;
+  return `<div class="mtp one${badge ? ' mid' : ''}" title="${esc(trustText(t))}"><div class="m"><b>${badge ? 'Badge only' : '–'}</b><span>${esc(trustText(t))}</span></div></div>`;
 }
 function bestLine(a) {
   const b = a.best;
