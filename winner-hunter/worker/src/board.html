@@ -215,7 +215,6 @@
   .bs { font-size: 12px; margin-top: 4px; color: var(--ink); }
   .bs.top { color: var(--win); font-weight: 600; }
   .bs.no { color: var(--faint); }
-  .copy { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink); white-space: pre-line; overflow-wrap: anywhere; }
   .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 12px 12px; margin-top: auto; }
   .acts button { border: 1px solid var(--line); background: var(--card2); border-radius: 12px; height: 36px; font-weight: 650; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px; transition: border-color .2s, box-shadow .2s, background .2s; }
   .acts .ok { color: var(--win); }
@@ -674,7 +673,6 @@ function card(a, inbox) {
       <div class="who">${esc(shop || a.adv)}${a.products != null ? ' · ' + esc(fmt(a.products)) + ' products' : ''}</div>
       ${bestLine(a)}
       <div class="more">
-        ${a.copy ? `<p class="copy">${esc(a.copy)}</p>` : ''}
         <div class="facts">
           <span><b>${esc(fmt(a.reach))}</b> EU reach</span>
           ${a.adv ? `<span>${esc(a.adv)}</span>` : ''}
