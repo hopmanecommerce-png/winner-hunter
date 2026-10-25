@@ -102,7 +102,7 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     await page.fill('input[name=pin]', '482913');
     await Promise.all([page.waitForURL(base + '/'), page.click('button[type=submit]')]);
     await page.waitForSelector('.card');
-    assert.strictEqual(await page.locator('[data-view]').count(), 4, 'Inbox, Browse, ★ and 🧠 (no Top 20)');
+    assert.strictEqual(await page.locator('[data-view]').count(), 5, 'Inbox, Browse, ★, ✓ Made ad and 🧠 (no Top 20)');
     assert.strictEqual(await page.getAttribute('[data-view=inbox]', 'aria-pressed'), 'true', 'Inbox is the start view');
     assert.strictEqual(await page.locator('.card').count(), 1, 'one product at a time');
     assert.strictEqual(await page.locator('.card.open').count(), 1, 'with its details open');
@@ -190,15 +190,19 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     await page.goBack();
     await page.waitForSelector('#sheet', { state: 'hidden' });
     assert.strictEqual(page.url(), base + '/', 'back closes the sheet, stays on the board');
-    // ✓ seen: gone from the board, with an Undo
+    // ✓ Made ad: gone from the board to the ✓ tab, with an Undo
     const id = await page.locator('.card').first().getAttribute('data-id');
+    assert.strictEqual(await page.locator('.card').first().locator('[data-act=seen]').innerText(), 'Made ad');
     await page.locator('.card').first().locator('[data-act=seen]').click();
     await page.waitForSelector('#toast:not([hidden])');
+    assert.strictEqual(await page.textContent('#toastMsg'), 'Moved to ✓ Made ad');
+    assert.strictEqual(await page.textContent('#nmade'), '1', 'the ✓ count follows');
     await page.waitForFunction((x) => !document.querySelector(`.card[data-id="${x}"]`), id);
     assert.strictEqual(await page.locator('.card').count(), 26);
     assert.strictEqual(env.db.prepare('SELECT status FROM hidden WHERE ad_id = ?').get(id).status, 'seen');
     await page.click('#undo');
     await page.waitForFunction((x) => !!document.querySelector(`.card[data-id="${x}"]`), id);
+    await page.waitForFunction(() => document.querySelector('#nmade').textContent === '', null, { timeout: 3000 });
     // ★ star
     await page.locator('.card').nth(2).locator('[data-act=star]').click();
     await page.waitForFunction(() => document.querySelectorAll('.star[aria-pressed="true"]').length === 1);
@@ -249,9 +253,12 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     const left = async () => Number((await page.textContent('#ileft')).replace(/\D/g, ''));
     const n0 = await left();
     const first = await page.locator('.card').getAttribute('data-id');
+    const made0 = Number(await page.textContent('#nmade')) || 0;
     await page.click('[data-tri=seen]');
     await page.waitForFunction((x) => document.querySelector('.card') && document.querySelector('.card').dataset.id !== x, first);
     assert.strictEqual(await left(), n0 - 1);
+    assert.strictEqual(Number(await page.textContent('#nmade')), made0 + 1, 'Made ad: the ✓ count goes up');
+    assert.ok(await page.$eval('#nmade', (el) => el.classList.contains('bump')), 'and jumps, so you see where it went');
     // Why? strip: the reasons for a yes; one tap saves it
     await page.waitForSelector('#why:not([hidden])');
     assert.match(await page.textContent('#why .wh'), /✓ Made ad/);
@@ -320,6 +327,21 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     assert.ok(await page.locator('#tri').isHidden());
     await noSideScroll('Inbox zero');
     await shot('9-inbox-zero');
+    // ✓ Made ad: every product you made an ad for, with the day, in every scope
+    const nMade = env.db.prepare("SELECT COUNT(*) AS n FROM hidden WHERE status = 'seen'").get().n;
+    assert.ok(nMade > 20);
+    await page.click('[data-view=made]');
+    await page.waitForFunction((n) => document.querySelectorAll('.card').length === n, nMade);
+    assert.strictEqual(await page.textContent('#nmade'), String(nMade));
+    assert.strictEqual(await page.getAttribute('[data-view=made]', 'aria-pressed'), 'true');
+    assert.ok(await page.locator('#scope').isHidden() && await page.locator('#q').isHidden() && await page.locator('#radar').isHidden());
+    assert.strictEqual(await page.locator('.card .tag.made').count(), nMade);
+    assert.match(await page.locator('.card .tag.made').first().innerText(), /✓ Made 17 Oct/i);
+    assert.deepStrictEqual(await page.locator('.card').first().locator('.acts button').allInnerTexts(), ['Unhide']);
+    assert.ok((await page.getAttribute('#csv', 'href')).startsWith('/export.csv?view=made'));
+    await page.waitForFunction(imagesInView);
+    await noSideScroll('Made ad');
+    await shot('9a-made');
     // 🧠 what the board learned: reasons, the note (as text), and a note about the board
     await page.click('[data-view=learned]');
     await page.waitForSelector('#learn:not([hidden]) h2');

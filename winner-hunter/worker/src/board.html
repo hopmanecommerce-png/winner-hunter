@@ -137,6 +137,9 @@
   .seg button[aria-pressed="true"] { background: rgba(46, 230, 255, .1); color: var(--ink); box-shadow: inset 0 0 0 1px rgba(46, 230, 255, .5), 0 0 16px -6px var(--cy); }
   .seg small { font: 600 11px var(--mono); color: var(--faint); }
   .seg button[aria-pressed="true"] small { color: var(--cy); }
+  .seg .ok { color: var(--win); font-style: normal; } /* ✓ Made ad: the green of the Made ad button */
+  .seg small.bump { animation: bump .6s ease-out; }
+  @keyframes bump { 30% { color: var(--win); transform: scale(1.5); } }
   .count { color: var(--muted); font: 500 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; margin-top: -2px; }
   .find { display: contents; }
   .seg.mkt { justify-self: start; } /* Outside EU | EU */
@@ -184,6 +187,7 @@
   .tag { font: 700 9.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: #fff; background: rgba(4, 5, 12, .55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, .12); border-radius: 999px; padding: 5px 7px; white-space: nowrap; }
   .tag.new { background: var(--holo); color: #06070d; border: 0; box-shadow: 0 0 12px rgba(46, 230, 255, .5); }
   .tag.out { background: rgba(255, 201, 77, .9); color: #1a1406; border: 0; }
+  .tag.made { background: rgba(4, 30, 20, .7); color: var(--win); border-color: rgba(61, 255, 176, .45); }
   .tag.sp { padding: 4px 6px; opacity: .85; }
   .tag.sp svg { display: block; }
   .star { position: absolute; right: 8px; top: 8px; z-index: 1; width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .14); display: grid; place-items: center; cursor: pointer;
@@ -429,6 +433,11 @@
     .rfoot span { display: none; }
     .rfoot { justify-content: flex-end; margin-top: 6px; }
     .card.open .flags span { display: inline-flex; }
+    .seg button { padding: 0 10px; }
+  }
+  @media (max-width: 759px) {
+    .bar2 { flex-wrap: wrap; }
+    .search { flex-basis: 100%; } /* Browse: the search gets its own row, the five views stay on one */
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -468,6 +477,7 @@
         <button data-view="inbox" aria-pressed="true">Inbox <small id="nin"></small></button>
         <button data-view="all" aria-pressed="false">Browse <small id="nall"></small></button>
         <button data-view="starred" aria-pressed="false" aria-label="Starred">★ <small id="nstar"></small></button>
+        <button data-view="made" aria-pressed="false" aria-label="Made ad" title="Products you made an ad for"><i class="ok">✓</i> <small id="nmade"></small></button>
         <button data-view="learned" aria-pressed="false" aria-label="What the board learned" title="What the board learned">🧠</button>
       </div>
       <label class="search" id="allrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg>
@@ -486,7 +496,7 @@
         </select></span>
         <button class="chip" data-f="r2500" aria-pressed="false">2.5K+/day</button>
         <button class="chip" data-f="r10k" aria-pressed="false">10K+/day</button>
-        <button class="chip" data-f="hidden" aria-pressed="false" title="Products you marked seen or rejected">Seen &amp; rejected</button>
+        <button class="chip" data-f="hidden" aria-pressed="false" title="Products you made an ad for or rejected">Made ad &amp; rejected</button>
       </div>
     </div>
     <div class="seg mkt" id="scope" role="group" aria-label="Where the ads run">
@@ -537,6 +547,7 @@ const fmt = (n) => (n == null ? '–' : n >= 1e6 ? (n / 1e6).toFixed(1).replace(
 const SYM = { EUR: '€', USD: '$', GBP: '£' };
 const money = (v, c) => (v == null ? '' : (SYM[c] || (c ? c + ' ' : '')) + Number(v).toFixed(2).replace(/\.00$/, ''));
 const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
+const day = (iso) => { const d = new Date(iso); return Number.isFinite(+d) ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''; };
 const ago = (iso) => {
   const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
   if (!Number.isFinite(m)) return '';
@@ -570,11 +581,12 @@ const opened = new Set();
 const DONE = new Set(); // decided in the inbox here: skipped even if the server list is a moment behind
 let FRESH = 0; // inbox products found in the last day
 let STARS = 0;
+let MADE = 0;
 let marketsStale = false;
 
 function params(extra) {
   const p = new URLSearchParams({ view: st.view });
-  if (st.scope && st.view !== 'starred') p.set('scope', st.scope);
+  if (st.scope && st.view !== 'starred' && st.view !== 'made') p.set('scope', st.scope);
   if (st.view === 'all') {
     if (st.q) p.set('q', st.q);
     if (st.sort !== 'rpd') p.set('sort', st.sort);
@@ -618,7 +630,7 @@ function card(a, inbox) {
   const isNew = Date.now() - Date.parse(a.first_seen) < NEW_MS;
   const tags = (isNew ? '<span class="tag new">New</span>' : '')
     + (a.fit >= 1.5 ? '<span class="tag fit" title="You liked products from this niche">♥ Your niche</span>' : '')
-    + (a.hidden ? `<span class="tag">${a.hidden === 'seen' ? 'Seen' : 'Rejected'}</span>` : '')
+    + (a.hidden === 'seen' ? `<span class="tag made" title="You made an ad for it">✓ Made${a.made_at ? ' ' + esc(day(a.made_at)) : ' ad'}</span>` : a.hidden ? '<span class="tag">Rejected</span>' : '')
     + (a.pass === false ? '<span class="tag out" title="No longer passes the rules (age, active ads or reach)">Out of rules</span>' : '')
     + (!inbox && a.store_photo && safe(a.img) ? `<span class="tag sp" title="Photo from the store page, may show another product" aria-label="Store photo">${ICON.cam}</span>` : '');
   const photo = safe(a.img)
@@ -630,7 +642,7 @@ function card(a, inbox) {
     : safe(a.ad) ? `<a class="view" href="${safe(a.ad)}" target="_blank" rel="noopener noreferrer" aria-label="View ad">${ICON.play}</a>` : '';
   const acts = a.hidden
     ? '<button class="un" data-act="none">Unhide</button>'
-    : `<button class="ok" data-act="seen" title="Done (made an ad): hide it">${ICON.check}Seen</button><button class="no" data-act="rejected" title="Not for me: hide it">${ICON.x}Reject</button>`;
+    : `<button class="ok" data-act="seen" title="You made an ad for it: it moves to ✓">${ICON.check}Made ad</button><button class="no" data-act="rejected" title="Not for me: hide it">${ICON.x}Reject</button>`;
   const shop = host(a.store);
   // In one market the big number is the reach a day there.
   const inCc = st.cc && a.crpd != null;
@@ -813,10 +825,11 @@ function render(append, fresh) {
   $('count').textContent = filtered ? `${total.toLocaleString('en-US')} ${total === 1 ? 'match' : 'matches'} · ${sorted}` : '';
   $('empty').hidden = ADS.length > 0;
   const msg = st.view === 'starred' ? 'No starred products yet. Tap ☆ on a card to keep it here.'
+    : st.view === 'made' ? 'No ads made yet. Tap ✓ Made ad on a product and it shows here, the last one first.'
     : filtered ? 'No products match.' : SCOPE === 'world' ? 'Nothing outside the EU yet: the nightly hunt looks there. Products need a Shopify store, 75+ active ads and 7–42 days live (no reach outside the EU).'
     : 'Nothing yet: products need a Shopify store, 75+ active ads, 7–42 days live and 500+ EU reach a day.';
   $('empty').innerHTML = `${EMPTY_ICON}<div>${esc(msg)}</div>`;
-  $('moreBtn').hidden = st.view !== 'all' || ADS.length >= total;
+  $('moreBtn').hidden = (st.view !== 'all' && st.view !== 'made') || ADS.length >= total;
   $('csv').href = '/export.csv?' + params().toString();
 }
 
@@ -925,6 +938,7 @@ async function decide(kind, dir) {
   total = Math.max(0, total - 1);
   if (isNew(a)) FRESH = Math.max(0, FRESH - 1);
   if (kind === 'keep') { STARS++; $('nstar').textContent = STARS; } else $('nall').textContent = Math.max(0, (Number($('nall').textContent) || 0) - 1); // kept ones stay in Browse
+  if (kind === 'seen') setMade(MADE + 1, true);
   cleared(1);
   marketsStale = true;
   const saved = setStatus(a.id, kind === 'keep' ? 'starred' : kind);
@@ -1093,7 +1107,7 @@ function header(j) {
   const k = st.view === 'inbox' ? 'inbox' : 'all';
   if (by) { $('nworld').textContent = by.world[k]; $('neu').textContent = by.eu[k]; }
   for (const b of document.querySelectorAll('[data-scope]')) b.setAttribute('aria-pressed', String(b.dataset.scope === SCOPE));
-  $('scope').hidden = st.view === 'starred';
+  $('scope').hidden = st.view === 'starred' || st.view === 'made';
   // Outside the EU there is no reach: no reach filters, and "Reach / day" sorts by active ads
   for (const b of document.querySelectorAll('[data-f=r2500], [data-f=r10k]')) b.hidden = SCOPE === 'world';
   $('sort').value = SCOPE === 'world' && st.sort === 'rpd' ? 'ads' : st.sort;
@@ -1102,6 +1116,7 @@ function header(j) {
   $('nstar').textContent = j.counts.starred || '';
   FRESH = j.counts.fresh || 0;
   STARS = j.counts.starred || 0;
+  setMade(j.counts.made || 0);
   const al = j.alert;
   $('alert').hidden = !al;
   $('alert').className = 'alert' + (al && al.level === 'yellow' ? ' yellow' : '');
@@ -1124,6 +1139,14 @@ function header(j) {
   box.className = 'status ' + (r.health === 'failed' ? 'bad' : r.health === 'warning' ? 'warn' : 'ok');
   const why = { 'meta-block': ' · Meta limit', token: ' · Meta token expired!', time: '', done: '' }[r.status] || '';
   $('run').innerHTML = `Last run <b>${esc(ago(r.finished_at || r.updated_at))}</b> · ${esc(fmt(r.ads_checked))} ads · <b>${esc(r.new_winners ?? 0)}</b> new winners${esc(why)}`;
+}
+
+// The ✓ tab's count. bump: you just made an ad, the count jumps so you see where it went.
+function setMade(n, bump) {
+  const el = $('nmade');
+  MADE = n;
+  el.textContent = n || '';
+  if (bump) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
 }
 
 let seq = 0;
@@ -1208,7 +1231,8 @@ $('grid').addEventListener('click', async (e) => {
       }
       c.classList.add('gone'); // right away; back if saving fails
       try { await setStatus(id, act); } catch (err) { c.classList.remove('gone'); throw err; }
-      if (act !== 'none') toast(act === 'seen' ? 'Marked seen' : 'Rejected', id);
+      if (act === 'seen') setMade(MADE + 1, true);
+      if (act !== 'none') toast(act === 'seen' ? 'Moved to ✓ Made ad' : 'Rejected', id);
       setTimeout(load, 220);
       loadMarkets();
     } catch (err) {

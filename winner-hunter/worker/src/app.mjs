@@ -167,11 +167,13 @@ function countriesOf(w) {
 
 /**
  * The rules at `now`, one product per advertiser + title, with its status. v: the board (each product's best
- * passing ad: most reach a day). k: every product once, its best ad (passing first): the ★ list keeps a starred
- * product after it ages out of the rules. ids: the ads of each product (gk), for /api/hide.
+ * passing ad: most reach a day). k: every product once, its best ad (passing first): the ★ and ✓ Made ad lists keep
+ * a product after it ages out of the rules. ids: the ads of each product (gk), for /api/hide. hat: when it was
+ * marked seen (made ad) or rejected.
  */
 export function products(rows, hidden = [], stars = [], now = Date.now()) {
   const hidOf = new Map(hidden.map((h) => [h.ad_id, h.status === 'rejected' ? 2 : h.status === 'seen' ? 1 : 0]));
+  const atOf = new Map(hidden.map((h) => [h.ad_id, h.at || '']));
   const starred = new Set(stars.map((x) => x.ad_id));
   const groups = new Map();
   for (const w of rows) {
@@ -182,9 +184,10 @@ export function products(rows, hidden = [], stars = [], now = Date.now()) {
     const pass = num(w.active_ads) >= MIN_ACTIVE_ADS && w.ad_age_days != null && age != null && age >= MIN_AGE_DAYS && age <= MAX_AGE_DAYS && (world || rpd >= MIN_REACH_PER_DAY) ? 1 : 0;
     const r = Object.assign({}, w, { rpd, age_now: age, pass, world, mk: countriesOf(w) });
     let g = groups.get(w.gk);
-    if (!g) groups.set(w.gk, (g = { hid: 0, star: 0, best: null, any: null, ids: [] }));
+    if (!g) groups.set(w.gk, (g = { hid: 0, hat: '', star: 0, best: null, any: null, ids: [] }));
     g.ids.push(w.ad_id);
     g.hid = Math.max(g.hid, hidOf.get(w.ad_id) || 0);
+    if (atOf.get(w.ad_id) > g.hat) g.hat = atOf.get(w.ad_id);
     if (starred.has(w.ad_id)) g.star = 1;
     if (pass && (!g.best || better(r, g.best) < 0)) g.best = r;
     if (!g.any || pass > g.any.pass || (pass === g.any.pass && better(r, g.any) < 0)) g.any = r;
@@ -192,8 +195,8 @@ export function products(rows, hidden = [], stars = [], now = Date.now()) {
   const v = [];
   const k = [];
   for (const g of groups.values()) {
-    if (g.best) v.push(Object.assign(g.best, { hid: g.hid, star: g.star }));
-    k.push(g.any === g.best ? g.any : Object.assign(g.any, { hid: g.hid, star: g.star }));
+    if (g.best) v.push(Object.assign(g.best, { hid: g.hid, hat: g.hat, star: g.star }));
+    k.push(g.any === g.best ? g.any : Object.assign(g.any, { hid: g.hid, hat: g.hat, star: g.star }));
   }
   return { v, k, groups };
 }
@@ -202,7 +205,7 @@ export function products(rows, hidden = [], stars = [], now = Date.now()) {
 async function board(env, now) {
   const [rows, h, s, f] = await Promise.all([
     snapshot(env.DB, now),
-    env.DB.prepare('SELECT ad_id, status FROM hidden').all(),
+    env.DB.prepare('SELECT ad_id, status, at FROM hidden').all(),
     env.DB.prepare('SELECT ad_id FROM stars').all(),
     env.DB.prepare("SELECT action, reasons, keyword, store, price FROM feedback WHERE action != 'general'").all(),
   ]);
@@ -270,9 +273,9 @@ const SORTS = {
 
 /** One view of the board: filters, one market (?cc=FR: best first by the reach a day there), sort and page. */
 export function viewOf(p, list, { csv = false } = {}) {
-  const view = ['starred', 'inbox'].includes(p.get('view')) ? p.get('view') : 'all';
+  const view = ['starred', 'made', 'inbox'].includes(p.get('view')) ? p.get('view') : 'all';
   // Inbox and Browse show one scope: products found outside the EU (world) or in it. Outside the EU there is no
-  // reach, so the competitor's active ads lead there. ★ keeps every scope.
+  // reach, so the competitor's active ads lead there. ★ and ✓ Made ad keep every scope.
   const scope = scopeOf(p, list);
   const inScope = (r) => (scope === 'world') === r.world;
   const lead = scope === 'world' ? (r) => num(r.active_ads) : (r) => r.rpd;
@@ -283,6 +286,11 @@ export function viewOf(p, list, { csv = false } = {}) {
   if (view === 'starred') {
     out = list.k.filter((r) => r.star); // seen, rejected or out of the rules too: a star is kept until you take it off
     limit = csv ? 5000 : 100;
+  } else if (view === 'made') {
+    out = list.k.filter((r) => r.hid === 1); // every product you made an ad for (✓), out of the rules too
+    sort = (a, b) => cmp(b.hat, a.hat) || better(a, b); // the last one you made first
+    limit = csv ? 5000 : 100;
+    offset = csv ? 0 : Math.min(Math.max(parseInt(p.get('offset'), 10) || 0, 0), 100000);
   } else if (view === 'inbox') {
     out = list.v.filter((r) => inScope(r) && inInbox(r) && !blockedBy(r, list.taste)) // not decided yet: not seen, rejected or kept (★)
       .map((r) => Object.assign({}, r, { fit: fitOf(r, list.taste), boost: sellsBoost(r) }));
@@ -330,6 +338,7 @@ export const countsOf = (list, now = Date.now(), scope = '') => {
     inbox: v.filter((r) => inInbox(r) && !blockedBy(r, list.taste)).length,
     fresh: v.filter((r) => inInbox(r) && !blockedBy(r, list.taste) && now - Date.parse(r.first_seen) < NEW_MS).length,
     starred: list.k.filter((r) => r.star).length,
+    made: list.k.filter((r) => r.hid === 1).length,
     hidden: v.filter((r) => r.hid > 0).length,
     by: { world: per(true), eu: per(false) },
   };
@@ -528,6 +537,7 @@ export function toAd(r) {
     targets: String(d.targets || '').slice(0, 120), // where the ad aims: "Worldwide", "United States, Canada"
     crpd: r.crpd == null ? null : Math.round(r.crpd),
     hidden: r.hid === 2 ? 'rejected' : r.hid === 1 ? 'seen' : '',
+    made_at: r.hid === 1 ? r.hat || '' : '', // when you marked it ✓ Made ad
     fit: r.fit == null ? null : r.fit,
     best: bestOf(r.bs),
   };

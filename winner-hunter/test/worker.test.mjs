@@ -95,7 +95,7 @@ test('/api/ads: All is the default view (no Top 20): ads that pass the rules, on
   assert.ok(!ids.includes('9100'), 'second ad of the same product collapsed');
   assert.ok(!ids.includes('9300'), 'too young');
   assert.ok(!ids.includes('9200'), '272 reach a day');
-  assert.deepStrictEqual(Object.keys(j.counts), ['all', 'inbox', 'fresh', 'starred', 'hidden', 'by']);
+  assert.deepStrictEqual(Object.keys(j.counts), ['all', 'inbox', 'fresh', 'starred', 'made', 'hidden', 'by']);
   assert.strictEqual(j.scope, 'eu', 'no products from outside the EU yet: the EU');
   assert.strictEqual(j.counts.inbox, 27, 'nothing decided yet: everything is in the inbox');
   assert.strictEqual(j.counts.all, 27);
@@ -201,6 +201,37 @@ test('/api/hide: seen and rejected leave All, Hidden shows them, none brings the
   assert.deepStrictEqual(out.ads.map((a) => [a.id, a.pass]).sort(), [['9000', true], ['9900', false]]);
   assert.strictEqual(out.counts.starred, 2);
   assert.ok(!(await (await s.get('/api/ads?view=all&limit=100')).json()).ads.some((a) => a.id === '9900'), 'never in All');
+});
+
+test('/api/ads?view=made: every product marked ✓ Made ad, the last one first, in every scope and out of the rules too', async () => {
+  const env = await seededEnv({ world: true });
+  const s = await loggedIn(env);
+  const made = async (q = '') => (await s.get('/api/ads?view=made' + q)).json();
+  const empty = await made();
+  assert.deepStrictEqual([empty.view, empty.total, empty.counts.made], ['made', 0, 0]);
+  assert.strictEqual((await s.post('/api/hide', { ad_id: '9003', status: 'seen' })).status, 200);
+  assert.strictEqual((await s.post('/api/hide', { ad_id: '9004', status: 'rejected' })).status, 200);
+  const ago = (days) => new Date(NOW - days * 864e5).toISOString();
+  // made earlier: an aged-out product, one from outside the EU, and a product through its second ad (9100 → 9000)
+  env.db.prepare("INSERT INTO hidden (ad_id, status, at) VALUES ('9900', 'seen', ?), ('8001', 'seen', ?), ('9100', 'seen', ?)").run(ago(3), ago(1), ago(2));
+  const j = await made('&scope=eu');
+  assert.deepStrictEqual(j.ads.map((a) => [a.id, a.made_at, a.pass, a.hidden]), [
+    ['9003', new Date(NOW).toISOString(), true, 'seen'],
+    ['8001', ago(1), true, 'seen'],
+    ['9000', ago(2), true, 'seen'],
+    ['9900', ago(3), false, 'seen'],
+  ], 'the last one first; every scope; once per product; out of the rules too; rejected not');
+  assert.strictEqual(j.counts.made, 4);
+  assert.ok(!(await (await s.get('/api/ads?view=all&scope=eu&limit=100')).json()).ads.some((a) => a.id === '9003'), 'not in Browse');
+  assert.ok((await (await s.get('/api/ads?view=all&hidden=1&scope=eu')).json()).ads.some((a) => a.id === '9003'), 'in Made ad & rejected');
+  assert.strictEqual((await (await s.get('/api/ads?view=all&scope=eu&limit=100')).json()).ads.find((a) => a.id === '9005').made_at, '', 'no date before you make it');
+  const csv = await s.get('/export.csv?view=made');
+  assert.match(csv.headers.get('content-disposition'), /winners-made-/);
+  assert.strictEqual((await csv.text()).trim().split('\r\n').length, 5, 'header + 4');
+  // Undo takes it off ✓
+  assert.strictEqual((await s.post('/api/hide', { ad_id: '9003', status: 'none' })).status, 200);
+  const after = await made();
+  assert.deepStrictEqual([after.ads.map((a) => a.id), after.counts.made], [['8001', '9000', '9900'], 3]);
 });
 
 test('/api/ads?view=inbox: not seen, rejected or kept (★), best first; Inbox zero when all are decided', async () => {
