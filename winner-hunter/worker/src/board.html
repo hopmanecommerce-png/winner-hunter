@@ -298,10 +298,10 @@
   .ibar i { display: block; height: 100%; width: var(--w, 0%); background: var(--holo); box-shadow: 0 0 12px rgba(46, 230, 255, .5); transition: width .4s; }
   .grid.one { grid-template-columns: minmax(0, 1fr); max-width: 760px; margin-left: auto; margin-right: auto; }
   .grid.one .card { touch-action: pan-y; transition: transform .18s ease-in, opacity .18s, box-shadow .2s; }
-  .grid.one .card.drag { transition: none; }
-  .grid.one .card img { -webkit-user-drag: none; }
-  .grid.one .ph { -webkit-user-select: none; user-select: none; }
-  .grid.one .card .acts, .grid.one .card .star { display: none; }
+  .grid.one .card.drag { transition: none; -webkit-user-select: none; user-select: none; }
+  .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .meta.m4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .grid.one .links { padding-bottom: 14px; }
   .grid.one .card[data-lean="seen"] { box-shadow: 0 0 0 2px var(--win), 0 0 30px -8px var(--win); }
   .grid.one .card[data-lean="rejected"] { box-shadow: 0 0 0 2px var(--bad), 0 0 30px -8px var(--bad); }
   .dock { position: sticky; bottom: 0; z-index: 4; max-width: 760px; margin: 12px auto 0; padding: 10px 0 max(10px, env(safe-area-inset-bottom));
@@ -384,6 +384,7 @@
     .card.open .links, .card.open .acts { flex: 1 1 100%; }
     .card.open .acts { grid-template-columns: 160px 160px; }
     .card.open .meta { max-width: 440px; }
+    .grid.one .links { padding: 0 18px 18px; }
   }
   @media (max-width: 520px) {
     .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
@@ -571,14 +572,15 @@ function nice(a) {
   return host(a.store) || a.adv || 'Untitled ad';
 }
 
-function card(a, force) {
-  const open = force || opened.has(a.id);
+// inbox: the one Inbox card: only the data (no photo) and one link, the ad in the Facebook Ad Library.
+function card(a, inbox) {
+  const open = inbox || opened.has(a.id);
   const isNew = Date.now() - Date.parse(a.first_seen) < NEW_MS;
   const tags = (isNew ? '<span class="tag new">New</span>' : '')
     + (a.fit >= 1.5 ? '<span class="tag fit" title="You liked products from this niche">♥ Your niche</span>' : '')
     + (a.hidden ? `<span class="tag">${a.hidden === 'seen' ? 'Seen' : 'Rejected'}</span>` : '')
     + (a.pass === false ? '<span class="tag out" title="No longer passes the rules (age, active ads or reach)">Out of rules</span>' : '')
-    + (a.store_photo && safe(a.img) ? `<span class="tag sp" title="Photo from the store page, may show another product" aria-label="Store photo">${ICON.cam}</span>` : '');
+    + (!inbox && a.store_photo && safe(a.img) ? `<span class="tag sp" title="Photo from the store page, may show another product" aria-label="Store photo">${ICON.cam}</span>` : '');
   const photo = safe(a.img)
     ? `<img src="${safe(a.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
     : `<div class="dom">${esc(host(a.store) || a.adv)}</div>`;
@@ -594,18 +596,22 @@ function card(a, force) {
   const inCc = st.cc && a.crpd != null;
   const mk = (a.mk || []).slice().sort((x, y) => (y[0] === st.cc) - (x[0] === st.cc));
   const flags = mk.length ? `<div class="flags" title="Where the ads reach (share of EU reach)">${mk.map(([c, p]) => `<span class="${c === st.cc ? 'hit' : ''}"><i>${flag(c)}</i>${esc(c)} ${esc(p)}%</span>`).join('')}</div>` : '';
+  const reachTip = inCc ? 'Reach per day in ' + esc(land(st.cc)) : 'EU reach per day the ad has run';
+  const reach = `<b>${esc(fmt(inCc ? a.crpd : a.rpd))}</b><span>${inCc ? esc(st.cc) + ' reach / day' : 'reach / day'}</span>`;
   return `<article class="card${open ? ' open' : ''}" data-id="${esc(a.id)}">
-    <div class="ph">${photo}
+    ${inbox ? '' : `<div class="ph">${photo}
       <div class="badges">${tags}</div>
       <button class="star" data-act="star" aria-pressed="${a.star}" aria-label="Star">${ICON.star}</button>
-      <div class="hero" title="${inCc ? 'Reach per day in ' + esc(land(st.cc)) : 'EU reach per day the ad has run'}"><b>${esc(fmt(inCc ? a.crpd : a.rpd))}</b><span>${inCc ? esc(st.cc) + ' reach / day' : 'reach / day'}</span></div>
+      <div class="hero" title="${reachTip}">${reach}</div>
       ${view}
-    </div>
+    </div>`}
     <div class="bd">
+      ${inbox && tags ? `<div class="tags">${tags}</div>` : ''}
       <h2 class="t">${esc(nice(a))}</h2>
       ${price}
       ${flags}
-      <div class="meta">
+      <div class="meta${inbox ? ' m4' : ''}">
+        ${inbox ? `<div class="m" title="${reachTip}">${reach}</div>` : ''}
         <div class="m" title="Active ads of this advertiser (75+ needed)"><b>${esc(fmt(a.ads))}</b><span>shop ads</span></div>
         <div class="m" title="Days the ad has run (7–42 days)"><b>${a.age == null ? '–' : esc(a.age) + 'd'}</b><span>live</span></div>
         <div class="m" title="Ads running for this product"><b>${esc(fmt(a.scaled || 1))}</b><span>copies</span></div>
@@ -622,13 +628,15 @@ function card(a, force) {
         </div>
       </div>
     </div>
-    <div class="links">
+    <div class="links">${inbox
+      ? (safe(a.ad) ? `<a class="pri" href="${safe(a.ad)}" target="_blank" rel="noopener noreferrer">Open in Facebook Ad Library ↗</a>` : '')
+      : `
       ${safe(a.ad) ? `<a class="pri" href="${safe(a.ad)}" target="_blank" rel="noopener noreferrer">Ad ↗</a>` : ''}
       ${safe(a.product) && /\/products\//.test(a.product) ? `<a href="${safe(a.product)}" target="_blank" rel="noopener noreferrer">Product ↗</a>` : ''}
       ${safe(a.store) ? `<a href="${safe(a.store)}" target="_blank" rel="noopener noreferrer">Store ↗</a>` : ''}
-      <a class="src" href="${esc(src1688(a.zh || a.title))}" target="_blank" rel="noopener noreferrer">Search 1688 ↗</a>
+      <a class="src" href="${esc(src1688(a.zh || a.title))}" target="_blank" rel="noopener noreferrer">Search 1688 ↗</a>`}
     </div>
-    <div class="acts">${acts}</div>
+    ${inbox ? '' : `<div class="acts">${acts}</div>`}
   </article>`;
 }
 
@@ -864,6 +872,7 @@ $('grid').addEventListener('pointermove', (e) => {
     if (Math.abs(dy) > Math.abs(dx)) { drag = null; return; }
     drag.on = true;
     drag.c.classList.add('drag');
+    getSelection().removeAllRanges(); // a mouse swipe over the text is not a text selection
     try { drag.c.setPointerCapture(e.pointerId); } catch (err) { /* fine without */ }
   }
   drag.dx = dx;
@@ -1211,7 +1220,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !$('sheet').hidden) closeAd();
   // "/" jumps to the search (not while typing somewhere)
   if (e.key === '/' && $('sheet').hidden && st.view === 'all' && !e.target.closest('input, select, textarea')) { e.preventDefault(); $('q').focus(); }
-  // Inbox: R / ← reject, K / ↑ keep, D / → made ad, Enter or V: view the ad
+  // Inbox: R / ← reject, K / ↑ keep, D / → made ad, Enter or V: the ad in the Facebook Ad Library
   if (st.view !== 'inbox' || !$('sheet').hidden || e.metaKey || e.ctrlKey || e.altKey || e.target.closest('input, select, textarea')) return;
   if (LAST && /^[1-9]$/.test(e.key)) {
     const k = Object.keys(REASON_LABELS[LAST.kind === 'rejected' ? 'bad' : 'good'])[Number(e.key) - 1];
@@ -1221,7 +1230,7 @@ document.addEventListener('keydown', (e) => {
   if (LAST && e.key.toLowerCase() === 'n') { e.preventDefault(); LAST.noteOpen = true; renderWhy(); $('wnote').focus(); return; }
   const kind = { r: 'rejected', ArrowLeft: 'rejected', k: 'keep', ArrowUp: 'keep', d: 'seen', ArrowRight: 'seen' }[e.key.length === 1 ? e.key.toLowerCase() : e.key];
   if (kind) { e.preventDefault(); decide(kind); return; }
-  if ((e.key === 'Enter' || e.key.toLowerCase() === 'v') && ADS[0] && !e.target.closest('a, button')) { e.preventDefault(); VIEWER ? openAd(ADS[0]) : safe(ADS[0].ad) && window.open(ADS[0].ad, '_blank', 'noopener'); }
+  if ((e.key === 'Enter' || e.key.toLowerCase() === 'v') && ADS[0] && !e.target.closest('a, button')) { e.preventDefault(); if (safe(ADS[0].ad)) window.open(ADS[0].ad, '_blank', 'noopener'); }
 });
 $('sBody').addEventListener('click', (e) => {
   if (e.target.id !== 'meer') return;

@@ -106,6 +106,12 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     assert.strictEqual(await page.getAttribute('[data-view=inbox]', 'aria-pressed'), 'true', 'Inbox is the start view');
     assert.strictEqual(await page.locator('.card').count(), 1, 'one product at a time');
     assert.strictEqual(await page.locator('.card.open').count(), 1, 'with its details open');
+    // the Inbox card: only the data (no photo) and one link, the ad in the Facebook Ad Library
+    const ic = page.locator('.card');
+    assert.strictEqual(await ic.locator('.ph, img, .acts, .star').count(), 0, 'no photo, star or buttons on the card');
+    assert.match(await ic.locator('.meta').innerText(), /reach \/ day[\s\S]*shop ads[\s\S]*live[\s\S]*copies/i);
+    assert.deepStrictEqual(await ic.locator('.links a').allInnerTexts(), ['Open in Facebook Ad Library ↗']);
+    assert.match(await ic.locator('.links a').getAttribute('href'), /^https:\/\/www\.facebook\.com\/ads\/library\/\?id=/);
     assert.strictEqual(await page.textContent('#ileft'), '27 left');
     assert.strictEqual(await page.textContent('#nin'), '27');
     assert.ok(await page.locator('#tri').isVisible() && (await page.locator('#q').isHidden()) && (await page.locator('#radar').isHidden()));
