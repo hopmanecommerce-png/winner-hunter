@@ -28,7 +28,8 @@ ON CONFLICT(ad_id) DO UPDATE SET ${[...COLS.slice(1).map(([c]) => c), 'last_seen
 first_seen = MIN(COALESCE(winners.first_seen, excluded.first_seen), excluded.first_seen)`;
 
 // The rules (lib/score.mjs) on a stored row, as the hunter saw it (the board also ages it since last_seen).
-export const STRICT = `COALESCE(active_ads, 0) >= ${MIN_ACTIVE_ADS} AND ad_age_days BETWEEN ${MIN_AGE_DAYS} AND ${MAX_AGE_DAYS} AND CAST(COALESCE(reach_eu, 0) AS REAL) / MAX(ad_age_days, 1) >= ${MIN_REACH_PER_DAY}`;
+// A row found outside the EU (data.world = 1) has no reach rule.
+export const STRICT = `COALESCE(active_ads, 0) >= ${MIN_ACTIVE_ADS} AND ad_age_days BETWEEN ${MIN_AGE_DAYS} AND ${MAX_AGE_DAYS} AND (COALESCE(json_extract(data, '$.world'), 0) = 1 OR CAST(COALESCE(reach_eu, 0) AS REAL) / MAX(ad_age_days, 1) >= ${MIN_REACH_PER_DAY})`;
 
 const MAX_BYTES = 1.5e6; // bound JSON per query
 

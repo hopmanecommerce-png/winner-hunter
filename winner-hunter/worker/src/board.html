@@ -139,6 +139,7 @@
   .seg button[aria-pressed="true"] small { color: var(--cy); }
   .count { color: var(--muted); font: 500 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; margin-top: -2px; }
   .find { display: contents; }
+  .seg.mkt { justify-self: start; } /* Outside EU | EU */
   .search { position: relative; display: block; min-width: 0; flex: 1 1 auto; }
   .search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
   input[type="search"] { width: 100%; height: 42px; border-radius: 14px; border: 1px solid var(--line); background: var(--card2); padding: 0 12px 0 36px; font-size: 15px; outline: none; transition: border-color .2s, box-shadow .2s; -webkit-appearance: none; appearance: none; }
@@ -381,6 +382,7 @@
   .zero .kept { color: var(--amb); border-color: rgba(255, 201, 77, .4); }
   @media (min-width: 760px) {
     .rail { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+    .seg.mkt { grid-column: 1 / -1; }
     .search { flex: 0 1 380px; }
     .chips { margin: 0; padding: 0; }
     .radar { padding: 22px 24px; }
@@ -492,6 +494,10 @@
         <button class="chip" data-f="hidden" aria-pressed="false" title="Products you marked seen or rejected">Seen &amp; rejected</button>
       </div>
     </div>
+    <div class="seg mkt" id="scope" role="group" aria-label="Where the ads run">
+      <button data-scope="world" aria-pressed="false" title="Ads outside the EU: no reach there, most active ads first">🌍 Outside EU <small id="nworld"></small></button>
+      <button data-scope="eu" aria-pressed="false" title="Ads in the EU: most reach a day first">🇪🇺 EU <small id="neu"></small></button>
+    </div>
     <div class="count" id="count" aria-live="polite" hidden></div>
   </div>
 
@@ -557,7 +563,8 @@ const SORTED = { rpd: 'by reach per day', new: 'newest first', scaled: 'by ad co
 const NEW_MS = 24 * 3600e3; // found in the last day: NEW
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } } };
 
-const st = { view: 'inbox', q: '', sort: 'rpd', r2500: false, r10k: false, hidden: false, cc: '', offset: 0 };
+const st = { view: 'inbox', q: '', sort: 'rpd', r2500: false, r10k: false, hidden: false, cc: '', offset: 0, scope: store.get('wh-scope') || '' };
+let SCOPE = ''; // what the board shows: 'world' (outside the EU) or 'eu'; st.scope is your choice ('' = the board picks)
 let ADS = [];
 let VIEWER = false; // the server can show ads in the board (Browser Run + META_TOKEN)
 let total = 0;
@@ -572,6 +579,7 @@ let marketsStale = false;
 
 function params(extra) {
   const p = new URLSearchParams({ view: st.view });
+  if (st.scope && st.view !== 'starred') p.set('scope', st.scope);
   if (st.view === 'all') {
     if (st.q) p.set('q', st.q);
     if (st.sort !== 'rpd') p.set('sort', st.sort);
@@ -650,8 +658,9 @@ function card(a, inbox) {
   const inCc = st.cc && a.crpd != null;
   const mk = (a.mk || []).slice().sort((x, y) => (y[0] === st.cc) - (x[0] === st.cc));
   const flags = mk.length ? `<div class="flags" title="Where the ads reach (share of EU reach)">${mk.map(([c, p]) => `<span class="${c === st.cc ? 'hit' : ''}"><i>${flag(c)}</i>${esc(c)} ${esc(p)}%</span>`).join('')}</div>` : '';
-  const reachTip = inCc ? 'Reach per day in ' + esc(land(st.cc)) : 'EU reach per day the ad has run';
-  const reach = `<b>${esc(fmt(inCc ? a.crpd : a.rpd))}</b><span>${inCc ? esc(st.cc) + ' reach / day' : 'reach / day'}</span>`;
+  // The big number: reach a day; outside the EU (no reach published there) the advertiser's active ads.
+  const reachTip = a.world ? 'Active ads of this advertiser (Meta publishes no reach outside the EU)' : inCc ? 'Reach per day in ' + esc(land(st.cc)) : 'EU reach per day the ad has run';
+  const reach = a.world ? `<b>${esc(fmt(a.ads))}</b><span>shop ads</span>` : `<b>${esc(fmt(inCc ? a.crpd : a.rpd))}</b><span>${inCc ? esc(st.cc) + ' reach / day' : 'reach / day'}</span>`;
   return `<article class="card${open ? ' open' : ''}" data-id="${esc(a.id)}">
     ${inbox ? '' : `<div class="ph">${photo}
       <div class="badges">${tags}</div>
@@ -664,8 +673,8 @@ function card(a, inbox) {
       <h2 class="t">${esc(nice(a))}</h2>
       ${price}
       ${flags}
-      <div class="meta${inbox ? ' m4' : ''}">
-        ${inbox ? `<div class="m" title="${reachTip}">${reach}</div>` : ''}
+      <div class="meta${inbox && !a.world ? ' m4' : ''}">
+        ${inbox && !a.world ? `<div class="m" title="${reachTip}">${reach}</div>` : ''}
         <div class="m" title="Active ads of this advertiser (75+ needed)"><b>${esc(fmt(a.ads))}</b><span>shop ads</span></div>
         <div class="m" title="Days the ad has run (7–42 days)"><b>${a.age == null ? '–' : esc(a.age) + 'd'}</b><span>live</span></div>
         <div class="m" title="Ads running for this product"><b>${esc(fmt(a.scaled || 1))}</b><span>copies</span></div>
@@ -676,7 +685,8 @@ function card(a, inbox) {
       <div class="more">
         ${a.copy ? `<p class="copy">${esc(a.copy)}</p>` : ''}
         <div class="facts">
-          <span><b>${esc(fmt(a.reach))}</b> EU reach</span>
+          ${a.reach != null ? `<span><b>${esc(fmt(a.reach))}</b> EU reach</span>` : ''}
+          ${a.targets ? `<span>aims at ${esc(a.targets)}</span>` : ''}
           ${a.adv ? `<span>${esc(a.adv)}</span>` : ''}
           ${a.myshopify ? `<span>${esc(a.myshopify)}</span>` : ''}
           <span>search “${esc(a.kw)}”</span>
@@ -734,7 +744,7 @@ function hexmap(m) {
 let shownTop = '';
 function radar() {
   const m = MARKETS;
-  $('radar').hidden = st.view !== 'all' || !m || !m.markets.length;
+  $('radar').hidden = st.view !== 'all' || SCOPE === 'world' || !m || !m.markets.length; // EU reach per country
   if ($('radar').hidden) return;
   const min = store.get('wh-radar') === 'min';
   $('radar').classList.toggle('min', min);
@@ -826,7 +836,8 @@ function render(append, fresh) {
   $('count').textContent = filtered ? `${total.toLocaleString('en-US')} ${total === 1 ? 'match' : 'matches'} · ${sorted}` : '';
   $('empty').hidden = ADS.length > 0;
   const msg = st.view === 'starred' ? 'No starred products yet. Tap ☆ on a card to keep it here.'
-    : filtered ? 'No products match.' : 'Nothing yet: products need a Shopify store, 75+ active ads, 7–42 days live and 500+ EU reach a day.';
+    : filtered ? 'No products match.' : SCOPE === 'world' ? 'Nothing outside the EU yet: the nightly hunt looks there. Products need a Shopify store, 75+ active ads and 7–42 days live (no reach outside the EU).'
+    : 'Nothing yet: products need a Shopify store, 75+ active ads, 7–42 days live and 500+ EU reach a day.';
   $('empty').innerHTML = `${EMPTY_ICON}<div>${esc(msg)}</div>`;
   $('moreBtn').hidden = st.view !== 'all' || ADS.length >= total;
   $('csv').href = '/export.csv?' + params().toString();
@@ -1044,7 +1055,7 @@ async function loadLearned() {
   $('grid').classList.remove('one');
   $('grid').innerHTML = '';
   $('grid').setAttribute('aria-busy', 'false');
-  for (const id of ['allrow', 'allrow2', 'count', 'empty', 'moreBtn', 'ibox', 'dock', 'zero', 'pnote']) $(id).hidden = true;
+  for (const id of ['allrow', 'allrow2', 'count', 'empty', 'moreBtn', 'ibox', 'dock', 'zero', 'pnote', 'scope']) $(id).hidden = true;
   radar();
   $('learn').hidden = false;
   if (!LEARNED) $('learn').innerHTML = '<div class="sload"><i class="spin"></i>Loading…</div>';
@@ -1100,6 +1111,15 @@ $('learn').addEventListener('submit', async (e) => {
 });
 
 function header(j) {
+  SCOPE = j.scope || '';
+  const by = j.counts.by;
+  const k = st.view === 'inbox' ? 'inbox' : 'all';
+  if (by) { $('nworld').textContent = by.world[k]; $('neu').textContent = by.eu[k]; }
+  for (const b of document.querySelectorAll('[data-scope]')) b.setAttribute('aria-pressed', String(b.dataset.scope === SCOPE));
+  $('scope').hidden = st.view === 'starred';
+  // Outside the EU there is no reach: no reach filters, and "Reach / day" sorts by active ads
+  for (const b of document.querySelectorAll('[data-f=r2500], [data-f=r10k]')) b.hidden = SCOPE === 'world';
+  $('sort').value = SCOPE === 'world' && st.sort === 'rpd' ? 'ads' : st.sort;
   $('nin').textContent = j.counts.inbox || '';
   $('nall').textContent = j.counts.all;
   $('nstar').textContent = j.counts.starred || '';
@@ -1350,6 +1370,15 @@ function goView(v) {
   window.scrollTo({ top: 0 });
 }
 for (const b of document.querySelectorAll('[data-view]')) b.addEventListener('click', () => goView(b.dataset.view));
+$('scope').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-scope]');
+  if (!b || b.dataset.scope === SCOPE) return;
+  st.scope = b.dataset.scope;
+  store.set('wh-scope', st.scope);
+  ADS = [];
+  load();
+  window.scrollTo({ top: 0 });
+});
 for (const b of document.querySelectorAll('[data-f]')) {
   b.addEventListener('click', () => {
     const f = b.dataset.f;

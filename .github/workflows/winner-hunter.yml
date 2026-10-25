@@ -37,7 +37,8 @@ jobs:
       CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
       D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID || '8934aca9-51d3-4f87-9c62-e897843149a1' }}
-      COUNTRIES: ${{ vars.HUNT_COUNTRIES || 'NL,BE,DE,FR,AT,ES,IT,IE,DK,SE,PL' }}
+      # Wealthy markets outside the EU (no reach rule there; lib/score.mjs WORLD). EU hunt: set HUNT_COUNTRIES=NL,BE,DE,…
+      COUNTRIES: ${{ vars.HUNT_COUNTRIES || 'US,CA,GB,AU,NZ,CH,NO,IS,SG,HK,JP,KR,IL,AE,SA,QA,KW' }}
       MINUTES: ${{ inputs.minutes || '120' }}
       KEYWORDS: ${{ inputs.keywords }}
     steps:

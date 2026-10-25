@@ -36,13 +36,26 @@ export function sampleRecords() {
   return recs;
 }
 
-/** A Worker env (DB binding + PIN) with the sample data; `stale` was last seen 30 days ago (11 + 30 = 41 days live
+/** Products found outside the EU (world = 1): no reach. Two pass (300 and 120 active ads), two fail (60 ads; 50 days). */
+export function worldRecords() {
+  const base = sampleRecords()[5];
+  const one = (id, o) => Object.assign({}, base, { id, world: 1, market: 'US,CA,GB,AU,NZ', reach_eu: null, top_countries: '', ad_library_url: `https://www.facebook.com/ads/library/?id=${id}` }, o);
+  return [
+    one('8001', { product_title: 'Posture Pillow', advertiser: 'Comfy US', advertiser_page_id: '801', active_ads: 300, targets: 'Worldwide', store_url: 'https://comfy-us.test/', product_url: 'https://comfy-us.test/products/posture-pillow' }),
+    one('8002', { product_title: 'Car Vent Holder', advertiser: 'Drive Co', advertiser_page_id: '802', active_ads: 120, targets: 'United States, Canada', store_url: 'https://driveco.test/', product_url: 'https://driveco.test/products/vent' }),
+    one('8003', { product_title: 'Small Shop Lamp', advertiser: 'Tiny', advertiser_page_id: '803', active_ads: 60, targets: 'New Zealand' }),
+    one('8004', { product_title: 'Old Ad Mug', advertiser: 'Oldies', advertiser_page_id: '804', ad_age_days: 50, targets: 'Australia' }),
+  ];
+}
+
+/** A Worker env (DB binding + PIN) with the sample data (world: also the worldRecords); `stale` was last seen 30 days ago (11 + 30 = 41 days live
  * today); `aged` was 40 days old when seen 5 days ago (45 today: out). */
-export async function seededEnv({ pin = '482913' } = {}) {
+export async function seededEnv({ pin = '482913', world = false } = {}) {
   const db = memoryDb();
   const rest = d1Rest(db);
   const client = d1Client({ accountId: 'a', databaseId: 'd', token: 't' }, { doFetch: rest.doFetch, retryMs: 0 });
   await client.upsertWinners(sampleRecords().map((r) => slimRecord(r)), new Date(NOW - 3600e3));
+  if (world) await client.upsertWinners(worldRecords().map((r) => slimRecord(r)), new Date(NOW - 3600e3));
   const stale = slimRecord(Object.assign({}, sampleRecords()[1], { id: '9500', score: 99, product_title: 'Stale Old Winner', advertiser_page_id: '703', reach_eu: 990000 }), { seenAt: iso(30) });
   const aged = slimRecord(Object.assign({}, sampleRecords()[1], { id: '9900', product_title: 'Aged Out Gadget', advertiser_page_id: '707', ad_age_days: 40, reach_eu: 900000 }), { seenAt: iso(5) });
   await client.upsertWinners([stale, aged], new Date(NOW));

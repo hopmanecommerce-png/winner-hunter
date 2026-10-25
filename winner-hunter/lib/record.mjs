@@ -49,6 +49,8 @@ export function slimRecord(r, { seenAt } = {}) {
     zh: r.zh || '',
     store_products: int(r.store_products),
     top_countries: cut(r.top_countries || '', 80),
+    world: r.world ? 1 : 0, // found outside the EU: no reach rule (score.mjs isWorld)
+    targets: cut(r.targets || '', 120), // where the ad aims: "Worldwide", "United States, Canada"
     ad_copy: cut(r.ad_copy || '', 600),
     checklist: (Array.isArray(r.checklist) ? r.checklist : []).slice(0, 7).map((c) => ({
       key: String(c.key || ''), label: cut(c.label || '', 40), state: String(c.state || ''), text: cut(c.text || '', 160),

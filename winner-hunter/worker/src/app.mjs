@@ -32,7 +32,9 @@ const TOKEN_DAYS = 7; // a Meta token expiring within this many days: red banner
 const KEY = `COALESCE(w.advertiser_page_id, '') || '|' || lower(trim(COALESCE(NULLIF(w.product_title, ''), w.ad_id)))`;
 const RPD = `CAST(COALESCE(w.reach_eu, 0) AS REAL) / MAX(COALESCE(w.ad_age_days, 0), 1)`;
 const AGE_NOW = `(COALESCE(w.ad_age_days, 0) + MAX(CAST(julianday(?1) - julianday(w.last_seen) AS INTEGER), 0))`;
-const PASS = `(COALESCE(w.active_ads, 0) >= ${MIN_ACTIVE_ADS} AND w.ad_age_days IS NOT NULL AND ${AGE_NOW} BETWEEN ${MIN_AGE_DAYS} AND ${MAX_AGE_DAYS} AND ${RPD} >= ${MIN_REACH_PER_DAY})`;
+// A product found outside the EU (data.world = 1) has no reach rule: Meta publishes no reach there.
+const WORLD = `COALESCE(json_extract(w.data, '$.world'), 0)`;
+const PASS = `(COALESCE(w.active_ads, 0) >= ${MIN_ACTIVE_ADS} AND w.ad_age_days IS NOT NULL AND ${AGE_NOW} BETWEEN ${MIN_AGE_DAYS} AND ${MAX_AGE_DAYS} AND (${WORLD} = 1 OR ${RPD} >= ${MIN_REACH_PER_DAY}))`;
 const BASE = `WITH g AS (
   SELECT w.ad_id, w.product_title, w.price, w.compare_at_price, w.currency, w.advertiser, w.active_ads,
     w.ad_age_days, w.reach_eu, w.scaled_count, w.keyword, w.store_url, w.product_url, w.ad_library_url, w.image_url,
@@ -63,7 +65,7 @@ export const parseCountries = (s) => [...String(s || '').matchAll(/\b([A-Z]{2}) 
 
 const SNAP_SQL = `SELECT w.ad_id, ${KEY} AS gk, w.product_title, w.price, w.compare_at_price, w.currency, w.advertiser, w.active_ads,
   w.ad_age_days, w.reach_eu, w.scaled_count, w.keyword, w.store_url, w.product_url, w.ad_library_url, w.image_url,
-  w.first_seen, w.last_seen, w.data FROM winners w`;
+  w.first_seen, w.last_seen, w.data, ${WORLD} AS world FROM winners w`;
 // Store signals (bestsellers.mjs, once a day), read with the winners and kept on each row: w.bs (best-seller rank)
 // and w.tp (the store's Trustpilot score).
 const BS_SQL = 'SELECT product_key, rank, ok, history FROM bestseller';
@@ -187,8 +189,9 @@ export function products(rows, hidden = [], stars = [], now = Date.now()) {
     const seen = Date.parse(w.last_seen);
     const age = Number.isFinite(seen) ? num(w.ad_age_days) + Math.max(Math.trunc((now - seen) / 864e5), 0) : null;
     const rpd = num(w.reach_eu) / Math.max(num(w.ad_age_days), 1);
-    const pass = num(w.active_ads) >= MIN_ACTIVE_ADS && w.ad_age_days != null && age != null && age >= MIN_AGE_DAYS && age <= MAX_AGE_DAYS && rpd >= MIN_REACH_PER_DAY ? 1 : 0;
-    const r = Object.assign({}, w, { rpd, age_now: age, pass, mk: countriesOf(w) });
+    const world = !!w.world;
+    const pass = num(w.active_ads) >= MIN_ACTIVE_ADS && w.ad_age_days != null && age != null && age >= MIN_AGE_DAYS && age <= MAX_AGE_DAYS && (world || rpd >= MIN_REACH_PER_DAY) ? 1 : 0;
+    const r = Object.assign({}, w, { rpd, age_now: age, pass, world, mk: countriesOf(w) });
     let g = groups.get(w.gk);
     if (!g) groups.set(w.gk, (g = { hid: 0, star: 0, best: null, any: null, ids: [] }));
     g.ids.push(w.ad_id);
@@ -279,6 +282,11 @@ const SORTS = {
 /** One view of the board: filters, one market (?cc=FR: best first by the reach a day there), sort and page. */
 export function viewOf(p, list, { csv = false } = {}) {
   const view = ['starred', 'inbox'].includes(p.get('view')) ? p.get('view') : 'all';
+  // Inbox and Browse show one scope: products found outside the EU (world) or in it. Outside the EU there is no
+  // reach, so the competitor's active ads lead there. ★ keeps every scope.
+  const scope = scopeOf(p, list);
+  const inScope = (r) => (scope === 'world') === r.world;
+  const lead = scope === 'world' ? (r) => num(r.active_ads) : (r) => r.rpd;
   let out;
   let sort = SORTS.rpd;
   let limit = 100;
@@ -287,20 +295,20 @@ export function viewOf(p, list, { csv = false } = {}) {
     out = list.k.filter((r) => r.star); // seen, rejected or out of the rules too: a star is kept until you take it off
     limit = csv ? 5000 : 100;
   } else if (view === 'inbox') {
-    out = list.v.filter((r) => inInbox(r) && !blockedBy(r, list.taste)) // not decided yet: not seen, rejected or kept (★)
+    out = list.v.filter((r) => inScope(r) && inInbox(r) && !blockedBy(r, list.taste)) // not decided yet: not seen, rejected or kept (★)
       .map((r) => Object.assign({}, r, { fit: fitOf(r, list.taste), boost: sellsBoost(r) }));
-    sort = (a, b) => b.rpd * b.fit * b.boost - a.rpd * a.fit * a.boost || cmp(a.ad_id, b.ad_id);
+    sort = (a, b) => lead(b) * b.fit * b.boost - lead(a) * a.fit * a.boost || cmp(a.ad_id, b.ad_id);
     limit = csv ? 5000 : Math.min(Math.max(parseInt(p.get('limit'), 10) || 20, 1), 100);
   } else {
     const hidden = p.get('hidden') === '1';
-    out = list.v.filter((r) => (hidden ? r.hid > 0 : r.hid === 0));
+    out = list.v.filter((r) => inScope(r) && (hidden ? r.hid > 0 : r.hid === 0));
     const minRpd = Number(p.get('rpd'));
-    if (minRpd === 2500 || minRpd === 10000) out = out.filter((r) => r.rpd >= minRpd);
+    if (scope === 'eu' && (minRpd === 2500 || minRpd === 10000)) out = out.filter((r) => r.rpd >= minRpd); // no reach outside the EU
     const q = String(p.get('q') || '').trim().slice(0, 80).toLowerCase();
     if (q) out = out.filter((r) => [r.product_title, r.advertiser, r.store_url, r.keyword].some((x) => String(x ?? '').toLowerCase().includes(q)));
-    sort = SORTS[p.get('sort')] || SORTS.rpd;
+    sort = SORTS[p.get('sort')] || (scope === 'world' ? SORTS.ads : SORTS.rpd);
     const cc = String(p.get('cc') || '').toUpperCase();
-    if (/^[A-Z]{2}$/.test(cc)) {
+    if (scope === 'eu' && /^[A-Z]{2}$/.test(cc)) { // the EU reach per country (Market Radar)
       out = out.flatMap((r) => {
         const hit = r.mk.find(([c]) => c === cc);
         return hit ? [Object.assign({}, r, { crpd: (r.rpd * hit[1]) / 100 })] : [];
@@ -311,20 +319,32 @@ export function viewOf(p, list, { csv = false } = {}) {
     offset = csv ? 0 : Math.min(Math.max(parseInt(p.get('offset'), 10) || 0, 0), 100000);
   }
   out.sort(sort);
-  return { view, total: out.length, offset, rows: out.slice(offset, offset + limit) };
+  return { view, scope, total: out.length, offset, rows: out.slice(offset, offset + limit) };
 }
+
+/** ?scope=world|eu; without it: outside the EU as soon as the board has products from there. */
+const scopeOf = (p, list) => (['world', 'eu'].includes(p.get('scope')) ? p.get('scope') : list.v.some((r) => r.world) ? 'world' : 'eu');
 
 const inInbox = (r) => r.hid === 0 && !r.star;
 const blockedBy = (r, taste) => !!(taste && taste.blocked.size && taste.blocked.has(storeOf(r.store_url)));
 const NEW_MS = 864e5; // found in the last day: new
 
-export const countsOf = (list, now = Date.now()) => ({
-  all: list.v.filter((r) => r.hid === 0).length,
-  inbox: list.v.filter((r) => inInbox(r) && !blockedBy(r, list.taste)).length,
-  fresh: list.v.filter((r) => inInbox(r) && !blockedBy(r, list.taste) && now - Date.parse(r.first_seen) < NEW_MS).length,
-  starred: list.k.filter((r) => r.star).length,
-  hidden: list.v.filter((r) => r.hid > 0).length,
-});
+/** Counts for the badges, in one scope (world | eu; all products without one). by: Inbox and Browse per scope. */
+export const countsOf = (list, now = Date.now(), scope = '') => {
+  const v = scope ? list.v.filter((r) => (scope === 'world') === r.world) : list.v;
+  const per = (world) => {
+    const s = list.v.filter((r) => r.world === world);
+    return { inbox: s.filter((r) => inInbox(r) && !blockedBy(r, list.taste)).length, all: s.filter((r) => r.hid === 0).length };
+  };
+  return {
+    all: v.filter((r) => r.hid === 0).length,
+    inbox: v.filter((r) => inInbox(r) && !blockedBy(r, list.taste)).length,
+    fresh: v.filter((r) => inInbox(r) && !blockedBy(r, list.taste) && now - Date.parse(r.first_seen) < NEW_MS).length,
+    starred: list.k.filter((r) => r.star).length,
+    hidden: v.filter((r) => r.hid > 0).length,
+    by: { world: per(true), eu: per(false) },
+  };
+};
 
 /** The board's ads (not hidden) whose ad view is missing or older than ?2, best first: prefetch.mjs opens these ahead. */
 export const PREFETCH_SQL = `${BASE} SELECT v.ad_id FROM v LEFT JOIN ad_views a ON a.ad_id = v.ad_id
@@ -515,6 +535,8 @@ export function toAd(r) {
     star: !!r.star,
     pass: !!r.pass,
     mk: parseCountries(d.top_countries).slice(0, 5),
+    world: !!r.world, // found outside the EU: no reach, the active ads lead
+    targets: String(d.targets || '').slice(0, 120), // where the ad aims: "Worldwide", "United States, Canada"
     crpd: r.crpd == null ? null : Math.round(r.crpd),
     hidden: r.hid === 2 ? 'rejected' : r.hid === 1 ? 'seen' : '',
     fit: r.fit == null ? null : r.fit,
@@ -579,7 +601,7 @@ async function login(req, env, now) {
 async function ads(url, env, now, viewer) {
   const list = await board(env, now);
   const q = viewOf(url.searchParams, list);
-  const counts = countsOf(list, now);
+  const counts = countsOf(list, now, q.scope);
   const run = await stateJson(env.DB, 'last_run');
   // While a run hunts, the board also shows what the run before it found.
   const prev = run && run.status === 'running'
@@ -587,6 +609,7 @@ async function ads(url, env, now, viewer) {
     : null;
   return json({
     view: q.view,
+    scope: q.scope,
     ads: q.rows.map(toAd),
     total: q.total,
     offset: q.offset,

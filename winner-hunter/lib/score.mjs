@@ -1,6 +1,8 @@
 /*
  * The hard requirements of a winner (no points): an ad passes all four or it is out.
  *   1. Shopify store (verified)   2. advertiser has 75+ active ads   3. ad live 7 to 42 days   4. 500+ EU reach per day
+ * Rule 4 is for hunts in the EU only. Outside the EU (any country not in EU below) Meta publishes no reach, so a
+ * hunt there skips it and the competitor's active ads lead: the record gets world = 1.
  * Everything else (ads for the same product, store size, reach, countries) is information only.
  */
 
@@ -17,7 +19,17 @@ export const DEFAULTS = {
   ageMax: MAX_AGE_DAYS,
   minAds: MIN_ACTIVE_ADS,
   minReachPerDay: MIN_REACH_PER_DAY,
+  reach: true, // rule 4; off for hunts outside the EU
 };
+
+// The 27 EU countries (Meta's codes).
+export const EU = new Set('AT BE BG CY CZ DE DK EE ES FI FR GR HR HU IE IT LT LU LV MT NL PL PT RO SE SI SK'.split(' '));
+// Wealthy markets outside the EU: the default hunt (the HUNT_COUNTRIES variable overrides it). Meta's API returns the
+// ads there that also ran in the EU or UK (mostly "Worldwide" ads), UK-only ads too, with no reach outside EU and UK.
+export const WORLD = ['US', 'CA', 'GB', 'AU', 'NZ', 'CH', 'NO', 'IS', 'SG', 'HK', 'JP', 'KR', 'IL', 'AE', 'SA', 'QA', 'KW'];
+/** A hunt in these countries (a list or "US,CA") reaches outside the EU: no reach rule. */
+export const isWorld = (countries) => (Array.isArray(countries) ? countries : String(countries || '').split(','))
+  .some((c) => String(c).trim() && !EU.has(String(c).trim().toUpperCase()));
 
 // Catalog ads carry template fields like {{product.name}} instead of real text.
 export const noTemplate = (t) => String(t || '').replace(/\{\{[^{}]*\}\}/g, '').replace(/[ \t]{2,}/g, ' ').trim();
@@ -155,11 +167,13 @@ export function scoreAd(ad, inp, S, now) {
   else if (days > S.ageMax) fail('age', `Live ${d(days)} (max 6 weeks)`);
   else put('age', 'ok', `Live ${d(days)}`);
 
-  // 4. EU reach per day of ad life
+  // 4. EU reach per day of ad life (EU hunts only; outside the EU it is information)
   const r = inp.reach;
   const rt = r && typeof r.eu === 'number' ? r.eu : null;
   const rpd = rt == null ? null : reachPerDay(rt, days);
-  if (rt == null) fail('reach', r && r.err ? `Reach unavailable (${r.err})` : 'Reach unavailable');
+  if (!S.reach) {
+    // no rule: Meta publishes no reach outside the EU and UK
+  } else if (rt == null) fail('reach', r && r.err ? `Reach unavailable (${r.err})` : 'Reach unavailable');
   else if (rpd >= S.minReachPerDay) put('reach', 'ok', `${fmtCompact(Math.floor(rpd))} EU reach a day`);
   else fail('reach', `${fmtCompact(Math.floor(rpd))} EU reach a day (needs ${S.minReachPerDay}+)`);
 
@@ -179,4 +193,4 @@ export const reachPerDay = (reach, age) => (reach ? reach / Math.max(age || 0, 1
 
 /** A stored record passes the rules (run.mjs saves only these; the board shows only these). */
 export const passesRules = (r) => r.verdict === 'winner' && (r.active_ads ?? 0) >= MIN_ACTIVE_ADS && r.ad_age_days != null && r.ad_age_days >= MIN_AGE_DAYS
-  && r.ad_age_days <= MAX_AGE_DAYS && reachPerDay(r.reach_eu, r.ad_age_days) >= MIN_REACH_PER_DAY;
+  && r.ad_age_days <= MAX_AGE_DAYS && (!!r.world || reachPerDay(r.reach_eu, r.ad_age_days) >= MIN_REACH_PER_DAY);

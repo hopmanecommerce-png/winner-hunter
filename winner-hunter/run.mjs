@@ -4,8 +4,8 @@
  *   META_TOKEN=… CF_API_TOKEN=… CF_ACCOUNT_ID=… [MINUTES=300] [KEYWORDS="dog | cat"] node winner-hunter/run.mjs
  *
  * Goes through keywords.txt in batches of 2, starting where the last run stopped (D1 state 'keyword_cursor').
- * After every batch the ads that pass every rule (lib/score.mjs: Shopify, 75+ active ads, 7–42 days live, 500+ EU
- * reach a day) are saved in D1 and the cursor moves on, so a run
+ * After every batch the ads that pass every rule (lib/score.mjs: Shopify, 75+ active ads, 7–42 days live, and for an
+ * EU hunt 500+ EU reach a day) are saved in D1 and the cursor moves on, so a run
  * that is stopped loses at most one batch. Stops at the time budget or when Meta blocks every token (613).
  * A D1 or store failure is a warning, never a crash. Typed-in KEYWORDS leave the cursor alone.
  *
@@ -20,7 +20,7 @@ import { d1Client, d1Settings } from './lib/d1.mjs';
 import { slimRecord } from './lib/record.mjs';
 import { parseKeywords, wrap } from './lib/keywords.mjs';
 import { photoCache } from './lib/storephoto.mjs';
-import { passesRules } from './lib/score.mjs';
+import { passesRules, WORLD } from './lib/score.mjs';
 
 const DAY = 864e5;
 const WARN_DAYS = 7; // a Meta token that expires within this many days makes the run red
@@ -222,7 +222,7 @@ async function main() {
     keywords,
     override,
     minutes: Number(env.MINUTES || 300),
-    countries: String(env.COUNTRIES || 'NL,BE,DE,FR,AT,ES,IT,IE,DK,SE,PL').toUpperCase().split(',').map((x) => x.trim()).filter(Boolean),
+    countries: String(env.COUNTRIES || WORLD.join(',')).toUpperCase().split(',').map((x) => x.trim()).filter(Boolean), // default: outside the EU
   }, {
     db: d1Client(s),
     photo: photoCache(),

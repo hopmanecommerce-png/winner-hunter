@@ -5,7 +5,9 @@
  *
  *   const { results, stats, cache } = await hunt({ tokens, queries: ['dress'], countries: ['NL', 'BE'] });
  *
- * The API returns ordinary (non-political) ads only for ads delivered in the EU/UK, so use EU/UK countries.
+ * The API returns ordinary (non-political) ads only for ads delivered in the EU/UK. Outside the EU (score.mjs WORLD,
+ * e.g. countries: ['US', 'NZ']) it returns the ads there that also ran in the EU or UK, without reach: that hunt
+ * skips the reach rule, keeps where each ad aims (target_locations) and marks its records world = 1.
  * It has no landing URL: the store comes from the domain shown on the ad, the product from the store's own
  * search (Shopify /search/suggest.json) using the ad's link title.
  *
@@ -13,7 +15,7 @@
  * take longer than maxBlockWaitMin moves on to the next token (META_TOKEN_2, _3); with none left the batch stops
  * with stats.blocked and still checks what it found.
  */
-import { DEFAULTS, NON_STORE, SHOPIFY_HDR, hostOf, hostKey, noTemplate, scoreAd, adUrl, fmtDay } from './score.mjs';
+import { DEFAULTS, NON_STORE, SHOPIFY_HDR, hostOf, hostKey, noTemplate, scoreAd, adUrl, fmtDay, isWorld } from './score.mjs';
 import { sized } from './storephoto.mjs';
 
 const DAY = 864e5;
@@ -45,7 +47,8 @@ export async function hunt(opts, deps = {}) {
   const o = Object.assign({ countries: ['NL'], max: 1500, api: 'v24.0', base: 'https://graph.facebook.com', pageCap: 500, apiConcurrency: 2, settings: {} }, opts);
   const doFetch = deps.fetch || globalThis.fetch;
   const log = deps.log || ((m) => console.log(m));
-  const S = Object.assign({}, DEFAULTS, o.settings);
+  const world = isWorld(o.countries); // outside the EU: no reach rule
+  const S = Object.assign({}, DEFAULTS, world ? { reach: false } : {}, o.settings);
   const now = deps.now || Date.now();
   const waitScale = deps.waitScale ?? 1;
   let usage = { pct: 0, regainMin: 0 };
@@ -283,7 +286,7 @@ export async function hunt(opts, deps = {}) {
       const dates = { ad_delivery_date_min: isoDay(w[1]), ad_delivery_date_max: isoDay(w[0]) };
       const cap = Math.ceil(o.max / windows.length);
       try {
-        for await (const batch of pages(archiveUrl(Object.assign({ search_terms: q, fields: FIELDS, limit: String(Math.min(250, cap)) }, dates)), cap)) {
+        for await (const batch of pages(archiveUrl(Object.assign({ search_terms: q, fields: world ? FIELDS + ',target_locations' : FIELDS, limit: String(Math.min(250, cap)) }, dates)), cap)) {
           for (const a of batch) if (a && a.id && !ads.has(String(a.id))) ads.set(String(a.id), toAd(a, q, now));
         }
       } catch (e) {
@@ -426,6 +429,7 @@ function toAd(a, q, now) {
     cta: '',
     reachEU: typeof a.eu_total_reach === 'number' ? a.eu_total_reach : null,
     markets: marketsOf(a),
+    targets: (a.target_locations || []).filter((l) => l && !l.excluded && l.name).map((l) => String(l.name)),
     query: q,
   };
 }
@@ -437,6 +441,8 @@ function record({ ad, ev, shop, product, pi }, o) {
     verdict: ev.verdict,
     checklist: ev.items.map((i) => ({ key: i.key, label: i.label, state: i.state, text: i.text })),
     market: o.countries.join(','),
+    world: isWorld(o.countries) ? 1 : 0,
+    targets: (ad.targets || []).join(', '),
     keyword: ad.query,
     product_title: (product && product.title) || ad.title,
     price: product ? product.price : null,
