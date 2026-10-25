@@ -28,13 +28,17 @@ async function get(doFetch, url, timeout, accept) {
   }
 }
 
-/** The store's Trustpilot facts from its home page and one product page (where TrustBoxes often sit). Never throws. */
+/**
+ * The store's Trustpilot facts from its home page and one product page (where TrustBoxes often sit). productUrl can
+ * be a function that finds one (async): it is only called when the home page answers without a widget. Never throws.
+ */
 export async function storeTrust(store, productUrl = '', { doFetch = globalThis.fetch, timeout = 15000 } = {}) {
-  const pages = [`https://${store}/`];
-  if (/\/products\//.test(productUrl || '')) pages.push(productUrl);
+  const pages = [`https://${store}/`, productUrl];
   let reached = false;
   let named = false;
-  for (const url of pages) {
+  for (let url of pages) {
+    if (typeof url === 'function') url = reached ? await Promise.resolve().then(url).catch(() => '') : '';
+    if (url !== pages[0] && !/\/products\//.test(url || '')) continue;
     const page = await get(doFetch, url, timeout, 'text/html');
     if (!page.ok) continue;
     reached = true;
