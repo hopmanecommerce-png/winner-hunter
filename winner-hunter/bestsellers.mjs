@@ -2,9 +2,11 @@
 /*
  * Store signals for every product on the board (and every ★ product), once a day after the hunt (winner-hunter.yml)
  * and for a test link (preview-board.yml); the board shows them on the card:
- *   - its rank in its own store's best-seller list (top 50, lib/bestsellers.mjs) → D1 table `bestseller`
+ *   - its rank in its own store's best-seller list (top 50, lib/bestsellers.mjs) → D1 table `bestseller`; only for
+ *     ads that link to a product page
  *   - its store's Trustpilot score and number of reviews, from a real Trustpilot widget on the store (lib/trust.mjs),
- *     checked again every TRUST_DAYS days → D1 table `store_trust`
+ *     checked again every TRUST_DAYS days → D1 table `store_trust`; for every store, also when the ad links to the
+ *     store's home page (most do)
  *   CF_API_TOKEN=… CF_ACCOUNT_ID=… [BS_MINUTES=15] node winner-hunter/bestsellers.mjs
  *
  * One request per store for its list, plus one per product the first time (its Shopify id), plus up to three for
@@ -16,14 +18,17 @@ import { fileURLToPath } from 'node:url';
 import { d1Client, d1Settings, chunks, STRICT } from './lib/d1.mjs';
 import { pool } from './lib/meta.mjs';
 import { productKey, storeTop, productId, rankOf, addDay } from './lib/bestsellers.mjs';
+import { hostOf, hostKey } from './lib/score.mjs';
 import { storeTrust } from './lib/trust.mjs';
 
 const DAY = 864e5;
 const KEEP_DAYS = 60; // rows not checked for this long are removed
 const TRUST_DAYS = 3; // a store's Trustpilot score is checked again after this long
 
-const WANTED_SQL = `SELECT DISTINCT product_url FROM winners
-WHERE product_url LIKE '%/products/%' AND ((${STRICT} AND last_seen >= ?1) OR ad_id IN (SELECT ad_id FROM stars))`;
+const WANTED_SQL = `SELECT DISTINCT product_url, store_url FROM winners
+WHERE (${STRICT} AND last_seen >= ?1) OR ad_id IN (SELECT ad_id FROM stars)`;
+// The store of an ad without a product page: its host without www, as the board's storeOf.
+const storeKey = (u) => { const h = hostOf(u); return h ? hostKey(h) : ''; };
 export const SAVE_SQL = `INSERT INTO bestseller (product_key, store, product_id, rank, ok, checked_at, history)
 SELECT json_extract(value, '$.key'), json_extract(value, '$.store'), json_extract(value, '$.id'), json_extract(value, '$.rank'),
   json_extract(value, '$.ok'), ?2, json_extract(value, '$.history') FROM json_each(?1) WHERE true
@@ -46,29 +51,31 @@ export async function refresh({ db, doFetch = globalThis.fetch, now = Date.now, 
   const known = new Map((await db.query('SELECT product_key, product_id, history FROM bestseller')).map((r) => [r.product_key, r]));
   const trusted = new Map((await db.query('SELECT store, checked_at FROM store_trust')).map((r) => [r.store, Date.parse(r.checked_at) || 0]));
 
-  // Products by store; one product page once.
+  // Products by store; one product page once. A store whose ads link elsewhere (home page, collection) gets no products,
+  // only its Trustpilot check.
   const byStore = new Map();
-  for (const { product_url: url } of wanted) {
+  for (const { product_url: url, store_url: storeUrl } of wanted) {
     const key = productKey(url);
-    if (!key) continue;
-    const store = key.split('/')[0];
+    const store = key ? key.split('/')[0] : storeKey(storeUrl) || storeKey(url);
+    if (!store) continue;
     if (!byStore.has(store)) byStore.set(store, new Map());
-    byStore.get(store).set(key, url);
+    if (key) byStore.get(store).set(key, url);
   }
 
   const rows = [];
   const trustRows = [];
-  const t = { products: 0, stores: byStore.size, ranked: 0, noList: 0, saved: 0, trust: { widget: 0, badge: 0, none: 0, failed: 0 } };
+  const t = { products: 0, stores: [...byStore.values()].filter((p) => p.size).length, ranked: 0, noList: 0, saved: 0, trust: { widget: 0, badge: 0, none: 0, failed: 0 } };
   await pool([...byStore], 6, async ([store, products]) => {
     if (now() > deadline) return;
     if (start - (trusted.get(store) || 0) >= TRUST_DAYS * DAY) {
-      const tr = await storeTrust(store, [...products.values()][0], { doFetch });
+      const tr = await storeTrust(store, [...products.values()][0] || '', { doFetch });
       if (tr.error) t.trust.failed++;
       else {
         t.trust[tr.status]++;
         trustRows.push({ store, status: tr.status, score: tr.score ?? null, reviews: tr.reviews ?? null, profile: tr.profile || null });
       }
     }
+    if (!products.size) return; // no product page: no best-seller rank to look up
     const { top, error } = await storeTop(store, { doFetch });
     if (!top) t.noList++;
     for (const [key, url] of products) {
