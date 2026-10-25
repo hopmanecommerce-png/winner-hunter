@@ -12,6 +12,11 @@ GitHub Actions (every night)  →  Cloudflare D1 (the database)  →  Board (Clo
 
 - Only ads that pass **all four hard rules** (no points, no score): **Shopify store**, advertiser has **75+ active ads**,
   ad live **7 to 42 days**, **500+ EU reach per day**. Anything else is never saved and never shown.
+- **🌍 Outside EU / 🇪🇺 EU** (switch under the menu): the hunt searches wealthy markets outside the EU (US, CA, GB, AU,
+  NZ, CH, NO, SG, JP, the Gulf…). Meta publishes no reach there, so those products skip the reach rule and the
+  competitor's **active ads** lead: most first, on the card as the big number, with where the ad aims ("Worldwide").
+  Meta's API only shows the ads there that also ran in the EU or UK (UK-only ads too); ads that run only in, say, New
+  Zealand stay invisible. The EU products found before stay under 🇪🇺 EU.
 - **Inbox** (start screen): every product you have not decided on, one at a time, best first. **✗ Reject**, **★ Keep**
   or **✓ Made ad** (buttons, swipe left/right, or keys R / K / D). Each one leaves the inbox; **Undo** brings it back.
   When none are left: **🎉 Inbox zero**. "New today" = found in the last 24 hours.
@@ -70,7 +75,9 @@ The database tables are made automatically (`worker/migrations/*.sql`).
 - The summary of each run is on its page in Actions, and on the board ("Last run …").
 
 Change the keywords: edit `keywords.txt` (one per line, `#` = comment).
-Other countries: add a repository variable `HUNT_COUNTRIES` (default `NL,BE,DE,FR,AT,ES,IT,IE,DK,SE,PL`).
+Other countries: add a repository variable `HUNT_COUNTRIES` (default: outside the EU,
+`US,CA,GB,AU,NZ,CH,NO,IS,SG,HK,JP,KR,IL,AE,SA,QA,KW`). Only EU countries (e.g. `NL,BE,DE,FR`) = the EU hunt with the
+reach rule.
 
 ## Files
 

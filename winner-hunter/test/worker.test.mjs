@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import { handle, makeToken, csvCell, toCsv, boardAlert, PREFETCH_SQL, tasteOf, fitOf } from '../worker/src/app.mjs';
 import { landingUrl, cleanAd } from '../worker/src/adview.mjs';
 import { seededEnv, NOW } from './helpers/seed.mjs';
+import { STRICT } from '../lib/d1.mjs';
 
 const HTML = fs.readFileSync(new URL('../worker/src/board.html', import.meta.url), 'utf8');
 const ORIGIN = 'https://winner-hunter.example.workers.dev';
@@ -94,7 +95,8 @@ test('/api/ads: All is the default view (no Top 20): ads that pass the rules, on
   assert.ok(!ids.includes('9100'), 'second ad of the same product collapsed');
   assert.ok(!ids.includes('9300'), 'too young');
   assert.ok(!ids.includes('9200'), '272 reach a day');
-  assert.deepStrictEqual(Object.keys(j.counts), ['all', 'inbox', 'fresh', 'starred', 'hidden']);
+  assert.deepStrictEqual(Object.keys(j.counts), ['all', 'inbox', 'fresh', 'starred', 'hidden', 'by']);
+  assert.strictEqual(j.scope, 'eu', 'no products from outside the EU yet: the EU');
   assert.strictEqual(j.counts.inbox, 27, 'nothing decided yet: everything is in the inbox');
   assert.strictEqual(j.counts.all, 27);
   assert.strictEqual(j.last_run.new_winners, 23);
@@ -272,6 +274,27 @@ test('feedback: every decision is logged, reasons and a note added after, undo t
   assert.deepStrictEqual(l.notes.map((n) => n.note), ['Meer dierenproducten graag', 'Te duur  voor NL']);
   assert.strictEqual((await s.get('/api/learned')).status, 200);
   assert.strictEqual((await call(env, '/api/learned')).status, 401, 'PIN needed');
+});
+
+test('outside the EU: no reach rule, the active ads lead; Inbox and Browse show one scope', async () => {
+  const env = await seededEnv({ world: true });
+  const s = await loggedIn(env);
+  const get = async (q) => (await s.get('/api/ads?' + q)).json();
+  const w = await get('view=inbox');
+  assert.strictEqual(w.scope, 'world', 'outside the EU first once the board has products from there');
+  assert.deepStrictEqual(w.ads.map((a) => [a.id, a.ads, a.world, a.targets]), [['8001', 300, true, 'Worldwide'], ['8002', 120, true, 'United States, Canada']],
+    'no reach needed, most active ads first; 60 active ads and 50 days live are still out');
+  assert.deepStrictEqual([w.counts.inbox, w.counts.all, w.counts.by], [2, 2, { world: { inbox: 2, all: 2 }, eu: { inbox: 27, all: 27 } }]);
+  const eu = await get('view=inbox&scope=eu');
+  assert.deepStrictEqual([eu.scope, eu.total, eu.counts.inbox, eu.ads.some((a) => a.world)], ['eu', 27, 27, false]);
+  assert.ok(eu.ads.every((a) => a.rpd >= 500), 'EU products still need their reach');
+  assert.deepStrictEqual((await get('view=all&scope=world')).ads.map((a) => a.id), ['8001', '8002'], 'Browse: most active ads first');
+  assert.strictEqual((await get('view=all&scope=eu')).ads.length, 27);
+  assert.strictEqual((await get('view=all&scope=nonsense')).scope, 'world');
+  // a decision works the same; the database rule (lib/d1.mjs STRICT) agrees
+  await s.post('/api/hide', { ad_id: '8001', status: 'rejected' });
+  assert.deepStrictEqual((await get('view=inbox&scope=world')).ads.map((a) => a.id), ['8002']);
+  assert.deepStrictEqual(env.db.prepare(`SELECT ad_id FROM winners WHERE ad_id LIKE '80%' AND ${STRICT} ORDER BY ad_id`).all().map((r) => r.ad_id), ['8001', '8002']);
 });
 
 test('notes: one per product, before or after deciding; notes on the same store come back; a note is not a decision', async () => {

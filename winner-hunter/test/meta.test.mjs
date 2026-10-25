@@ -159,3 +159,26 @@ test('checkTokens: debug_token expiry, never-expiring, invalid (190), and a fail
   const down = await checkTokens(['x'], { fetch: async () => { throw new Error('network down'); } });
   assert.deepStrictEqual(down, [{ n: 1, error: 'network down' }]);
 });
+
+test('outside the EU: no reach rule, where the ad aims is kept, records are marked world', async () => {
+  const calls = [];
+  const d = (n) => new Date(NOW - n * 864e5).toISOString().slice(0, 10);
+  const list = [
+    // Anna Boutique (134 active ads) without any EU reach: passes outside the EU
+    { id: '11', page_id: '501', page_name: 'Anna Boutique', ad_creative_link_captions: ['anna-boutique.shop'], ad_creative_link_titles: ['Linen Summer Dress'], ad_creative_bodies: ['x'],
+      ad_delivery_start_time: d(14), publisher_platforms: ['facebook'],
+      target_locations: [{ name: 'Worldwide', type: 'country_groups', excluded: false }, { name: 'France', type: 'countries', excluded: true }] },
+    // Tiny Shop: 12 active ads, still out
+    { id: '12', page_id: '505', page_name: 'Tiny Shop', ad_creative_link_captions: ['tinyshop.store'], ad_creative_link_titles: ['Mug'], ad_creative_bodies: ['x'],
+      ad_delivery_start_time: d(12), target_locations: [{ name: 'New Zealand', type: 'countries', excluded: false }] },
+  ];
+  const { results } = await hunt(Object.assign({}, base, { countries: ['US', 'NZ'] }), Object.assign({ fetch: fakeFetch(calls, { byKeyword: () => list }) }, quiet));
+  assert.deepStrictEqual(results.map((r) => [r.id, r.world, r.targets, r.active_ads, r.reach_eu, r.market]), [['11', 1, 'Worldwide', 134, null, 'US,NZ']]);
+  assert.deepStrictEqual(results[0].checklist.map((c) => c.key), ['shopify', 'ads', 'age'], 'no reach rule');
+  const search = calls.find((u) => u.searchParams.get('search_terms'));
+  assert.match(search.searchParams.get('fields'), /,target_locations$/);
+  assert.strictEqual(search.searchParams.get('ad_reached_countries'), '["US","NZ"]');
+  // an EU hunt still needs reach and does not mark its records
+  const eu = await hunt(base, Object.assign({ fetch: fakeFetch([]) }, quiet));
+  assert.deepStrictEqual([eu.results[0].world, eu.results[0].targets, eu.results[0].checklist.length], [0, '', 4]);
+});

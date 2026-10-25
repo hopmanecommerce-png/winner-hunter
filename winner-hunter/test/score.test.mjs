@@ -1,7 +1,7 @@
 // The checklist score (lib/score.mjs) and the stored record shape (lib/record.mjs).
 import test from 'node:test';
 import assert from 'node:assert';
-import { scoreAd, productOf, passesRules, reachPerDay, DAY, MIN_ACTIVE_ADS, MIN_AGE_DAYS, MAX_AGE_DAYS, MIN_REACH_PER_DAY } from '../lib/score.mjs';
+import { scoreAd, productOf, passesRules, reachPerDay, isWorld, WORLD, EU, DAY, MIN_ACTIVE_ADS, MIN_AGE_DAYS, MAX_AGE_DAYS, MIN_REACH_PER_DAY } from '../lib/score.mjs';
 import { slimRecord, zhTerm } from '../lib/record.mjs';
 import { parseKeywords, wrap } from '../lib/keywords.mjs';
 
@@ -46,6 +46,21 @@ test('ad age 7 to 42 days (inclusive) is required', () => {
   assert.strictEqual(v(134).skip, 'Live 134 days (max 6 weeks)');
   assert.strictEqual(v(3).skip, 'Live 3 days (needs 7+)');
   assert.strictEqual(scoreAd(ad({ start: 0 }), winnerInputs, {}, NOW).verdict, 'skip', 'start date unknown');
+});
+
+test('outside the EU there is no reach rule (Meta publishes none): the other three still count', () => {
+  assert.strictEqual(EU.size, 27);
+  assert.ok(isWorld(['US', 'NZ']) && isWorld('NL,GB') && isWorld(WORLD) && !WORLD.some((c) => EU.has(c)));
+  assert.ok(!isWorld(['NL', 'be']) && !isWorld('') && !isWorld([]));
+  const noReach = Object.assign({}, winnerInputs, { reach: { err: 'not published' } });
+  const w = scoreAd(ad(), noReach, { reach: false }, NOW);
+  assert.deepStrictEqual([w.verdict, w.items.map((i) => i.key)], ['winner', ['shopify', 'ads', 'age']]);
+  assert.strictEqual(scoreAd(ad(), Object.assign({}, noReach, { cnt: { count: 40 } }), { reach: false }, NOW).verdict, 'skip', 'active ads still count');
+  assert.strictEqual(scoreAd(ad({ start: daysAgo(60) }), noReach, { reach: false }, NOW).verdict, 'skip', 'age still counts');
+  assert.strictEqual(scoreAd(ad(), noReach, {}, NOW).verdict, 'skip', 'an EU hunt still needs reach');
+  const rec = { verdict: 'winner', active_ads: 200, ad_age_days: 12, reach_eu: null };
+  assert.ok(passesRules(Object.assign({ world: 1 }, rec)) && !passesRules(rec));
+  assert.deepStrictEqual([slimRecord({ id: '1', world: 1, targets: 'Worldwide' }).world, slimRecord({ id: '1', world: 1, targets: 'Worldwide' }).targets, slimRecord({ id: '2' }).world], [1, 'Worldwide', 0]);
 });
 
 test('500+ EU reach per day of ad life is required; unknown reach is out', () => {
