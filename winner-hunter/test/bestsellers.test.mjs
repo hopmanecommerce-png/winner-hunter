@@ -4,6 +4,7 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import { productKey, storeTop, productId, rankOf, addDay, movement } from '../lib/bestsellers.mjs';
 import { refresh } from '../bestsellers.mjs';
+import { storeTrust, trustIdIn } from '../lib/trust.mjs';
 import { handle, makeToken, productKey as boardKey, movement as boardMovement, bestOf, sellsBoost } from '../worker/src/app.mjs';
 import { d1Client } from '../lib/d1.mjs';
 import { d1Rest } from './helpers/sqlite-d1.mjs';
@@ -156,4 +157,74 @@ test('workflows: ranks after every hunt (also a red one) and before every test l
   const at = (x) => prev.indexOf(x);
   assert.ok(at('run: node winner-hunter/migrate.mjs') > 0 && at('run: node winner-hunter/migrate.mjs') < at('run: node winner-hunter/bestsellers.mjs'));
   assert.ok(at('run: node winner-hunter/bestsellers.mjs') < at('versions upload'));
+});
+
+// ---- Trustpilot (lib/trust.mjs): only from a real widget on the store ----
+const WIDGET = (score, total, name) => json({ businessUnit: { trustScore: score, stars: 4, displayName: name, identifyingName: name, numberOfReviews: { total } } });
+function trustStores() {
+  const calls = [];
+  const doFetch = async (url) => {
+    calls.push(url);
+    const u = new URL(url);
+    const page = (html) => new Response(`<html><body>${html}</body></html>`, { status: 200, headers: { 'content-type': 'text/html' } });
+    if (u.host === 'widget.trustpilot.com') {
+      assert.match(u.pathname, /^\/trustbox-data\/5419b6a8b0d04a076446a9ad$/);
+      const id = u.searchParams.get('businessUnitId');
+      if (id === 'aaaaaaaaaaaaaaaaaaaaaaaa') return WIDGET(4.2, 1252, 'shop1.test');
+      if (id === 'bbbbbbbbbbbbbbbbbbbbbbbb') return WIDGET(2.4, 31, 'shop2.test');
+      return new Response('<!DOCTYPE html><title>Trustpilot Custom Widget</title>', { status: 200 });
+    }
+    if (u.host === 'shop1.test' && u.pathname === '/') return page('<div class="trustpilot-widget" data-locale="nl-NL" data-template-id="x" data-businessunit-id="aaaaaaaaaaaaaaaaaaaaaaaa"></div>');
+    if (u.host === 'shop2.test' && u.pathname === '/') return page('<footer>no widget here</footer>');
+    if (u.host === 'shop2.test' && u.pathname === '/products/item-2') return page('<script>window.tp = {"businessUnitId":"bbbbbbbbbbbbbbbbbbbbbbbb"}</script>');
+    if (u.host === 'shop3.test') return page('<img src="https://upload.wikimedia.org/Trustpilot_Logo.png" alt="Trustpilot"><div>★★★★★ Uitstekend</div>');
+    if (u.host === 'shop5.test') return page('<footer>plain store</footer>');
+    if (u.host === 'shop6.test') return page('<div data-businessunit-id="cccccccccccccccccccccccc"></div>');
+    return new Response('down', { status: 503 });
+  };
+  return { calls, doFetch };
+}
+
+test('storeTrust: score and reviews from a real widget (home or product page), badge only, none, not reachable', async () => {
+  const { doFetch } = trustStores();
+  assert.deepStrictEqual(await storeTrust('shop1.test', 'https://shop1.test/products/item-1', { doFetch }), { status: 'widget', score: 4.2, reviews: 1252, profile: 'shop1.test' });
+  assert.deepStrictEqual(await storeTrust('shop2.test', 'https://shop2.test/products/item-2', { doFetch }), { status: 'widget', score: 2.4, reviews: 31, profile: 'shop2.test' }, 'widget on the product page');
+  assert.deepStrictEqual(await storeTrust('shop3.test', '', { doFetch }), { status: 'badge' }, 'Trustpilot logo, no real widget');
+  assert.deepStrictEqual(await storeTrust('shop5.test', '', { doFetch }), { status: 'none' });
+  assert.deepStrictEqual(await storeTrust('down.test', '', { doFetch }), { error: 'store not reachable' });
+  assert.deepStrictEqual(await storeTrust('shop6.test', '', { doFetch }), { error: 'Trustpilot widget data HTTP 200' }, 'unknown id: retried next run, not "none"');
+  assert.strictEqual(trustIdIn("data-businessunit-id='0123456789abcdef01234567'"), '0123456789abcdef01234567');
+  assert.strictEqual(trustIdIn('"business_unit_id": "0123456789abcdef01234567"'), '0123456789abcdef01234567');
+  assert.strictEqual(trustIdIn('data-businessunit-id="not-an-id"'), '');
+});
+
+test('bestsellers.mjs + board: Trustpilot per store every 3 days; the card gets score, reviews or what the store shows', async () => {
+  const env = await seededEnv();
+  const db = d1Client({ accountId: 'a', databaseId: 'd', token: 't' }, { doFetch: d1Rest(env.db).doFetch, retryMs: 0 });
+  const logs = [];
+  const s1 = trustStores();
+  const t1 = await refresh({ db, doFetch: s1.doFetch, now: () => NOW, log: (m) => logs.push(m) });
+  assert.deepStrictEqual({ widget: t1.trust.widget, badge: t1.trust.badge, none: t1.trust.none }, { widget: 2, badge: 1, none: 1 });
+  assert.match(logs[1], /^Trustpilot: \d+ stores checked · 2 with a real widget · 1 name it without one · 1 without · \d+ not reachable$/);
+  const row = (s) => env.db.prepare('SELECT status, score, reviews, profile FROM store_trust WHERE store = ?').get(s);
+  assert.deepStrictEqual({ ...row('shop1.test') }, { status: 'widget', score: 4.2, reviews: 1252, profile: 'shop1.test' });
+  assert.strictEqual(row('shop3.test').status, 'badge');
+  assert.strictEqual(row('shop7.test'), undefined, 'not reachable: nothing saved, tried again next run');
+
+  const s2 = trustStores();
+  await refresh({ db, doFetch: s2.doFetch, now: () => NOW + DAY, log: () => {} });
+  assert.ok(!s2.calls.some((u) => /^https:\/\/shop1\.test\/$|businessUnitId=a{24}/.test(u)), 'checked a day ago: not again');
+  assert.ok(s2.calls.some((u) => /businessUnitId=c{24}/.test(u)), 'a failed widget lookup is tried again the next run');
+  const s3 = trustStores();
+  await refresh({ db, doFetch: s3.doFetch, now: () => NOW + 3 * DAY, log: () => {} });
+  assert.ok(s3.calls.some((u) => /widget\.trustpilot/.test(u)), 'after 3 days: checked again');
+
+  const later = NOW + 3 * DAY;
+  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, later)}`;
+  const ads = (await (await handle(new Request('https://wh.example.workers.dev/api/ads', { headers: { cookie } }), env, { html: '', now: later })).json()).ads;
+  const trust = (id) => ads.find((a) => a.id === id).trust;
+  assert.deepStrictEqual(trust('9001'), { status: 'widget', score: 4.2, reviews: 1252, profile: 'shop1.test' });
+  assert.deepStrictEqual(trust('9003'), { status: 'badge', score: null, reviews: null, profile: '' });
+  assert.deepStrictEqual(trust('9005'), { status: 'none', score: null, reviews: null, profile: '' });
+  assert.strictEqual(trust('9007'), null, 'never checked: nothing shown');
 });
