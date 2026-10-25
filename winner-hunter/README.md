@@ -28,6 +28,10 @@ GitHub Actions (every night)  →  Cloudflare D1 (the database)  →  Board (Clo
   its own store's best-seller list (Shopify's sales order, top 50) and how it moved in a week: "#2 best seller in its
   store · ↑3 in 8d". The Inbox puts sellers first (× 1.5 in the store's top 10, × 1.2 in its top 50); Browse can sort
   by it. No line = the store gives no list (headless shop); "Not in its store's top 50" = checked, not selling much.
+- **Trustpilot** (second row in the stats block): the store's TrustScore and number of reviews, read from the real
+  Trustpilot widget the store shows (checked every 3 days). "Badge only" = the store names Trustpilot but shows no
+  real widget (often a copied logo); "–" = no Trustpilot on the store. Stores without a widget get no score:
+  Trustpilot's website blocks bots and its API needs a business key.
 - Per product: photo, price/discount, a ✓ per rule (active ads, days live, reach per day), ads for this product,
   the store's product count, shop. **▶ Bekijk ad** opens the ad itself (video, images, text, button) on the board, at once: `ad-prefetch.yml` opens every board ad ahead of time (every 8 hours and after each hunt).
   Tap a card for more: ad text, checklist and the buttons **Ad ↗ · Product ↗ · Store ↗ · Search 1688 ↗**.
@@ -76,7 +80,7 @@ Other countries: add a repository variable `HUNT_COUNTRIES` (default `NL,BE,DE,F
 
 ```
 run.mjs          nightly run (batches, cursor, time budget)
-bestsellers.mjs  store best-seller ranks for the board's products (after the hunt; lib/bestsellers.mjs)
+bestsellers.mjs  store signals for the board's products: best-seller rank + Trustpilot (after the hunt; lib/bestsellers.mjs, lib/trust.mjs)
 migrate.mjs      creates the D1 tables (safe to run every time)
 import.mjs       one-time import of the old winners
 keywords.txt     the search words

@@ -64,8 +64,10 @@ export const parseCountries = (s) => [...String(s || '').matchAll(/\b([A-Z]{2}) 
 const SNAP_SQL = `SELECT w.ad_id, ${KEY} AS gk, w.product_title, w.price, w.compare_at_price, w.currency, w.advertiser, w.active_ads,
   w.ad_age_days, w.reach_eu, w.scaled_count, w.keyword, w.store_url, w.product_url, w.ad_library_url, w.image_url,
   w.first_seen, w.last_seen, w.data FROM winners w`;
-// Store best sellers (bestsellers.mjs, once a day), read with the winners and kept on each row as w.bs.
+// Store signals (bestsellers.mjs, once a day), read with the winners and kept on each row: w.bs (best-seller rank)
+// and w.tp (the store's Trustpilot score).
 const BS_SQL = 'SELECT product_key, rank, ok, history FROM bestseller';
+const TRUST_SQL = 'SELECT store, status, score, reviews, profile FROM store_trust';
 const VERSION_SQL = `SELECT (SELECT MAX(rowid) FROM winners) AS r, (SELECT updated_at FROM state WHERE key = 'last_run') AS u`;
 const SNAP_MS = 15 * 60000; // read again after this long anyway
 const SNAPS = new WeakMap(); // per D1 binding
@@ -78,14 +80,16 @@ export async function snapshot(DB, now = Date.now()) {
   const shared = typeof navigator !== 'undefined' && navigator.userAgent === 'Cloudflare-Workers';
   let s = SNAPS.get(DB) || (shared ? LAST : null);
   if (!s || s.ver !== ver || now - s.at > SNAP_MS || now < s.at) {
-    const [{ results }, bs] = await Promise.all([
-      DB.prepare(SNAP_SQL).all(),
-      DB.prepare(BS_SQL).all().then((r) => r.results || [], () => []), // no table yet: no ranks, the board still works
-    ]);
+    const optional = (sql) => DB.prepare(sql).all().then((r) => r.results || [], () => []); // no table yet: the board still works
+    const [{ results }, bs, tp] = await Promise.all([DB.prepare(SNAP_SQL).all(), optional(BS_SQL), optional(TRUST_SQL)]);
     const best = new Map(bs.map((b) => [b.product_key, b]));
+    const trust = new Map(tp.map((t) => [t.store, t]));
     for (const w of results) {
-      const b = best.get(productKey(w.product_url));
+      const key = productKey(w.product_url);
+      const b = best.get(key);
       if (b) w.bs = b;
+      const t = trust.get(key.split('/')[0] || storeOf(w.store_url));
+      if (t) w.tp = t;
     }
     s = { ver, at: now, rows: results };
     SNAPS.set(DB, s);
@@ -142,6 +146,13 @@ export function bestOf(b) {
   }
   const m = movement(h);
   return { rank: b.rank == null ? null : Number(b.rank), move: m ? { from: m.from, days: m.days } : null };
+}
+
+/** For the card: the store's Trustpilot facts { status: 'widget' | 'badge' | 'none', score, reviews, profile }, or null. */
+export function trustOf(t) {
+  if (!t || !['widget', 'badge', 'none'].includes(t.status)) return null;
+  const n = (x) => (x == null || !Number.isFinite(Number(x)) ? null : Number(x));
+  return { status: t.status, score: n(t.score), reviews: n(t.reviews), profile: t.profile || '' };
 }
 
 const bsRank = (r) => (r.bs && Number(r.bs.ok) && r.bs.rank != null ? Number(r.bs.rank) : null);
@@ -508,6 +519,7 @@ export function toAd(r) {
     hidden: r.hid === 2 ? 'rejected' : r.hid === 1 ? 'seen' : '',
     fit: r.fit == null ? null : r.fit,
     best: bestOf(r.bs),
+    trust: trustOf(r.tp),
   };
 }
 
