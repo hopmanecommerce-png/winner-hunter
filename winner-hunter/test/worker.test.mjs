@@ -94,7 +94,7 @@ test('/api/ads: All is the default view (no Top 20): ads that pass the rules, on
   assert.ok(!ids.includes('9100'), 'second ad of the same product collapsed');
   assert.ok(!ids.includes('9300'), 'too young');
   assert.ok(!ids.includes('9200'), '272 reach a day');
-  assert.deepStrictEqual(Object.keys(j.counts), ['all', 'inbox', 'fresh', 'starred', 'hidden']);
+  assert.deepStrictEqual(Object.keys(j.counts), ['all', 'inbox', 'fresh', 'starred', 'made', 'hidden']);
   assert.strictEqual(j.counts.inbox, 27, 'nothing decided yet: everything is in the inbox');
   assert.strictEqual(j.counts.all, 27);
   assert.strictEqual(j.last_run.new_winners, 23);
@@ -199,6 +199,38 @@ test('/api/hide: seen and rejected leave All, Hidden shows them, none brings the
   assert.deepStrictEqual(out.ads.map((a) => [a.id, a.pass]).sort(), [['9000', true], ['9900', false]]);
   assert.strictEqual(out.counts.starred, 2);
   assert.ok(!(await (await s.get('/api/ads?view=all&limit=100')).json()).ads.some((a) => a.id === '9900'), 'never in All');
+});
+
+test('/api/ads?view=made: every product marked ✓ Made ad, the last one first, out of the rules too', async () => {
+  const env = await seededEnv();
+  const s = await loggedIn(env);
+  const made = async (q = '') => (await s.get('/api/ads?view=made' + q)).json();
+  const empty = await made();
+  assert.deepStrictEqual([empty.view, empty.total, empty.counts.made], ['made', 0, 0]);
+  assert.strictEqual((await s.post('/api/hide', { ad_id: '9003', status: 'seen' })).status, 200);
+  assert.strictEqual((await s.post('/api/hide', { ad_id: '9004', status: 'rejected' })).status, 200);
+  const ago = (days) => new Date(NOW - days * 864e5).toISOString();
+  // made earlier: an aged-out product, and a product through its second ad (9100 → 9000)
+  env.db.prepare("INSERT INTO hidden (ad_id, status, at) VALUES ('9900', 'seen', ?), ('9100', 'seen', ?)").run(ago(3), ago(2));
+  const j = await made();
+  assert.deepStrictEqual(j.ads.map((a) => [a.id, a.made_at, a.pass, a.hidden]), [
+    ['9003', new Date(NOW).toISOString(), true, 'seen'],
+    ['9000', ago(2), true, 'seen'],
+    ['9900', ago(3), false, 'seen'],
+  ], 'the last one first; once per product; out of the rules too; rejected not');
+  assert.strictEqual(j.counts.made, 3);
+  assert.ok(!(await (await s.get('/api/ads?view=all&limit=100')).json()).ads.some((a) => a.id === '9003'), 'not in Browse');
+  assert.ok((await (await s.get('/api/ads?view=all&hidden=1')).json()).ads.some((a) => a.id === '9003'), 'in Made ad & rejected');
+  assert.strictEqual((await (await s.get('/api/ads?view=all&limit=100')).json()).ads.find((a) => a.id === '9005').made_at, '', 'no date before you make it');
+  const csv = await s.get('/export.csv?view=made');
+  assert.match(csv.headers.get('content-disposition'), /winners-made-/);
+  const rows = (await csv.text()).trim().split('\r\n');
+  assert.strictEqual(rows.length, 4, 'header + 3');
+  assert.ok(rows[0].endsWith(',status,made_at') && rows[1].endsWith(',seen,' + new Date(NOW).toISOString()), 'with the day you made it');
+  // Undo takes it off ✓
+  assert.strictEqual((await s.post('/api/hide', { ad_id: '9003', status: 'none' })).status, 200);
+  const after = await made();
+  assert.deepStrictEqual([after.ads.map((a) => a.id), after.counts.made], [['9000', '9900'], 2]);
 });
 
 test('/api/ads?view=inbox: not seen, rejected or kept (★), best first; Inbox zero when all are decided', async () => {
@@ -382,7 +414,7 @@ test('CSV export: header, quotes, commas, newlines and formulas made harmless', 
   assert.match(res.headers.get('content-disposition'), /^attachment; filename="winners-all-2026-10-17\.csv"$/);
   const csv = await res.text();
   const [head] = csv.split('\r\n');
-  assert.strictEqual(head, 'ad_id,product,price,compare_at,currency,discount_pct,reach_eu,reach_per_day,ad_age_days,active_ads,ads_for_product,store_products,advertiser,store_url,product_url,ad_library_url,image_url,keyword,first_seen,last_seen,status');
+  assert.strictEqual(head, 'ad_id,product,price,compare_at,currency,discount_pct,reach_eu,reach_per_day,ad_age_days,active_ads,ads_for_product,store_products,advertiser,store_url,product_url,ad_library_url,image_url,keyword,first_seen,last_seen,status,made_at');
   assert.strictEqual(csv.trim().split('\r\n').length, 28, 'header + the 27 that pass the rules');
   for (const out of ['9200', '9300', '9600', '9700', '9800', '9900']) assert.ok(!csv.includes(out + ','), out + ' fails a rule');
   assert.ok(csv.includes(`"'=HYPERLINK(""http://evil.test"",""x"") <img src=x onerror=alert(1)>, ""quoted""\nline2"`));
