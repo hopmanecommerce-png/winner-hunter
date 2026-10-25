@@ -140,7 +140,7 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     await page.locator('.card .t').nth(1).click();
     const open = page.locator('.card.open');
     assert.strictEqual(await open.count(), 1);
-    assert.ok(await open.locator('.copy').isVisible(), 'ad text in the opened card');
+    assert.strictEqual(await open.locator('.copy').count(), 0, 'no ad text on the card (the ad itself is one tap away)');
     assert.ok(await open.locator('a', { hasText: 'Ad ↗' }).isVisible());
     assert.ok(await open.locator('a', { hasText: 'Search 1688 ↗' }).isVisible());
     await open.scrollIntoViewIfNeeded();
@@ -148,7 +148,7 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     await shot('3-card-open');
     // ▶ Bekijk ad: on every compact card; opens the ad in a sheet on this page (video ad)
     assert.strictEqual(await page.locator('.card .view').count(), 27);
-    assert.strictEqual(await page.locator('.card:not(.open) .copy').filter({ visible: true }).count(), 0, 'no ad text on compact cards');
+    assert.strictEqual(await page.locator('.card .copy').count(), 0, 'no ad text on any card');
     const vid = '9000';
     await page.locator(`.card[data-id="${vid}"] .view`).click();
     await page.waitForSelector('#sheet:not([hidden]) .fb video');

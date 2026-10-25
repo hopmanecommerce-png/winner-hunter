@@ -65,3 +65,9 @@ jobs:
         run: |
           [ "$MINUTES" -gt 300 ] && export MINUTES=300
           node winner-hunter/run.mjs
+
+      # Proof that the board's products sell: each one's rank in its store's own best-seller list (top 50).
+      # Also after a red hunt: whatever is on the board gets its rank.
+      - name: Store best sellers
+        if: ${{ !cancelled() }}
+        run: node winner-hunter/bestsellers.mjs

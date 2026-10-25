@@ -445,12 +445,11 @@ test('a database without tables gives a clear 503', async () => {
   assert.match((await res.json()).error, /Database not ready/);
 });
 
-test('the ad text is only in the opened card (not on the compact card); every card has a ▶ View ad button', async () => {
+test('no ad text on the cards (the ad itself is one tap away); every card has a ▶ View ad button', async () => {
   const env = await seededEnv();
   const me = await loggedIn(env);
   assert.strictEqual((await me.get('/ad/1234567890')).status, 404);
-  assert.match(HTML, /<div class="more">\s*\$\{a\.copy \? `<p class="copy">/, 'ad text inside the details');
-  assert.strictEqual(HTML.match(/class="copy"/g).length, 1);
+  assert.doesNotMatch(HTML, /class="copy"|a\.copy/, 'no ad text on the cards');
   assert.strictEqual(HTML.match(/class="view"[^>]*aria-label="View ad"/g).length, 2, 'button (viewer on) and link (viewer off)');
 });
 
