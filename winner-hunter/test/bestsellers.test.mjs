@@ -95,8 +95,12 @@ test('bestsellers.mjs: ranks for the board products, kept per day; the board sho
   const db = d1Client({ accountId: 'a', databaseId: 'd', token: 't' }, { doFetch: d1Rest(env.db).doFetch, retryMs: 0 });
   const logs = [];
 
+  // a ✓ Made ad product that aged out of the rules (45 days live) still gets its rank
+  env.db.prepare("UPDATE winners SET store_url = 'https://shop99.test/', product_url = 'https://shop99.test/products/gadget' WHERE ad_id = '9900'").run();
+  env.db.prepare("INSERT INTO hidden (ad_id, status, at) VALUES ('9900', 'seen', 'x')").run();
   const w1 = stores(WEEK1);
   const t1 = await refresh({ db, doFetch: w1.doFetch, now: () => NOW, log: (m) => logs.push(m) });
+  assert.ok(env.db.prepare("SELECT 1 FROM bestseller WHERE product_key = 'shop99.test/products/gadget'").get(), '✓ products are checked too');
   assert.strictEqual(t1.ranked, 2, 'item-1 (#3, by handle) and item-2 (#1, by id)');
   assert.ok(t1.noList >= 1 && t1.stores === t1.noList + 3);
   assert.match(logs[0], /^Store best sellers: \d+ products in \d+ stores · 2 in their store's top 50/);
@@ -164,7 +168,7 @@ test('workflows: ranks after every hunt (also a red one) and before every test l
 const WIDGET = (score, total, name) => json({ businessUnit: { trustScore: score, stars: 4, displayName: name, identifyingName: name, numberOfReviews: { total } } });
 function trustStores() {
   const calls = [];
-  const doFetch = async (url) => {
+  const doFetch = async (url, init = {}) => {
     calls.push(url);
     const u = new URL(url);
     const page = (html) => new Response(`<html><body>${html}</body></html>`, { status: 200, headers: { 'content-type': 'text/html' } });
@@ -174,6 +178,7 @@ function trustStores() {
       if (id === 'aaaaaaaaaaaaaaaaaaaaaaaa') return WIDGET(4.2, 1252, 'shop1.test');
       if (id === 'bbbbbbbbbbbbbbbbbbbbbbbb') return WIDGET(2.4, 31, 'shop2.test');
       if (id === 'dddddddddddddddddddddddd') return WIDGET(4.7, 88, 'shop4.test');
+      if (id === 'eeeeeeeeeeeeeeeeeeeeeeee') return WIDGET(3.9, 12, 'shop16.test');
       return new Response('<!DOCTYPE html><title>Trustpilot Custom Widget</title>', { status: 200 });
     }
     if (u.host === 'shop1.test' && u.pathname === '/') return page('<div class="trustpilot-widget" data-locale="nl-NL" data-template-id="x" data-businessunit-id="aaaaaaaaaaaaaaaaaaaaaaaa"></div>');
@@ -181,6 +186,12 @@ function trustStores() {
     if (u.host === 'shop2.test' && u.pathname === '/products/item-2') return page('<script>window.tp = {"businessUnitId":"bbbbbbbbbbbbbbbbbbbbbbbb"}</script>');
     if (u.host === 'shop3.test') return page('<img src="https://upload.wikimedia.org/Trustpilot_Logo.png" alt="Trustpilot"><div>★★★★★ Uitstekend</div>');
     if (u.host === 'shop4.test' && u.pathname === '/') return page('<div class="trustpilot-widget" data-businessunit-id="dddddddddddddddddddddddd"></div>');
+    if (u.host === 'shop16.test' && u.pathname === '/') return page('<footer>widget on the product pages only</footer>');
+    if (u.host === 'shop16.test' && u.pathname.endsWith('/graphql.json')) {
+      assert.strictEqual(JSON.parse(init.body).variables.n, 1, 'one best seller is enough for its page');
+      return list([160, 'pillow']);
+    }
+    if (u.host === 'shop16.test' && u.pathname === '/products/pillow') return page('<div data-businessunit-id="eeeeeeeeeeeeeeeeeeeeeeee"></div>');
     if (u.host === 'shop5.test') return page('<footer>plain store</footer>');
     if (u.host === 'shop6.test') return page('<div data-businessunit-id="cccccccccccccccccccccccc"></div>');
     return new Response('down', { status: 503 });
@@ -193,6 +204,12 @@ test('storeTrust: score and reviews from a real widget (home or product page), b
   assert.deepStrictEqual(await storeTrust('shop1.test', 'https://shop1.test/products/item-1', { doFetch }), { status: 'widget', score: 4.2, reviews: 1252, profile: 'shop1.test' });
   assert.deepStrictEqual(await storeTrust('shop2.test', 'https://shop2.test/products/item-2', { doFetch }), { status: 'widget', score: 2.4, reviews: 31, profile: 'shop2.test' }, 'widget on the product page');
   assert.deepStrictEqual(await storeTrust('shop3.test', '', { doFetch }), { status: 'badge' }, 'Trustpilot logo, no real widget');
+  let asked = 0;
+  const find = async () => { asked++; return 'https://shop16.test/products/pillow'; };
+  assert.deepStrictEqual(await storeTrust('shop16.test', find, { doFetch }), { status: 'widget', score: 3.9, reviews: 12, profile: 'shop16.test' }, 'a product page found when the home page has no widget');
+  assert.deepStrictEqual(await storeTrust('shop1.test', find, { doFetch }), { status: 'widget', score: 4.2, reviews: 1252, profile: 'shop1.test' });
+  assert.deepStrictEqual(await storeTrust('down.test', find, { doFetch }), { error: 'store not reachable' });
+  assert.strictEqual(asked, 1, 'not asked when the home page has the widget or does not answer');
   assert.deepStrictEqual(await storeTrust('shop5.test', '', { doFetch }), { status: 'none' });
   assert.deepStrictEqual(await storeTrust('down.test', '', { doFetch }), { error: 'store not reachable' });
   assert.deepStrictEqual(await storeTrust('shop6.test', '', { doFetch }), { error: 'Trustpilot widget data HTTP 200' }, 'unknown id: retried next run, not "none"');
@@ -205,15 +222,26 @@ test('bestsellers.mjs + board: Trustpilot per store every 3 days, also for ads t
   const env = await seededEnv();
   const db = d1Client({ accountId: 'a', databaseId: 'd', token: 't' }, { doFetch: d1Rest(env.db).doFetch, retryMs: 0 });
   const logs = [];
+  // shop1 also has a home-page ad (9008); shop12's ad links to a collection
+  env.db.prepare("UPDATE winners SET store_url = 'https://shop1.test/', product_url = 'https://shop1.test/' WHERE ad_id = '9008'").run();
+  env.db.prepare("UPDATE winners SET product_url = 'https://shop12.test/collections/all' WHERE ad_id = '9012'").run();
   const s1 = trustStores();
   const t1 = await refresh({ db, doFetch: s1.doFetch, now: () => NOW, log: (m) => logs.push(m) });
-  assert.deepStrictEqual({ widget: t1.trust.widget, badge: t1.trust.badge, none: t1.trust.none }, { widget: 3, badge: 1, none: 1 });
-  assert.match(logs[1], /^Trustpilot: \d+ stores checked · 3 with a real widget · 1 name it without one · 1 without · \d+ not reachable$/);
+  assert.deepStrictEqual({ widget: t1.trust.widget, badge: t1.trust.badge, none: t1.trust.none }, { widget: 4, badge: 1, none: 1 });
+  assert.strictEqual(s1.calls.filter((u) => /businessUnitId=a{24}/.test(u)).length, 1, 'a store with home-page and product-page ads: one Trustpilot check');
+  assert.ok(s1.calls.includes('https://shop12.test/') && !s1.calls.some((u) => /shop12\.test\/.+/.test(u)), 'collection link: Trustpilot from the home page, no best-seller list');
+  // stores with product pages start first, the Trustpilot-only stores after them
+  const first = (h) => s1.calls.findIndex((u) => new URL(u).host === h);
+  const withProducts = new Set(env.db.prepare("SELECT product_url FROM winners WHERE product_url LIKE '%/products/%'").all().map((r) => new URL(r.product_url).host));
+  const homeOnly = ['shop0.test', 'shop4.test', 'shop12.test', 'shop16.test'];
+  assert.ok(Math.max(...[...withProducts].map(first).filter((i) => i >= 0)) < Math.min(...homeOnly.map(first)), 'product stores first');
+  assert.match(logs[1], /^Trustpilot: \d+ stores checked · 4 with a real widget · 1 name it without one · 1 without · \d+ not reachable$/);
   const row = (s) => env.db.prepare('SELECT status, score, reviews, profile FROM store_trust WHERE store = ?').get(s);
   assert.deepStrictEqual({ ...row('shop1.test') }, { status: 'widget', score: 4.2, reviews: 1252, profile: 'shop1.test' });
   assert.strictEqual(row('shop3.test').status, 'badge');
   assert.deepStrictEqual({ ...row('shop4.test') }, { status: 'widget', score: 4.7, reviews: 88, profile: 'shop4.test' }, 'its ad links to the home page');
-  assert.ok(!s1.calls.some((u) => /shop4\.test\/.+/.test(u)), 'home page only: no product page or best-seller list asked');
+  assert.ok(!s1.calls.some((u) => /shop4\.test\/.+/.test(u)), 'widget on the home page: no product page or best-seller list asked');
+  assert.deepStrictEqual({ ...row('shop16.test') }, { status: 'widget', score: 3.9, reviews: 12, profile: 'shop16.test' }, 'home-page ads, widget on a product page: found through its best seller');
   assert.strictEqual(row('shop7.test'), undefined, 'not reachable: nothing saved, tried again next run');
 
   const s2 = trustStores();
@@ -231,6 +259,7 @@ test('bestsellers.mjs + board: Trustpilot per store every 3 days, also for ads t
   assert.deepStrictEqual(trust('9001'), { status: 'widget', score: 4.2, reviews: 1252, profile: 'shop1.test' });
   assert.deepStrictEqual(trust('9003'), { status: 'badge', score: null, reviews: null, profile: '' });
   assert.deepStrictEqual(trust('9004'), { status: 'widget', score: 4.7, reviews: 88, profile: 'shop4.test' }, 'ad to the home page: the card has its score too');
+  assert.deepStrictEqual(trust('9016'), { status: 'widget', score: 3.9, reviews: 12, profile: 'shop16.test' });
   assert.deepStrictEqual(trust('9005'), { status: 'none', score: null, reviews: null, profile: '' });
   assert.strictEqual(trust('9007'), null, 'never checked: nothing shown');
 });
