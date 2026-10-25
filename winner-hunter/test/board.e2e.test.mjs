@@ -316,6 +316,21 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     assert.strictEqual(env.db.prepare('SELECT status FROM hidden WHERE ad_id = ?').get(third).status, 'seen');
     await noSideScroll('Inbox after decisions');
     await shot('8-inbox');
+    // a slow save (roaming): Made ad, then ✓ at once; the count holds and the product is in ✓ once it is saved
+    await page.route('**/api/hide', async (route) => { await new Promise((r) => setTimeout(r, 800)); await route.continue(); });
+    const slow = await page.locator('.card').getAttribute('data-id');
+    const madeBefore = Number(await page.textContent('#nmade')) || 0;
+    await page.keyboard.press('d');
+    await page.waitForFunction((x) => document.querySelector('.card') && document.querySelector('.card').dataset.id !== x, slow);
+    await page.click('[data-view=made]');
+    await page.waitForResponse((r) => r.url().includes('/api/ads?view=made'));
+    await page.waitForTimeout(50);
+    assert.strictEqual(Number(await page.textContent('#nmade')), madeBefore + 1, 'the count holds while the save is on its way');
+    await page.waitForFunction((x) => !!document.querySelector(`.card[data-id="${x}"]`), slow, { timeout: 5000 });
+    assert.strictEqual(Number(await page.textContent('#nmade')), madeBefore + 1);
+    await page.unroute('**/api/hide');
+    await page.click('[data-view=inbox]');
+    await page.waitForSelector('#tri:not([hidden])');
     // clear the rest: Inbox zero
     for (let k = await left(); k > 0; k--) {
       const cur = await page.locator('.card').getAttribute('data-id');
@@ -337,11 +352,74 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     assert.ok(await page.locator('#scope').isHidden() && await page.locator('#q').isHidden() && await page.locator('#radar').isHidden());
     assert.strictEqual(await page.locator('.card .tag.made').count(), nMade);
     assert.match(await page.locator('.card .tag.made').first().innerText(), /✓ Made 17 Oct/i);
-    assert.deepStrictEqual(await page.locator('.card').first().locator('.acts button').allInnerTexts(), ['Unhide']);
     assert.ok((await page.getAttribute('#csv', 'href')).startsWith('/export.csv?view=made'));
+    assert.strictEqual(await page.evaluate(() => day('2025-03-02T12:00:00Z')), 'Mar 2025', 'another year: month and year');
     await page.waitForFunction(imagesInView);
     await noSideScroll('Made ad');
     await shot('9a-made');
+    // small phones, 4-digit counts: the five views never push the page sideways
+    const bigCounts = () => page.evaluate(() => { for (const [id, n] of [['nin', '1234'], ['nall', '4321'], ['nstar', '123'], ['nmade', '456']]) document.getElementById(id).textContent = n; });
+    for (const w of [360, 320]) {
+      await page.setViewportSize({ width: w, height: 740 });
+      await bigCounts();
+      await noSideScroll(`✓ at ${w}px with 4-digit counts`);
+    }
+    await page.click('[data-view=all]');
+    await page.waitForFunction(() => document.querySelector('[data-view=all]').getAttribute('aria-pressed') === 'true' && document.querySelectorAll('.card').length > 0);
+    await bigCounts();
+    await noSideScroll('Browse at 320px with 4-digit counts');
+    await page.setViewportSize({ width: 360, height: 740 });
+    await noSideScroll('Browse at 360px with 4-digit counts');
+    await shot('9c-browse-360');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.click('[data-view=made]');
+    await page.waitForFunction((n) => document.querySelectorAll('.card').length === n, nMade);
+    // remove from ✓ takes two taps (it wipes the day and the reasons); no Undo, so a slip does nothing
+    const rmId = await page.evaluate(() => LAST && LAST.kind === 'seen' && LAST.a.id); // the last Inbox decision: its Why? strip must go
+    assert.ok(rmId, 'the last Inbox decision was a Made ad');
+    const rm = page.locator(`.card[data-id="${rmId}"]`);
+    assert.deepStrictEqual(await rm.locator('.acts button').allInnerTexts(), ['Remove from ✓']);
+    await rm.locator('[data-act=none]').click();
+    assert.strictEqual(await rm.locator('[data-act=none]').innerText(), 'Tap again to remove');
+    assert.strictEqual(env.db.prepare('SELECT status FROM hidden WHERE ad_id = ?').get(rmId).status, 'seen', 'one tap: nothing removed');
+    await page.evaluate(() => { PENDING_MADE++; }); // another Made ad save still on its way: the server count is not taken
+    await rm.locator('[data-act=none]').click();
+    await page.waitForFunction((x) => !document.querySelector(`.card[data-id="${x}"]`), rmId);
+    assert.strictEqual(await page.textContent('#nmade'), String(nMade - 1), 'the count goes down at once');
+    await page.evaluate(() => { PENDING_MADE--; });
+    assert.strictEqual(await page.textContent('#toastMsg'), 'Removed from ✓ Made ad');
+    assert.strictEqual(env.db.prepare('SELECT 1 FROM hidden WHERE ad_id = ?').get(rmId), undefined);
+    await page.waitForFunction((n) => document.querySelector('#nmade').textContent === String(n - 1), nMade);
+    // it was decided in the Inbox on this phone: it is back there without a reload
+    await page.click('[data-view=inbox]');
+    await page.waitForFunction((x) => document.querySelector('.card') && document.querySelector('.card').dataset.id === x, rmId);
+    assert.strictEqual(await page.textContent('#ileft'), '1 left');
+    assert.ok(await page.locator('#why').isHidden(), 'no Why? strip for the removed decision');
+    // keep it, then unstar it in ★: back in the Inbox too
+    await page.keyboard.press('k');
+    await page.waitForSelector('#zero:not([hidden])');
+    await page.click('[data-view=starred]');
+    await page.waitForSelector(`.card[data-id="${rmId}"]`);
+    await page.locator(`.card[data-id="${rmId}"] [data-act=star]`).click();
+    await page.waitForFunction((x) => !document.querySelector(`.card[data-id="${x}"]`) || document.querySelector(`.card[data-id="${x}"] .star`).getAttribute('aria-pressed') === 'false', rmId);
+    await page.click('[data-view=inbox]');
+    await page.waitForFunction((x) => document.querySelector('.card') && document.querySelector('.card').dataset.id === x, rmId);
+    assert.strictEqual(await page.textContent('#ileft'), '1 left', 'unstarred: back in the Inbox without a reload');
+    // tablets: the five views, the search and the sort menu do not cover each other
+    for (const w of [768, 820, 1024, 1280]) {
+      await page.setViewportSize({ width: w, height: 1000 });
+      await page.click('[data-view=all]');
+      await page.waitForFunction(() => document.querySelector('[data-view=all]').getAttribute('aria-pressed') === 'true' && document.querySelectorAll('.card').length > 0);
+      await bigCounts();
+      for (const v of ['inbox', 'all', 'starred', 'made', 'learned']) {
+        const hit = await page.evaluate((x) => { const r = document.querySelector(`[data-view=${x}]`).getBoundingClientRect(); const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!(e && e.closest(`[data-view=${x}]`)); }, v);
+        assert.ok(hit, `${w}px: the ${v} view can be tapped`);
+      }
+      assert.ok((await page.locator('#q').boundingBox()).width > 200, `${w}px: the search has room`);
+      await noSideScroll(`Browse at ${w}px`);
+      if (w === 820) await shot('9d-browse-ipad');
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
     // 🧠 what the board learned: reasons, the note (as text), and a note about the board
     await page.click('[data-view=learned]');
     await page.waitForSelector('#learn:not([hidden]) h2');
@@ -357,7 +435,7 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     await noSideScroll('Learned');
     await shot('9b-learned');
     await page.waitForTimeout(300);
-    assert.strictEqual((await (await fetch(base + '/api/ads?view=inbox', { headers: { cookie: (await page.context().cookies()).map((c) => `${c.name}=${c.value}`).join('; ') } })).json()).total, 0, 'saved: nothing left on the server');
+    assert.strictEqual((await (await fetch(base + '/api/ads?view=inbox', { headers: { cookie: (await page.context().cookies()).map((c) => `${c.name}=${c.value}`).join('; ') } })).json()).total, 1, 'saved: nothing left on the server but the product removed from ✓ and unstarred (back in the Inbox)');
     // a failed run: red banner on top, on a phone
     env.db.prepare("UPDATE state SET value = ? WHERE key = 'last_run'").run(JSON.stringify({ status: 'done', health: 'failed', finished_at: new Date(NOW - 3600e3).toISOString(), ads_checked: 0, new_winners: 0,
       alert: 'Run mislukt: 0 ads gecheckt (Meta token?) / Run failed: 0 ads checked (Meta token?) <b>x</b>' }));

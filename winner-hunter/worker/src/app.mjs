@@ -172,8 +172,7 @@ function countriesOf(w) {
  * marked seen (made ad) or rejected.
  */
 export function products(rows, hidden = [], stars = [], now = Date.now()) {
-  const hidOf = new Map(hidden.map((h) => [h.ad_id, h.status === 'rejected' ? 2 : h.status === 'seen' ? 1 : 0]));
-  const atOf = new Map(hidden.map((h) => [h.ad_id, h.at || '']));
+  const hidOf = new Map(hidden.map((h) => [h.ad_id, { hid: h.status === 'rejected' ? 2 : h.status === 'seen' ? 1 : 0, at: h.at || '' }]));
   const starred = new Set(stars.map((x) => x.ad_id));
   const groups = new Map();
   for (const w of rows) {
@@ -186,8 +185,8 @@ export function products(rows, hidden = [], stars = [], now = Date.now()) {
     let g = groups.get(w.gk);
     if (!g) groups.set(w.gk, (g = { hid: 0, hat: '', star: 0, best: null, any: null, ids: [] }));
     g.ids.push(w.ad_id);
-    g.hid = Math.max(g.hid, hidOf.get(w.ad_id) || 0);
-    if (atOf.get(w.ad_id) > g.hat) g.hat = atOf.get(w.ad_id);
+    const h = hidOf.get(w.ad_id);
+    if (h) { g.hid = Math.max(g.hid, h.hid); if (h.at > g.hat) g.hat = h.at; }
     if (starred.has(w.ad_id)) g.star = 1;
     if (pass && (!g.best || better(r, g.best) < 0)) g.best = r;
     if (!g.any || pass > g.any.pass || (pass === g.any.pass && better(r, g.any) < 0)) g.any = r;
@@ -290,7 +289,7 @@ export function viewOf(p, list, { csv = false } = {}) {
     out = list.k.filter((r) => r.hid === 1); // every product you made an ad for (✓), out of the rules too
     sort = (a, b) => cmp(b.hat, a.hat) || better(a, b); // the last one you made first
     limit = csv ? 5000 : 100;
-    offset = csv ? 0 : Math.min(Math.max(parseInt(p.get('offset'), 10) || 0, 0), 100000);
+    offset = offsetOf(p, csv);
   } else if (view === 'inbox') {
     out = list.v.filter((r) => inScope(r) && inInbox(r) && !blockedBy(r, list.taste)) // not decided yet: not seen, rejected or kept (★)
       .map((r) => Object.assign({}, r, { fit: fitOf(r, list.taste), boost: sellsBoost(r) }));
@@ -313,11 +312,13 @@ export function viewOf(p, list, { csv = false } = {}) {
       if (!SORTS[p.get('sort')] || p.get('sort') === 'rpd') sort = (a, b) => b.crpd - a.crpd || cmp(a.ad_id, b.ad_id);
     }
     limit = csv ? 5000 : Math.min(Math.max(parseInt(p.get('limit'), 10) || 40, 1), 100);
-    offset = csv ? 0 : Math.min(Math.max(parseInt(p.get('offset'), 10) || 0, 0), 100000);
+    offset = offsetOf(p, csv);
   }
   out.sort(sort);
   return { view, scope, total: out.length, offset, rows: out.slice(offset, offset + limit) };
 }
+
+const offsetOf = (p, csv) => (csv ? 0 : Math.min(Math.max(parseInt(p.get('offset'), 10) || 0, 0), 100000));
 
 /** ?scope=world|eu; without it: outside the EU as soon as the board has products from there. */
 const scopeOf = (p, list) => (['world', 'eu'].includes(p.get('scope')) ? p.get('scope') : list.v.some((r) => r.world) ? 'world' : 'eu');
@@ -557,6 +558,7 @@ const CSV_COLS = [
   ['ad_age_days', (a) => a.age], ['active_ads', (a) => a.ads], ['ads_for_product', (a) => a.scaled], ['store_products', (a) => a.products], ['advertiser', (a) => a.adv],
   ['store_url', (a) => a.store], ['product_url', (a) => a.product], ['ad_library_url', (a) => a.ad], ['image_url', (a) => a.img],
   ['keyword', (a) => a.kw], ['first_seen', (a) => a.first_seen], ['last_seen', (a) => a.last_seen], ['status', (a) => a.hidden || (a.star ? 'starred' : '')],
+  ['made_at', (a) => a.made_at],
 ];
 export const toCsv = (ads) => [CSV_COLS.map((c) => c[0]).join(','), ...ads.map((a) => CSV_COLS.map(([, f]) => csvCell(f(a))).join(','))].join('\r\n') + '\r\n';
 

@@ -187,7 +187,7 @@
   .tag { font: 700 9.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: #fff; background: rgba(4, 5, 12, .55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, .12); border-radius: 999px; padding: 5px 7px; white-space: nowrap; }
   .tag.new { background: var(--holo); color: #06070d; border: 0; box-shadow: 0 0 12px rgba(46, 230, 255, .5); }
   .tag.out { background: rgba(255, 201, 77, .9); color: #1a1406; border: 0; }
-  .tag.made { background: rgba(4, 30, 20, .7); color: var(--win); border-color: rgba(61, 255, 176, .45); }
+  .tag.made { background: rgba(4, 30, 20, .7); color: var(--win); border-color: rgba(61, 255, 176, .45); letter-spacing: .05em; }
   .tag.sp { padding: 4px 6px; opacity: .85; }
   .tag.sp svg { display: block; }
   .star { position: absolute; right: 8px; top: 8px; z-index: 1; width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .14); display: grid; place-items: center; cursor: pointer;
@@ -379,11 +379,13 @@
   .zero .zb { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
   .zero button { height: 42px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--line2); background: var(--card2); font-weight: 650; cursor: pointer; }
   .zero .kept { color: var(--amb); border-color: rgba(255, 201, 77, .4); }
-  @media (min-width: 760px) {
+  @media (min-width: 1200px) { /* views + search beside the filters only where all of it fits */
     .rail { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
     .seg.mkt { grid-column: 1 / -1; }
     .search { flex: 0 1 380px; }
     .chips { margin: 0; padding: 0; }
+  }
+  @media (min-width: 760px) {
     .radar { padding: 22px 24px; }
     .rbody { display: grid; grid-template-columns: minmax(250px, 310px) minmax(220px, 280px) minmax(0, 1fr); gap: 24px; align-items: center; }
     .rviews { display: contents; }
@@ -435,9 +437,14 @@
     .card.open .flags span { display: inline-flex; }
     .seg button { padding: 0 10px; }
   }
-  @media (max-width: 759px) {
+  @media (max-width: 1199px) {
     .bar2 { flex-wrap: wrap; }
     .search { flex-basis: 100%; } /* Browse: the search gets its own row, the five views stay on one */
+  }
+  @media (max-width: 400px) { .seg button { padding: 0 7px; gap: 4px; } }
+  @media (max-width: 380px) {
+    .bar2 > .seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; } /* the smallest phones: the views scroll, never the page */
+    .bar2 > .seg::-webkit-scrollbar { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -547,7 +554,12 @@ const fmt = (n) => (n == null ? '–' : n >= 1e6 ? (n / 1e6).toFixed(1).replace(
 const SYM = { EUR: '€', USD: '$', GBP: '£' };
 const money = (v, c) => (v == null ? '' : (SYM[c] || (c ? c + ' ' : '')) + Number(v).toFixed(2).replace(/\.00$/, ''));
 const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
-const day = (iso) => { const d = new Date(iso); return Number.isFinite(+d) ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''; };
+// '17 Oct' this year, 'Oct 2025' before: ✓ keeps products for good
+const day = (iso) => {
+  const d = new Date(iso);
+  if (!Number.isFinite(+d)) return '';
+  return d.getFullYear() === new Date().getFullYear() ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+};
 const ago = (iso) => {
   const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
   if (!Number.isFinite(m)) return '';
@@ -582,11 +594,13 @@ const DONE = new Set(); // decided in the inbox here: skipped even if the server
 let FRESH = 0; // inbox products found in the last day
 let STARS = 0;
 let MADE = 0;
+let MADE_SEQ = 0; // Made ad saves finished here: a load answered across one has an old count
+let PENDING_MADE = 0; // Made ad saves still on their way to the server
 let marketsStale = false;
 
 function params(extra) {
   const p = new URLSearchParams({ view: st.view });
-  if (st.scope && st.view !== 'starred' && st.view !== 'made') p.set('scope', st.scope);
+  if (st.scope) p.set('scope', st.scope); // ★ and ✓ list every scope; the scope still counts the Inbox and Browse badges
   if (st.view === 'all') {
     if (st.q) p.set('q', st.q);
     if (st.sort !== 'rpd') p.set('sort', st.sort);
@@ -640,7 +654,9 @@ function card(a, inbox) {
   const view = VIEWER
     ? `<button class="view" data-act="view" aria-label="View ad">${ICON.play}</button>`
     : safe(a.ad) ? `<a class="view" href="${safe(a.ad)}" target="_blank" rel="noopener noreferrer" aria-label="View ad">${ICON.play}</a>` : '';
-  const acts = a.hidden
+  const acts = a.hidden === 'seen' // a ✓ product: removing wipes the day and the reasons, so two taps (any view)
+    ? '<button class="un" data-act="none" data-confirm="1">Remove from ✓</button>'
+    : a.hidden
     ? '<button class="un" data-act="none">Unhide</button>'
     : `<button class="ok" data-act="seen" title="You made an ad for it: it moves to ✓">${ICON.check}Made ad</button><button class="no" data-act="rejected" title="Not for me: hide it">${ICON.x}Reject</button>`;
   const shop = host(a.store);
@@ -938,10 +954,10 @@ async function decide(kind, dir) {
   total = Math.max(0, total - 1);
   if (isNew(a)) FRESH = Math.max(0, FRESH - 1);
   if (kind === 'keep') { STARS++; $('nstar').textContent = STARS; } else $('nall').textContent = Math.max(0, (Number($('nall').textContent) || 0) - 1); // kept ones stay in Browse
-  if (kind === 'seen') setMade(MADE + 1, true);
   cleared(1);
   marketsStale = true;
   const saved = setStatus(a.id, kind === 'keep' ? 'starred' : kind);
+  if (kind === 'seen') madeOne(saved);
   LAST = { a, kind, reasons: new Set(), saved: saved.catch(() => {}) };
   renderInbox();
   deciding = false;
@@ -1101,7 +1117,7 @@ $('learn').addEventListener('submit', async (e) => {
   try { await sendFeedback({ general: t }); toast('Thanks! Saved.', ''); loadLearned(); } catch (err) { toast('Could not save: ' + err.message, ''); }
 });
 
-function header(j) {
+function header(j, madeFresh = true) {
   SCOPE = j.scope || '';
   const by = j.counts.by;
   const k = st.view === 'inbox' ? 'inbox' : 'all';
@@ -1116,7 +1132,7 @@ function header(j) {
   $('nstar').textContent = j.counts.starred || '';
   FRESH = j.counts.fresh || 0;
   STARS = j.counts.starred || 0;
-  setMade(j.counts.made || 0);
+  if (madeFresh && !PENDING_MADE) setMade(j.counts.made || 0);
   const al = j.alert;
   $('alert').hidden = !al;
   $('alert').className = 'alert' + (al && al.level === 'yellow' ? ' yellow' : '');
@@ -1141,6 +1157,18 @@ function header(j) {
   $('run').innerHTML = `Last run <b>${esc(ago(r.finished_at || r.updated_at))}</b> · ${esc(fmt(r.ads_checked))} ads · <b>${esc(r.new_winners ?? 0)}</b> new winners${esc(why)}`;
 }
 
+// A Made ad tapped here: the ✓ count goes up and jumps at once. The server's count is older than this one until the
+// save is done (header() keeps this one); then ✓ loads again if it is open. A failed save takes it back.
+function madeOne(saved) {
+  PENDING_MADE++;
+  setMade(MADE + 1, true);
+  saved.then(() => {}, () => setMade(Math.max(0, MADE - 1))).then(() => {
+    PENDING_MADE--;
+    MADE_SEQ++;
+    if (st.view === 'made') load();
+  });
+}
+
 // The ✓ tab's count. bump: you just made an ad, the count jumps so you see where it went.
 function setMade(n, bump) {
   const el = $('nmade');
@@ -1153,6 +1181,7 @@ let seq = 0;
 async function load(append) {
   if (st.view === 'learned') { seq++; loadLearned(); return; }
   const my = ++seq;
+  const madeSeq = MADE_SEQ;
   if (!append) {
     st.offset = 0;
     if (!ADS.length) $('grid').innerHTML = SKELETON;
@@ -1168,7 +1197,7 @@ async function load(append) {
     ADS = append ? ADS.concat(got) : got;
     VIEWER = !!j.viewer;
     total = j.total - (j.ads.length - got.length);
-    header(j);
+    header(j, madeSeq === MADE_SEQ);
     if (st.view === 'inbox') FRESH = Math.max(0, FRESH - j.ads.filter((a) => DONE.has(a.id) && isNew(a)).length);
     render(append, got);
     radar();
@@ -1190,10 +1219,12 @@ async function setStatus(id, status) {
 
 let undoId = '';
 let undoStatus = 'none';
+let undoMade = false; // the Undo takes back a Made ad: the ✓ count goes down
 let toastTimer = 0;
-function toast(msg, id, back) {
+function toast(msg, id, back, made = false) {
   undoId = id;
   undoStatus = back || 'none';
+  undoMade = made;
   $('toastMsg').textContent = msg;
   $('undo').hidden = !id;
   $('toast').hidden = false;
@@ -1204,11 +1235,19 @@ $('undo').addEventListener('click', async () => {
   $('toast').hidden = true;
   if (!undoId) return;
   const id = undoId;
-  if (DONE.delete(id)) cleared(-1);
+  forget(id);
+  if (undoMade) setMade(Math.max(0, MADE - 1));
   try { await setStatus(id, undoStatus); } catch (e) { /* shown by the reload */ }
   load();
   loadMarkets();
 });
+
+// A product decided in the Inbox on this phone that is undecided again (removed from ✓, unhidden, unstarred):
+// back in the Inbox without a reload, and its Why? strip goes.
+function forget(id) {
+  if (DONE.delete(id)) cleared(-1);
+  if (LAST && LAST.a.id === id) { LAST = null; renderWhy(); }
+}
 
 $('grid').addEventListener('click', async (e) => {
   const c = e.target.closest('.card');
@@ -1226,13 +1265,23 @@ $('grid').addEventListener('click', async (e) => {
         b.setAttribute('aria-pressed', String(a.star));
         const n = Math.max(0, (Number($('nstar').textContent) || 0) + (a.star ? 1 : -1));
         $('nstar').textContent = n || '';
+        if (!a.star) forget(id);
         if (st.view === 'starred' && !a.star) load();
+        return;
+      }
+      if (b.dataset.confirm && !b.dataset.sure) { // a second tap, so a slip never wipes the day and the reasons
+        b.dataset.sure = '1';
+        b.textContent = 'Tap again to remove';
+        setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = 'Remove from ✓'; } }, 3000);
         return;
       }
       c.classList.add('gone'); // right away; back if saving fails
       try { await setStatus(id, act); } catch (err) { c.classList.remove('gone'); throw err; }
-      if (act === 'seen') setMade(MADE + 1, true);
-      if (act !== 'none') toast(act === 'seen' ? 'Moved to ✓ Made ad' : 'Rejected', id);
+      if (act === 'seen') madeOne(Promise.resolve());
+      if (act === 'none') forget(id);
+      if (act === 'none' && b.dataset.confirm) setMade(Math.max(0, MADE - 1)); // also while another save holds the count
+      if (act !== 'none') toast(act === 'seen' ? 'Moved to ✓ Made ad' : 'Rejected', id, 'none', act === 'seen');
+      else if (b.dataset.confirm) toast('Removed from ✓ Made ad', '');
       setTimeout(load, 220);
       loadMarkets();
     } catch (err) {

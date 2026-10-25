@@ -78,6 +78,15 @@ test('Outside EU / EU switch: products from outside the EU lead with active ads,
     await page.reload();
     await page.waitForSelector('.card');
     assert.strictEqual(await page.getAttribute('[data-scope=eu]', 'aria-pressed'), 'true');
+    // ★ and ✓ list every scope, but the Inbox and Browse badges stay counted in the EU you picked
+    assert.deepStrictEqual([await page.textContent('#nin'), await page.textContent('#nall')], ['27', '27']);
+    for (const v of ['made', 'starred']) {
+      await Promise.all([page.waitForResponse((r) => r.url().includes('/api/ads?view=' + v)), page.click(`[data-view=${v}]`)]);
+      await page.waitForTimeout(100);
+      assert.deepStrictEqual([await page.textContent('#nin'), await page.textContent('#nall')], ['27', '27'], 'badges in ' + v);
+    }
+    await page.click('[data-view=inbox]');
+    await page.waitForSelector('#tri:not([hidden])');
     // Browse outside the EU: most shop ads first, no reach filters or EU radar
     await page.click('[data-scope=world]');
     await page.click('[data-view=all]');
