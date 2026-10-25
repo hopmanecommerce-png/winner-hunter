@@ -15,8 +15,11 @@ GitHub Actions (every night)  →  Cloudflare D1 (the database)  →  Board (Clo
 - **Inbox** (start screen): every product you have not decided on, one at a time, best first. **✗ Reject**, **★ Keep**
   or **✓ Made ad** (buttons, swipe left/right, or keys R / K / D). Each one leaves the inbox; **Undo** brings it back.
   When none are left: **🎉 Inbox zero**. "New today" = found in the last 24 hours.
-- **Why?** After each choice: tap a reason (Too expensive, Not my niche, Bad store… or Wow product, My niche…) and
-  add a note if you like. The board **learns**: niches you like go up in the Inbox, niches you reject go down,
+  The Inbox card shows only the data and one link: **Open in Facebook Ad Library**.
+- **📝 Note** (under the Inbox card, key N): write about the ad, the competitor or the product. It saves as you type and
+  stays with the product. Your notes on other products of the same store or advertiser show below it.
+- **Why?** After each choice: tap a reason (Too expensive, Not my niche, Bad store… or Wow product, My niche…).
+  The board **learns**: niches you like go up in the Inbox, niches you reject go down,
   "Bad store" takes that store out of the Inbox, "Too expensive" (twice) ranks expensive products lower.
 - **🧠**: what the board learned, your notes, and a box to tell the board something. Everything is in the D1
   table `feedback`; ask Claude "learn from my Winner Hunter feedback" to turn it into better keywords and rules.

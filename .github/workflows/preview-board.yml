@@ -1,0 +1,58 @@
+# A test link for the board before it goes live. On every push to a branch other than main, this uploads the board
+# as a new version of the Worker WITHOUT deploying it: the live board does not change. The version gets its own link,
+# https://<branch>-winner-hunter-clean.<subdomain>.workers.dev (shown in the run summary).
+# The test link uses the live database and PIN: Reject / Keep / Made ad there are saved for real.
+# Merging into main deploys the board as before (deploy-board.yml).
+name: Preview board
+
+on:
+  push:
+    branches-ignore: [main]
+    paths:
+      - 'winner-hunter/worker/**'
+      - '.github/workflows/preview-board.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-board-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Worker packages
+        working-directory: winner-hunter/worker
+        run: npm ci --no-audit --no-fund
+
+      - name: Upload a test version (the live board does not change)
+        id: up
+        working-directory: winner-hunter/worker
+        run: |
+          set -o pipefail
+          # The branch name as the link name: lowercase letters, digits and dashes, short enough for a web address.
+          ALIAS=$(printf '%s' "$GITHUB_REF_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//' | cut -c1-40 | sed -E 's/-+$//')
+          case "$ALIAS" in [a-z]*) ;; *) ALIAS="b-$ALIAS" ;; esac
+          npx --yes wrangler@4 versions upload --preview-alias "$ALIAS" --message "Preview of $GITHUB_REF_NAME" 2>&1 | tee "$RUNNER_TEMP/up.log"
+          URL=$(grep -oE "https://$ALIAS-[A-Za-z0-9.-]+\.workers\.dev" "$RUNNER_TEMP/up.log" | head -1 || true)
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Test link
+        env:
+          URL: ${{ steps.up.outputs.url }}
+        run: |
+          echo "Test link: ${URL:-see the upload step log}"
+          echo "## Test link: ${URL:-see the upload step log}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Same PIN and database as the live board: decisions made there are saved for real." >> "$GITHUB_STEP_SUMMARY"
