@@ -69,7 +69,10 @@ test('store best sellers and Trustpilot on the cards: rank and weekly move, Trus
     await page.waitForSelector('.card');
     assert.strictEqual(await page.locator('.card .bs.top').innerText(), '🏆 #2 best seller in its store · ↑3 in 8d');
     const tp = page.locator('.card .meta .mtp');
-    assert.match(await tp.innerText(), /^4\.2 ★\s+trustpilot\s+1\.3K\s+reviews$/i, 'score and reviews inside the stats block');
+    assert.match(await tp.innerText(), /^4\.2 ★\s+trustpilot ↗\s+1\.3K\s+reviews$/i, 'score and reviews inside the stats block');
+    assert.strictEqual(await tp.evaluate((el) => el.tagName), 'A', 'the Trustpilot row is a link');
+    assert.strictEqual(await tp.getAttribute('href'), 'https://www.trustpilot.com/review/shop1.test', "to the store's Trustpilot page");
+    assert.strictEqual(await tp.getAttribute('target'), '_blank');
     assert.strictEqual(await tp.locator('.good').count(), 1, '4+ is green');
     assert.match(await tp.getAttribute('title'), /Trustpilot 4\.2 from 1,252 reviews/);
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/bestseller-inbox.png` });
@@ -79,7 +82,10 @@ test('store best sellers and Trustpilot on the cards: rank and weekly move, Trus
     assert.match(await page.locator('.mtp.mid').first().innerText(), /Badge only\s+Trustpilot named, no real widget/i);
     const card = (shop) => page.locator('.card', { has: page.locator(`text=${shop}`) }).first().locator('.mtp');
     assert.match(await card('shop5.test').innerText(), /^–\s+Not on Trustpilot$/i, 'no Trustpilot page');
-    assert.match(await card('shop2.test').innerText(), /^2\.4 ★\s+trustpilot\s+31\s+reviews$/i, 'a widget still shows its score');
+    assert.match(await card('shop2.test').innerText(), /^2\.4 ★\s+trustpilot ↗\s+31\s+reviews$/i, 'a widget still shows its score');
+    assert.strictEqual(await card('shop2.test').getAttribute('href'), 'https://www.trustpilot.com/review/shop2.test', 'and links its Trustpilot page');
+    assert.strictEqual(await card('shop5.test').getAttribute('href'), null, 'no Trustpilot page: no link');
+    assert.strictEqual(await page.locator('.mtp.mid').first().getAttribute('href'), null, 'badge only: no link');
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/trust-browse.png` });
     await page.selectOption('#sort', 'best');
     await page.waitForFunction(() => /#\d+ best seller/.test(document.querySelector('.card .bs')?.textContent || ''));

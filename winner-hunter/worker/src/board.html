@@ -309,6 +309,9 @@
   .meta.m4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .mtp { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line); margin-top: 7px; padding-top: 7px; }
   .mtp.one { grid-template-columns: minmax(0, 1fr); }
+  a.mtp { color: inherit; text-decoration: none; border-radius: 8px; transition: background .2s; }
+  a.mtp:hover { background: var(--card2); }
+  a.mtp .m:first-child span { color: var(--link); }
   .mtp .good b { color: var(--win); }
   .mtp .mid b, .mtp.mid b { color: var(--amb); }
   .mtp .low b { color: var(--bad); }
@@ -637,12 +640,19 @@ function trustText(t) {
   if (scored(t)) return `Trustpilot ${t.score == null ? '–' : t.score.toFixed(1)} from ${(t.reviews ?? 0).toLocaleString('en-US')} reviews`;
   return TRUST_NO[t.status] || TRUST_NO.none;
 }
+// The store's page on Trustpilot; '' when the profile is not a plain domain (a widget can come without one).
+function trustUrl(t) {
+  const d = String(t.profile || '').trim().toLowerCase();
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d) ? 'https://www.trustpilot.com/review/' + d : '';
+}
 function trustRow(a) {
   const t = a.trust;
   if (!t) return '';
   if (scored(t)) {
     const tone = t.score == null ? '' : t.score >= 4 ? ' good' : t.score >= 3 ? ' mid' : ' low';
-    return `<div class="mtp" title="${esc(trustText(t))} (Trustpilot profile ${esc(t.profile)})"><div class="m${tone}"><b>${t.score == null ? '–' : esc(t.score.toFixed(1))} ★</b><span>Trustpilot</span></div><div class="m"><b>${esc(fmt(t.reviews ?? 0))}</b><span>reviews</span></div></div>`;
+    const url = trustUrl(t);
+    const tag = url ? `a href="${esc(url)}" target="_blank" rel="noopener noreferrer"` : 'div';
+    return `<${tag} class="mtp" title="${esc(trustText(t))} (Trustpilot profile ${esc(t.profile)})${url ? ': open it' : ''}"><div class="m${tone}"><b>${t.score == null ? '–' : esc(t.score.toFixed(1))} ★</b><span>Trustpilot${url ? ' ↗' : ''}</span></div><div class="m"><b>${esc(fmt(t.reviews ?? 0))}</b><span>reviews</span></div></${url ? 'a' : 'div'}>`;
   }
   const badge = t.status === 'badge';
   return `<div class="mtp one${badge ? ' mid' : ''}" title="${esc(trustText(t))}"><div class="m"><b>${badge ? 'Badge only' : '–'}</b><span>${esc(trustText(t))}</span></div></div>`;
