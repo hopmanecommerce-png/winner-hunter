@@ -3,7 +3,7 @@
  *   GET  /            board (or the PIN screen)        POST /login   PIN form → cookie
  *   GET  /api/ads     ads of a view, counts, last run, alert banner   POST /api/hide  seen / rejected / none, starred / unstarred
  *   GET  /export.csv  the current view as CSV           GET  /logout
- *   GET  /api/ad/:id  the ad itself (text, video/images, CTA) for the in-board viewer (adview.mjs)
+ *   GET  /api/ad/:id  the ad itself (text, video/images, CTA) (adview.mjs; the board no longer uses it)
  *   GET  /api/markets EU reach a day per country over the board's products (Market Radar)
  * All SQL is parameterized; sort orders come from a fixed list.
  */
@@ -794,7 +794,7 @@ async function csv(url, env, now) {
 
 /**
  * The Worker. `launch(env.BROWSER)` opens a Browser Run browser (index.mjs passes @cloudflare/puppeteer's launch;
- * tests pass a fake). Without it, a META_TOKEN or the BROWSER binding the viewer is off and "▶ Bekijk ad" opens the Ad Library.
+ * tests pass a fake). Without it, a META_TOKEN or the BROWSER binding the viewer is off. The board opens the Ad Library either way.
  */
 export async function handle(req, env, { html = '', now = Date.now(), launch = null } = {}) {
   const url = new URL(req.url);

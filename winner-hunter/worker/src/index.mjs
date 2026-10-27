@@ -1,5 +1,5 @@
 // Cloudflare Worker entry: the board page (board.html, bundled as text), its API (app.mjs) and the ad viewer's
-// browser (Browser Run via @cloudflare/puppeteer, binding BROWSER).
+// browser (no longer used by the board) (Browser Run via @cloudflare/puppeteer, binding BROWSER).
 import puppeteer from '@cloudflare/puppeteer';
 import html from './board.html';
 import { handle } from './app.mjs';

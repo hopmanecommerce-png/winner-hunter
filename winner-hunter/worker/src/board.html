@@ -216,6 +216,12 @@
   .m b { display: block; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .m span { display: block; font: 500 9.5px var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .who { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .who.ln { display: flex; gap: 6px; align-items: baseline; }
+  .who.ln > * { flex: none; white-space: nowrap; }
+  .who.ln a { color: var(--ink); text-decoration: none; font-weight: 600; padding: 10px 6px; margin: -10px -6px; }
+  .who.ln a:hover { text-decoration: underline; }
+  .who.ln .shop { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .who.ln .src { margin-left: auto; color: var(--mg); }
   .bs { font-size: 12px; margin-top: 4px; color: var(--ink); }
   .bs.top { color: var(--win); font-weight: 600; }
   .bs.no { color: var(--faint); }
@@ -233,7 +239,6 @@
   .links a { color: var(--ink); text-decoration: none; border: 1px solid var(--line); background: var(--card2); border-radius: 12px; padding: 9px 12px; font-weight: 650; font-size: 13px; transition: border-color .2s; }
   .links a:hover { border-color: var(--line2); }
   .links a.pri { background: var(--holo); color: #06070d; border-color: transparent; }
-  .links a.src { color: var(--mg); border-color: rgba(255, 79, 216, .45); }
   .more p { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
   .facts { display: flex; flex-wrap: wrap; gap: 4px 12px; font: 500 11.5px var(--mono); }
   .facts span b { color: var(--ink); font-weight: 700; }
@@ -255,45 +260,8 @@
   @keyframes up { from { opacity: 0; transform: translate(-50%, 14px); } }
   .toast button { background: rgba(46, 230, 255, .14); border: 0; color: var(--cy); font: 700 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; padding: 8px 12px; border-radius: 10px; }
 
-  /* The ad viewer: a full-screen sheet over the board. */
-  html.lock, html.lock body { overflow: hidden; }
-  .sheet { position: fixed; inset: 0; z-index: 20; display: flex; justify-content: center; }
-  .scrim { position: absolute; inset: 0; background: rgba(2, 3, 8, .7); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: fade .2s; }
-  @keyframes fade { from { opacity: 0; } }
-  .panel { position: relative; width: 100%; max-width: 520px; height: 100%; background: #070812; display: flex; flex-direction: column; border-left: 1px solid var(--line); border-right: 1px solid var(--line); box-shadow: 0 0 60px rgba(139, 92, 255, .25); animation: rise .3s cubic-bezier(.2, .8, .2, 1); }
-  .sbar { display: flex; gap: 6px; align-items: center; padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left)); background: rgba(7, 8, 18, .8); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); border-bottom: 1px solid var(--line); }
-  .sbar button, .sbar a { background: var(--card2); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 0 14px; height: 36px; font: 600 11.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; text-decoration: none; display: inline-flex; align-items: center; cursor: pointer; white-space: nowrap; }
-  .sbar #sClose { margin-right: auto; }
-  .sbody { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 14px max(12px, env(safe-area-inset-right)) max(28px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
   .sload { display: grid; justify-items: center; gap: 14px; padding: 80px 0; color: var(--muted); font: 600 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
   .spin { width: 36px; height: 36px; border-radius: 50%; background: conic-gradient(from 0deg, transparent, var(--cy), var(--mg)); -webkit-mask: radial-gradient(circle, transparent 13px, #000 14px); mask: radial-gradient(circle, transparent 13px, #000 14px); animation: spin .8s linear infinite; }
-  .serr { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: grid; gap: 14px; overflow-wrap: anywhere; }
-  .serr a { justify-self: start; background: var(--holo); color: #06070d; text-decoration: none; font-weight: 700; border-radius: 12px; padding: 11px 16px; }
-  .fb { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
-  .fbh { display: flex; gap: 10px; align-items: center; padding: 12px; min-width: 0; }
-  .fbh img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex: 0 0 40px; background: var(--card2); }
-  .fbh div { min-width: 0; }
-  .fbh b { display: block; font-size: 15px; overflow-wrap: anywhere; }
-  .fbh small { display: block; color: var(--muted); font-size: 12px; }
-  .fbt { margin: 0; padding: 0 12px; font-size: 15px; line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
-  .fbt.full { display: block; -webkit-line-clamp: unset; }
-  .meer { border: 0; background: none; color: var(--cy); font: 700 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: 6px 12px 0; cursor: pointer; }
-  .fbm { margin-top: 10px; display: grid; gap: 2px; }
-  .fbm img, .fbm video { display: block; width: 100%; height: auto; max-height: 78vh; object-fit: contain; background: #000; }
-  .vnote { display: block; padding: 6px 12px; font-size: 12px; color: var(--muted); }
-  .car { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 10px 12px 12px; -webkit-overflow-scrolling: touch; }
-  .cc { flex: 0 0 80%; scroll-snap-align: start; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--card); display: flex; flex-direction: column; }
-  .cc img, .cc video { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; background: #000; }
-  .lbox { display: flex; gap: 10px; align-items: center; padding: 10px 12px; background: var(--card2); }
-  .cc .lbox { flex: 1; }
-  .lt { flex: 1; min-width: 0; display: grid; gap: 2px; overflow-wrap: anywhere; }
-  .lt small { color: var(--muted); font-size: 11px; text-transform: uppercase; }
-  .lt b { font-size: 15px; line-height: 1.25; }
-  .lt span { font-size: 13px; color: var(--muted); }
-  .cta { flex: 0 0 auto; background: var(--card2); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; font-weight: 700; font-size: 14px; text-decoration: none; white-space: nowrap; }
-  a.cta { color: var(--link); }
-  .low { padding: 8px 12px 12px; font-size: 12px; color: var(--muted); }
-  .sinfo { margin: 0 2px 12px; font: 500 11.5px/1.5 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
 
   /* Inbox: one product at a time until none are left */
   .ibox { max-width: 760px; margin: 14px auto 0; display: grid; gap: 8px; }
@@ -403,10 +371,8 @@
     .rlist { grid-template-columns: 1fr 1fr; column-gap: 18px; align-self: center; }
     .rh .sub { order: 0; }
     .card.open { flex-direction: row; flex-wrap: wrap; }
-    .card.open .ph { width: 340px; flex: 0 0 340px; }
     .card.open .bd { flex: 1 1 300px; padding: 18px; }
-    .card.open .links, .card.open .acts { flex: 1 1 100%; }
-    .card.open .acts { grid-template-columns: 160px 160px; }
+    .card.open .links { flex: 1 1 100%; }
     .card.open .meta { max-width: 440px; }
     .grid.one .links { padding: 0 18px 18px; }
   }
@@ -419,7 +385,6 @@
     .m span { font-size: 8.5px; letter-spacing: .02em; }
     .m b { font-size: 13px; }
     .hero b { font-size: 21px; }
-    .card.open .ph { aspect-ratio: 4 / 3; }
     .flags span:nth-child(n+3) { display: none; }
     .radar { padding: 14px 12px 12px; border-radius: 22px; }
     .rh { margin-bottom: 8px; }
@@ -537,13 +502,6 @@
   <div class="empty" id="empty" hidden></div>
   <div class="loadmore" id="loadmore"><button id="moreBtn" hidden>Show more</button></div>
 </div>
-<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Ad" hidden>
-  <div class="scrim" id="scrim"></div>
-  <div class="panel">
-    <div class="sbar"><button id="sClose">✕ Close</button><a id="sLib" target="_blank" rel="noopener noreferrer">Ad Library ↗</a><a id="sShop" target="_blank" rel="noopener noreferrer">Store ↗</a></div>
-    <div class="sbody" id="sBody"></div>
-  </div>
-</div>
 <div class="toast" id="toast" role="status" hidden><span id="toastMsg"></span><button id="undo">Undo</button></div>
 
 <script nonce="__NONCE__">
@@ -584,12 +542,10 @@ const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) 
 
 const st = { view: 'inbox', q: '', sort: 'rpd', r2500: false, r10k: false, hidden: false, cc: '', offset: 0 };
 let ADS = [];
-let VIEWER = false; // the server can show ads in the board (Browser Run + META_TOKEN)
 let total = 0;
 let loading = false;
 let MARKETS = null;
 let showAll = false;
-const opened = new Set();
 const DONE = new Set(); // decided in the inbox here: skipped even if the server list is a moment behind
 let FRESH = 0; // inbox products found in the last day
 let STARS = 0;
@@ -665,8 +621,8 @@ function bestLine(a) {
 }
 
 // inbox: the one Inbox card: only the data (no photo) and one link, the ad in the Facebook Ad Library.
+// Elsewhere a tap on the card or on ▶ opens the ad in the Facebook Ad Library.
 function card(a, inbox) {
-  const open = inbox || opened.has(a.id);
   const isNew = Date.now() - Date.parse(a.first_seen) < NEW_MS;
   const tags = (isNew ? '<span class="tag new">New</span>' : '')
     + (a.fit >= 1.5 ? '<span class="tag fit" title="You liked products from this niche">♥ Your niche</span>' : '')
@@ -677,22 +633,22 @@ function card(a, inbox) {
     ? `<img src="${safe(a.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
     : `<div class="dom">${esc(host(a.store) || a.adv)}</div>`;
   const price = a.price != null ? `<div class="price"><span>${esc(money(a.price, a.cur))}</span>${a.was > a.price ? `<s>${esc(money(a.was, a.cur))}</s><span class="off">−${esc(a.off)}%</span>` : ''}</div>` : '';
-  const view = VIEWER
-    ? `<button class="view" data-act="view" aria-label="View ad">${ICON.play}</button>`
-    : safe(a.ad) ? `<a class="view" href="${safe(a.ad)}" target="_blank" rel="noopener noreferrer" aria-label="View ad">${ICON.play}</a>` : '';
+  const view = safe(a.ad) ? `<a class="view" href="${safe(a.ad)}" target="_blank" rel="noopener noreferrer" aria-label="Open in Ad Library">${ICON.play}</a>` : '';
   const acts = a.hidden === 'seen' // a ✓ product: removing wipes the day and the reasons, so two taps (any view)
     ? '<button class="un" data-act="none" data-confirm="1">Remove from ✓</button>'
     : a.hidden
     ? '<button class="un" data-act="none">Unhide</button>'
     : `<button class="ok" data-act="seen" title="You made an ad for it: it moves to ✓">${ICON.check}Made ad</button><button class="no" data-act="rejected" title="Not for me: hide it">${ICON.x}Reject</button>`;
   const shop = host(a.store);
+  const onProduct = !!safe(a.product) && /\/products\//.test(a.product);
+  const shopUrl = onProduct ? safe(a.product) : safe(a.store);
   // In one market the big number is the reach a day there.
   const inCc = st.cc && a.crpd != null;
   const mk = (a.mk || []).slice().sort((x, y) => (y[0] === st.cc) - (x[0] === st.cc));
   const flags = mk.length ? `<div class="flags" title="Where the ads reach (share of EU reach)">${mk.map(([c, p]) => `<span class="${c === st.cc ? 'hit' : ''}"><i>${flag(c)}</i>${esc(c)} ${esc(p)}%</span>`).join('')}</div>` : '';
   const reachTip = inCc ? 'Reach per day in ' + esc(land(st.cc)) : 'EU reach per day the ad has run';
   const reach = `<b>${esc(fmt(inCc ? a.crpd : a.rpd))}</b><span>${inCc ? esc(st.cc) + ' reach / day' : 'reach / day'}</span>`;
-  return `<article class="card${open ? ' open' : ''}" data-id="${esc(a.id)}">
+  return `<article class="card${inbox ? ' open' : ''}" data-id="${esc(a.id)}">
     ${inbox ? '' : `<div class="ph">${photo}
       <div class="badges">${tags}</div>
       <button class="star" data-act="star" aria-pressed="${a.star}" aria-label="Star">${ICON.star}</button>
@@ -711,9 +667,13 @@ function card(a, inbox) {
         <div class="m" title="Ads running for this product"><b>${esc(fmt(a.scaled || 1))}</b><span>copies</span></div>
         ${trustRow(a)}
       </div>
-      <div class="who">${esc(shop || a.adv)}${a.products != null ? ' · ' + esc(fmt(a.products)) + ' products' : ''}</div>
+      ${inbox ? `<div class="who">${esc(shop || a.adv)}${a.products != null ? ' · ' + esc(fmt(a.products)) + ' products' : ''}</div>` : `<div class="who ln">
+        ${shopUrl ? `<a class="shop" href="${shopUrl}" target="_blank" rel="noopener noreferrer" title="${onProduct ? 'The product in the store' : 'The store'}">${esc(shop || a.adv || 'Store')} ↗</a>` : `<span class="shop">${esc(shop || a.adv)}</span>`}
+        ${a.products != null ? `<span>${esc(fmt(a.products))} products</span>` : ''}
+        <a class="src" href="${esc(src1688(a.zh || a.title))}" target="_blank" rel="noopener noreferrer" title="Search 1688">1688 ↗</a>
+      </div>`}
       ${bestLine(a)}
-      <div class="more">
+      ${inbox ? `<div class="more">
         <div class="facts">
           <span><b>${esc(fmt(a.reach))}</b> EU reach</span>
           ${a.adv ? `<span>${esc(a.adv)}</span>` : ''}
@@ -721,16 +681,9 @@ function card(a, inbox) {
           <span>search “${esc(a.kw)}”</span>
           <span>found ${esc(String(a.first_seen || '').slice(0, 10))}</span>
         </div>
-      </div>
+      </div>` : ''}
     </div>
-    <div class="links">${inbox
-      ? (safe(a.ad) ? `<a class="pri" href="${safe(a.ad)}" target="_blank" rel="noopener noreferrer">Open in Facebook Ad Library ↗</a>` : '')
-      : `
-      ${safe(a.ad) ? `<a class="pri" href="${safe(a.ad)}" target="_blank" rel="noopener noreferrer">Ad ↗</a>` : ''}
-      ${safe(a.product) && /\/products\//.test(a.product) ? `<a href="${safe(a.product)}" target="_blank" rel="noopener noreferrer">Product ↗</a>` : ''}
-      ${safe(a.store) ? `<a href="${safe(a.store)}" target="_blank" rel="noopener noreferrer">Store ↗</a>` : ''}
-      <a class="src" href="${esc(src1688(a.zh || a.title))}" target="_blank" rel="noopener noreferrer">Search 1688 ↗</a>`}
-    </div>
+    ${inbox && safe(a.ad) ? `<div class="links"><a class="pri" href="${safe(a.ad)}" target="_blank" rel="noopener noreferrer">Open in Facebook Ad Library ↗</a></div>` : ''}
     ${inbox ? '' : `<div class="acts">${acts}</div>`}
   </article>`;
 }
@@ -961,7 +914,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let deciding = false;
 async function decide(kind, dir) {
   const a = ADS[0];
-  if (st.view !== 'inbox' || !a || deciding || !$('sheet').hidden) return;
+  if (st.view !== 'inbox' || !a || deciding) return;
   deciding = true;
   saveNote(); // what you typed goes with this product
   const c = $('grid').querySelector('.card');
@@ -1209,7 +1162,6 @@ async function load(append) {
     if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
     const got = st.view === 'inbox' ? j.ads.filter((a) => !DONE.has(a.id)) : j.ads;
     ADS = append ? ADS.concat(got) : got;
-    VIEWER = !!j.viewer;
     total = j.total - (j.ads.length - got.length);
     header(j, madeSeq === MADE_SEQ);
     if (st.view === 'inbox') FRESH = Math.max(0, FRESH - j.ads.filter((a) => DONE.has(a.id) && isNew(a)).length);
@@ -1271,7 +1223,6 @@ $('grid').addEventListener('click', async (e) => {
   const b = e.target.closest('[data-act]');
   if (b && a) {
     const act = b.dataset.act;
-    if (act === 'view') { openAd(a); return; }
     try {
       if (act === 'star') {
         await setStatus(id, a.star ? 'unstarred' : 'starred');
@@ -1303,96 +1254,16 @@ $('grid').addEventListener('click', async (e) => {
     }
     return;
   }
-  if (e.target.closest('a, button, input, select') || st.view === 'inbox') return;
-  opened.has(id) ? opened.delete(id) : opened.add(id);
-  c.classList.toggle('open', opened.has(id));
+  if (e.target.closest('a, button, input, select') || st.view === 'inbox' || !a || !safe(a.ad)) return;
+  if (String(getSelection() || '')) return; // selecting text to copy it is not a tap
+  window.open(a.ad, '_blank', 'noopener');
 });
 
-// ---- The ad viewer: the ▶ button opens the ad (video, images, text, CTA) in a sheet on this page.
-const link = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) ? esc(u) : '');
-const VIEWS = new Map();
-let shown = null;
-function mediaHtml(m) {
-  if (!m) return '';
-  if (m.type === 'video' && safe(m.src)) {
-    return `<video controls playsinline preload="metadata" referrerpolicy="no-referrer"${safe(m.poster) ? ` poster="${safe(m.poster)}"` : ''} src="${safe(m.src)}"></video>`;
-  }
-  const src = m.type === 'video' ? m.poster : m.src;
-  if (!safe(src)) return '';
-  return `<img src="${safe(src)}" alt="" referrerpolicy="no-referrer">${m.type === 'video' ? '<span class="vnote">The video only plays in the Ad Library ↗</span>' : ''}`;
-}
-function boxHtml(b) {
-  if (!b || !(b.caption || b.title || b.description || b.cta || b.url)) return '';
-  const u = link(b.url);
-  const cta = u ? `<a class="cta" href="${u}" target="_blank" rel="noopener noreferrer">${esc(b.cta || 'Open ↗')}</a>` : b.cta ? `<span class="cta">${esc(b.cta)}</span>` : '';
-  return `<div class="lbox"><div class="lt">${b.caption ? `<small>${esc(b.caption)}</small>` : ''}${b.title ? `<b>${esc(b.title)}</b>` : ''}${b.description ? `<span>${esc(b.description)}</span>` : ''}</div>${cta}</div>`;
-}
-function adHtml(d) {
-  const media = d.cards && d.cards.length
-    ? `<div class="car">${d.cards.map((c) => `<div class="cc">${mediaHtml(c.media)}${boxHtml(c)}</div>`).join('')}</div>`
-    : `<div class="fbm">${(d.media || []).map(mediaHtml).join('')}</div>${boxHtml(d.link)}`;
-  return `<article class="fb">
-    <div class="fbh">${safe(d.avatar) ? `<img src="${safe(d.avatar)}" alt="" referrerpolicy="no-referrer">` : ''}<div><b>${esc(d.name || 'Advertiser')}</b><small>Sponsored · Library ID: ${esc(d.library_id || d.id)}</small></div></div>
-    ${d.body ? `<p class="fbt" id="fbt">${esc(d.body)}</p><button class="meer" id="meer" hidden>more</button>` : ''}
-    ${media}
-    ${d.low_impressions ? '<div class="low">Low impression count</div>' : ''}
-  </article>`;
-}
-function errHtml(msg, a) {
-  return `<div class="serr"><div>${esc(msg)}</div>${safe(a.ad) ? `<a href="${safe(a.ad)}" target="_blank" rel="noopener noreferrer">Open in Ad Library ↗</a>` : ''}</div>`;
-}
-function setLink(el, u) {
-  el.hidden = !u;
-  if (u) el.href = u; else el.removeAttribute('href');
-}
-async function openAd(a) {
-  shown = a;
-  setLink($('sLib'), safe(a.ad) ? a.ad : '');
-  setLink($('sShop'), safe(a.product) && /\/products\//.test(a.product) ? a.product : safe(a.store) ? a.store : '');
-  $('sBody').innerHTML = '<div class="sload"><i class="spin"></i>Loading the ad… (±4 s)</div>';
-  $('sheet').hidden = false;
-  document.documentElement.classList.add('lock');
-  if (!(history.state && history.state.sheet)) history.pushState({ sheet: 1 }, '');
-  $('sClose').focus();
-  let html;
-  try {
-    let d = VIEWS.get(a.id);
-    if (!d) {
-      const res = await fetch('/api/ad/' + encodeURIComponent(a.id), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
-      if (res.status === 401) { location.reload(); return; }
-      d = await res.json().catch(() => ({ error: 'HTTP ' + res.status }));
-      if (!res.ok || d.error) throw new Error(d.error || 'HTTP ' + res.status);
-      VIEWS.set(a.id, d);
-    }
-    html = adHtml(d);
-  } catch (e) {
-    html = errHtml(e.message, a);
-  }
-  if (shown !== a) return;
-  const shopLine = `${host(a.store)}${a.products != null ? ' · ' + fmt(a.products) + ' products' : ''} · ${a.scaled > 1 ? fmt(a.scaled) + ' ads for this product' : '1 ad for this product'} · ${fmt(a.reach)} EU reach${a.best ? ' · ' + bestText(a.best) : ''}${a.trust ? ' · ' + trustText(a.trust) : ''}`;
-  $('sBody').innerHTML = `<p class="sinfo">${esc(shopLine)}</p>` + html;
-  const t = $('fbt');
-  if (t && t.scrollHeight > t.clientHeight + 2) $('meer').hidden = false;
-}
-function hideAd() {
-  shown = null;
-  $('sheet').hidden = true;
-  $('sBody').innerHTML = ''; // stops a playing video
-  document.documentElement.classList.remove('lock');
-}
-function closeAd() {
-  if (history.state && history.state.sheet) history.back(); // popstate hides it; an iOS back-swipe does the same
-  else hideAd();
-}
-window.addEventListener('popstate', () => { if (!$('sheet').hidden) hideAd(); });
-$('sClose').addEventListener('click', closeAd);
-$('scrim').addEventListener('click', closeAd);
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !$('sheet').hidden) closeAd();
   // "/" jumps to the search (not while typing somewhere)
-  if (e.key === '/' && $('sheet').hidden && st.view === 'all' && !e.target.closest('input, select, textarea')) { e.preventDefault(); $('q').focus(); }
+  if (e.key === '/' && st.view === 'all' && !e.target.closest('input, select, textarea')) { e.preventDefault(); $('q').focus(); }
   // Inbox: R / ← reject, K / ↑ keep, D / → made ad, Enter or V: the ad in the Facebook Ad Library
-  if (st.view !== 'inbox' || !$('sheet').hidden || e.metaKey || e.ctrlKey || e.altKey || e.target.closest('input, select, textarea')) return;
+  if (st.view !== 'inbox' || e.metaKey || e.ctrlKey || e.altKey || e.target.closest('input, select, textarea')) return;
   if (LAST && /^[1-9]$/.test(e.key)) {
     const k = Object.keys(REASON_LABELS[LAST.kind === 'rejected' ? 'bad' : 'good'])[Number(e.key) - 1];
     if (k) { e.preventDefault(); toggleReason(k); }
@@ -1403,13 +1274,6 @@ document.addEventListener('keydown', (e) => {
   if (kind) { e.preventDefault(); decide(kind); return; }
   if ((e.key === 'Enter' || e.key.toLowerCase() === 'v') && ADS[0] && !e.target.closest('a, button')) { e.preventDefault(); if (safe(ADS[0].ad)) window.open(ADS[0].ad, '_blank', 'noopener'); }
 });
-$('sBody').addEventListener('click', (e) => {
-  if (e.target.id !== 'meer') return;
-  $('fbt').classList.add('full');
-  e.target.hidden = true;
-});
-$('sBody').addEventListener('error', (e) => { if (e.target instanceof HTMLImageElement) e.target.remove(); }, true);
-
 // A photo the store no longer serves: show the shop name instead.
 $('grid').addEventListener('error', (e) => {
   const img = e.target;
