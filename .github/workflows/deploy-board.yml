@@ -75,7 +75,7 @@ jobs:
         working-directory: winner-hunter/worker
         run: |
           if [ -z "$META_TOKEN" ]; then
-            echo "::warning::No META_TOKEN secret: '▶ Bekijk ad' opens the Ad Library instead of the in-board viewer"
+            echo "::warning::No META_TOKEN secret: the /api/ad viewer stays off (the board does not use it: ▶ opens the Ad Library)"
             exit 0
           fi
           printf '%s' "$META_TOKEN" | tr -d '[:space:]' | npx --yes wrangler@4 secret put META_TOKEN

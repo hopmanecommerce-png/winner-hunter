@@ -36,8 +36,7 @@ GitHub Actions (every night)  →  Cloudflare D1 (the database)  →  Board (Clo
   No page there: a real Trustpilot widget on the store still counts (a page on another domain); else "Not on
   Trustpilot". "Badge only" / "No Trustpilot on the store": only the store was checked (no token that run).
 - Per product: photo, price/discount, a ✓ per rule (active ads, days live, reach per day), ads for this product,
-  the store's product count, shop. **▶ Bekijk ad** opens the ad itself (video, images, text, button) on the board, at once: `ad-prefetch.yml` opens every board ad ahead of time (every 8 hours and after each hunt).
-  Tap a card for more: ad text, checklist and the buttons **Ad ↗ · Product ↗ · Store ↗ · Search 1688 ↗**.
+  the store's product count, shop. **▶** and a tap on the card open the ad in the Facebook Ad Library (new tab); the shop name links to the product (or the store), **1688 ↗** searches 1688. The in-board ad viewer (`/api/ad/:id`, `ad-prefetch.yml`) is off: the board no longer uses it.
 - **✓ Made ad** moves a product to **✓**; **✗ Reject** (not for me) hides it; **Undo** brings it back.
 - **CSV** downloads what you are looking at.
 - A "store photo" label means: photo from the shop's page, not the product photo of the ad.

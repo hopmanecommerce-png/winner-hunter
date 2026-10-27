@@ -1,15 +1,10 @@
-# Opens every ad on the board ahead of time (Meta's render_ad page in Chrome on the runner) and stores it in D1, so
-# "▶ Bekijk ad" on the board opens at once. Runs every 8 hours and after each Winner Hunter run; only ads without a
-# stored view from the last 16 hours. Secrets: META_TOKEN, CF_API_TOKEN, CF_ACCOUNT_ID.
+# Opens every ad on the board ahead of time (Meta's render_ad page in Chrome on the runner) and stores it in D1 for the
+# /api/ad viewer; only ads without a stored view from the last 16 hours. Secrets: META_TOKEN, CF_API_TOKEN, CF_ACCOUNT_ID.
+# Off: ▶ and a tap on a card now open the Facebook Ad Library, the board shows no ads itself. Only by hand.
 name: Ad prefetch
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '43 */8 * * *'
-  workflow_run:
-    workflows: ['Winner Hunter']
-    types: [completed]
 
 permissions:
   contents: read
