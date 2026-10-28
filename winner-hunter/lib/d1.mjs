@@ -53,7 +53,7 @@ export function d1Settings(env = process.env) {
   return s.accountId && s.databaseId && s.token ? s : null;
 }
 
-export function d1Client({ accountId, databaseId, token }, { doFetch = globalThis.fetch, retryMs = 5000, chunk = 200, maxBytes = MAX_BYTES } = {}) {
+export function d1Client({ accountId, databaseId, token }, { doFetch = globalThis.fetch, retryMs = 5000, chunk = 200, maxBytes = MAX_BYTES, timeoutMs = 60000 } = {}) {
   const url = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/d1/database/${encodeURIComponent(databaseId)}/query`;
 
   // One statement; retried once. Throws an Error('Cloudflare D1: …') when it still fails.
@@ -61,20 +61,25 @@ export function d1Client({ accountId, databaseId, token }, { doFetch = globalThi
     let err = '';
     for (let attempt = 0; attempt < 2; attempt++) {
       if (attempt) await new Promise((r) => setTimeout(r, retryMs));
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), timeoutMs); // the answer included: a stalled request never hangs a run
       try {
         const res = await doFetch(url, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ sql, params }),
+          signal: ctrl.signal,
         });
-        const j = await res.json().catch(() => null);
+        const j = await res.json().catch((e) => { if (e.name === 'AbortError') throw e; return null; });
         const results = j ? [].concat(j.result || []) : [];
         const bad = results.find((x) => x && x.success === false);
         if (j && j.success && res.ok !== false && !bad) return (results[0] && results[0].results) || [];
         err = (j && [].concat(j.errors || [], (bad && bad.error) || []).map((e) => e.message || e).join('; ')) || 'HTTP ' + res.status;
         if (res.status === 401 || res.status === 403 || /duplicate column name/i.test(err)) break; // does not get better on retry
       } catch (e) {
-        err = e.message || String(e);
+        err = e.name === 'AbortError' ? `no answer in ${Math.round(timeoutMs / 1000)} s` : e.message || String(e);
+      } finally {
+        clearTimeout(timer);
       }
     }
     throw new Error('Cloudflare D1: ' + err);

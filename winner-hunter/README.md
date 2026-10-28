@@ -38,6 +38,17 @@ GitHub Actions (every night)  →  Cloudflare D1 (the database)  →  Board (Clo
 - Per product: photo, price/discount, a ✓ per rule (active ads, days live, reach per day), ads for this product,
   the store's product count, shop. **▶ Bekijk ad** opens the ad itself (video, images, text, button) on the board, at once: `ad-prefetch.yml` opens every board ad ahead of time (every 8 hours and after each hunt).
   Tap a card for more: ad text, checklist and the buttons **Ad ↗ · Product ↗ · Store ↗ · Search 1688 ↗**.
+- **🌍 Outside the EU** (the focus): the products are proven in the EU (reach), and the question is where their shop
+  does not sell yet. Meta's API only shows shop ads that ran in the EU or UK (asking it for New Zealand returns the same
+  EU/UK ads, none aimed at New Zealand: tested 2026-10-28), but every ad says where it is aimed. So each card shows
+  **Not in its ads 🇺🇸🇬🇧🇨🇦…**: the markets outside the EU (US, UK, Canada, Australia, New Zealand, Switzerland,
+  Norway, Iceland, Singapore, Hong Kong, Japan, South Korea, Israel, UAE, Saudi Arabia, Qatar, Kuwait) none of the
+  shop's ads aim at, with **Check ↗**: the Ad Library website for that market, because a campaign that runs only
+  outside the EU is invisible to the API. The **Market Radar** opens on **Outside EU**: per market the proven products
+  whose shop's ads don't aim there; tap one for those products. The Inbox, and Browse with the **🌍 Untapped** chip on,
+  leave out products whose shop's ads already aim everywhere. Checked once a week per shop after the hunt
+  (`markets.mjs`); a shop with more than 2,000 active ads and no worldwide ad among them, or an unknown Meta country
+  group, shows nothing (can't tell).
 - **✓ Made ad** moves a product to **✓**; **✗ Reject** (not for me) hides it; **Undo** brings it back.
 - **CSV** downloads what you are looking at.
 - A "store photo" label means: photo from the shop's page, not the product photo of the ad.
@@ -75,6 +86,11 @@ The database tables are made automatically (`worker/migrations/*.sql`).
 - The board shows a red banner for a failed run, no run in 36 hours or a Meta token expiring within 7 days,
   and a yellow one for a run with warnings.
 - The summary of each run is on its page in Actions, and on the board ("Last run …").
+- Every Meta and D1 request has a time limit (the answer included). On 2026-10-27 the hunt quit two minutes in with
+  "success" and the run "running" for ever: something it waited for never settled and Node simply stopped. Should a
+  run still end without finishing, it is marked failed (red) on the board.
+- After the hunt and the store best sellers: **markets outside the EU** for the board's shops (`markets.mjs`, up to 20
+  minutes, stops at 80% of Meta's hourly limit; the rest the next night).
 
 Change the keywords: edit `keywords.txt` (one per line, `#` = comment).
 Other countries: add a repository variable `HUNT_COUNTRIES` (default `NL,BE,DE,FR,AT,ES,IT,IE,DK,SE,PL`).
@@ -84,6 +100,7 @@ Other countries: add a repository variable `HUNT_COUNTRIES` (default `NL,BE,DE,F
 ```
 run.mjs          nightly run (batches, cursor, time budget)
 bestsellers.mjs  store signals for the board's products: best-seller rank + Trustpilot (after the hunt; lib/bestsellers.mjs, lib/trust.mjs)
+markets.mjs      where each board shop's ads aim, for the markets outside the EU (after the hunt; lib/markets.mjs)
 migrate.mjs      creates the D1 tables (safe to run every time)
 import.mjs       one-time import of the old winners
 keywords.txt     the search words

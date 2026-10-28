@@ -209,6 +209,40 @@ export async function run(cfg, deps) {
   return t;
 }
 
+/**
+ * A run that ended without finishing (last_run still "running"): marked failed, so the board shows it red instead of
+ * "running" for ever. Returns true when it marked one.
+ */
+export async function markStalled(db, now = Date.now(), why = 'vastgelopen terwijl hij wachtte / stuck while waiting') {
+  const raw = await db.getState('last_run'); // a D1 error throws: the caller says it could not mark the run
+  let last = null;
+  try {
+    last = JSON.parse(raw || 'null');
+  } catch (e) {
+    last = null;
+  }
+  if (!last || last.status !== 'running') return false;
+  const iso = new Date(now).toISOString();
+  const [nl, en] = String(why).split(' / ');
+  const alert = `Run gestopt voordat hij klaar was (${nl}) / Run stopped before it finished (${en || nl})`.slice(0, 300);
+  await db.setState('last_run', Object.assign({}, last, { status: 'stalled', finished_at: iso, health: 'failed', alert }), new Date(now));
+  await db.saveRun({ id: last.id, started_at: last.started_at, finished_at: iso, ads_checked: last.ads_checked || 0, winners: last.new_winners || 0,
+    meta_usage_peak: last.meta_usage_peak || 0, note: `stalled · ${last.batches || 0} batches · ${last.saved || 0} saved`, status: 'failed' });
+  return true;
+}
+
+/** After run() threw: mark the run failed and say whether that worked (never swallowed). */
+export async function failRun(db, err, log = console.log, now = Date.now()) {
+  try {
+    const marked = await markStalled(db, now, `fout: ${err.message} / error: ${err.message}`);
+    if (!marked) log('::warning::Nothing marked in D1 (this run had not saved a "running" status yet)');
+    return marked;
+  } catch (e) {
+    log(`::warning::Could not mark the run failed in D1: ${e.message}`);
+    return false;
+  }
+}
+
 async function main() {
   const env = process.env;
   const tokens = [env.META_TOKEN, env.META_TOKEN_2, env.META_TOKEN_3].filter(Boolean);
@@ -217,17 +251,38 @@ async function main() {
   if (!s) throw new Error('No CF_API_TOKEN / CF_ACCOUNT_ID: add them as GitHub secrets (see winner-hunter/README.md)');
   const keywords = parseKeywords(fs.readFileSync(new URL('./keywords.txt', import.meta.url), 'utf8'));
   const override = String(env.KEYWORDS || '').split('|').map((k) => k.trim()).filter(Boolean);
-  const out = await run({
-    tokens,
-    keywords,
-    override,
-    minutes: Number(env.MINUTES || 300),
-    countries: String(env.COUNTRIES || 'NL,BE,DE,FR,AT,ES,IT,IE,DK,SE,PL').toUpperCase().split(',').map((x) => x.trim()).filter(Boolean),
-  }, {
-    db: d1Client(s),
-    photo: photoCache(),
-    summary: (m) => env.GITHUB_STEP_SUMMARY && fs.appendFileSync(env.GITHUB_STEP_SUMMARY, m),
+  // 2026-10-27 the hunt ended 2 minutes in with exit code 0 and the run "running" for ever: something it waited for
+  // (most likely a Meta request whose connection Node no longer watched) never settled, and with nothing else left to
+  // wait for, Node simply stopped. Meta and D1 requests time out now; should a run still end without finishing, it
+  // is marked failed (red) here.
+  const db = d1Client(s);
+  let finished = false;
+  process.once('beforeExit', () => {
+    if (finished) return;
+    process.exitCode = 1;
+    console.log('::error::The hunt stopped before it finished (stuck while waiting, nothing left to wait for)');
+    markStalled(db).then((marked) => console.log(marked ? 'Run marked failed in D1' : '::warning::Nothing marked in D1 (this run had not saved a "running" status yet)'),
+      (e) => console.log(`::warning::Could not mark the run failed in D1: ${e.message}`));
   });
+  let out;
+  try {
+    out = await run({
+      tokens,
+      keywords,
+      override,
+      minutes: Number(env.MINUTES || 300),
+      countries: String(env.COUNTRIES || 'NL,BE,DE,FR,AT,ES,IT,IE,DK,SE,PL').toUpperCase().split(',').map((x) => x.trim()).filter(Boolean),
+    }, {
+      db,
+      photo: photoCache(),
+      summary: (m) => env.GITHUB_STEP_SUMMARY && fs.appendFileSync(env.GITHUB_STEP_SUMMARY, m),
+    });
+  } catch (e) {
+    finished = true;
+    await failRun(db, e);
+    throw e;
+  }
+  finished = true;
   // Red only now, after everything found was saved: GitHub then notifies "workflow run failed".
   if (out.health === 'failed') process.exitCode = 1;
 }

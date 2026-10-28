@@ -71,7 +71,11 @@
     box-shadow: 0 30px 80px -40px rgba(46, 230, 255, .35); }
   .rh { position: relative; z-index: 1; display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; margin-bottom: 14px; }
   .rh .sub { color: var(--faint); font: 500 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; }
-  .rh button { margin-left: auto; }
+  .rh > button { margin-left: auto; }
+  .rh .rmode button { height: 26px; padding: 0 10px; }
+  .radar[data-mode="out"] .hexmap, .radar[data-mode="out"] .rtabs[aria-label="Radar view"] { display: none !important; }
+  .radar[data-mode="out"] .rlist { display: grid !important; }
+  .radar[data-mode="out"] .rnum .nm { font-size: 26px; overflow-wrap: normal; word-break: normal; } /* "United Arab Emirates": whole words */
   .rtop { position: relative; z-index: 1; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: center; padding: 4px 0 16px; border: 0; background: none; width: 100%; text-align: left; cursor: pointer; }
   .ring { position: relative; width: 104px; height: 104px; isolation: isolate; }
   /* The radar sweep turns around the #1 market's flag. */
@@ -217,6 +221,14 @@
   .m span { display: block; font: 500 9.5px var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .who { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bs { font-size: 12px; margin-top: 4px; color: var(--ink); }
+  /* Untapped outside the EU: the markets the shop's ads don't aim at. */
+  .opn { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; font-size: 12px; color: var(--muted); min-width: 0; }
+  .opn b { font: 700 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--win); }
+  .opn .fx { font-size: 14px; letter-spacing: 1px; line-height: 1; }
+  .opn small { font: 600 10.5px var(--mono); color: var(--muted); }
+  .opn.ww b { color: var(--faint); }
+  .opn a { color: var(--cy); font-weight: 650; text-decoration: none; white-space: nowrap; }
+  .opn a:hover { text-decoration: underline; }
   .bs.top { color: var(--win); font-weight: 600; }
   .bs.no { color: var(--faint); }
   .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 12px 12px; margin-top: auto; }
@@ -385,8 +397,8 @@
   .zero .zb { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
   .zero button { height: 42px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--line2); background: var(--card2); font-weight: 650; cursor: pointer; }
   .zero .kept { color: var(--amb); border-color: rgba(255, 201, 77, .4); }
-  @media (min-width: 1200px) { /* views + search beside the filters only where all of it fits */
-    .rail { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  @media (min-width: 1320px) { /* views + search beside the filters only where all of it fits */
+    .rail { grid-template-columns: minmax(600px, 1fr) minmax(0, max-content); align-items: center; } /* views + search keep their room */
     .search { flex: 0 1 380px; }
     .chips { margin: 0; padding: 0; }
   }
@@ -395,7 +407,10 @@
     .rbody { display: grid; grid-template-columns: minmax(250px, 310px) minmax(220px, 280px) minmax(0, 1fr); gap: 24px; align-items: center; }
     .rviews { display: contents; }
     .rtabs { display: none; }
+    .rtabs.rmode { display: inline-flex; }
     .radar[data-rv] .hexmap, .radar[data-rv] .rlist { display: grid; }
+    .radar[data-mode="out"] .rbody { grid-template-columns: minmax(250px, 310px) minmax(0, 1fr); }
+    .radar[data-mode="out"] .rnum .nm { font-size: 30px; }
     .rtop { padding: 0; }
     .ring, .ring svg { width: 132px; height: 132px; }
     .ring .fl { font-size: 48px; }
@@ -442,7 +457,7 @@
     .card.open .flags span { display: inline-flex; }
     .seg button { padding: 0 10px; }
   }
-  @media (max-width: 1199px) {
+  @media (max-width: 1319px) {
     .bar2 { flex-wrap: wrap; }
     .search { flex-basis: 100%; } /* Browse: the search gets its own row, the five views stay on one */
   }
@@ -471,7 +486,7 @@
   <div class="status" id="runbox"><i class="dot"></i><span class="run" id="run">Loading…</span></div>
 
   <section class="radar" id="radar" aria-label="Market Radar" hidden>
-    <div class="rh"><span class="kick holo">Market Radar</span><span class="sub" id="rsub"></span><button class="ghost" id="rtog" aria-expanded="true">Hide</button></div>
+    <div class="rh"><span class="kick holo">Market Radar</span><div class="rtabs rmode" role="group" aria-label="Radar markets"><button data-rm="out" aria-pressed="true" title="Markets outside the EU the shops' ads don't aim at">Outside EU</button><button data-rm="eu" aria-pressed="false" title="Where the products get their EU reach">EU reach</button></div><span class="sub" id="rsub"></span><button class="ghost" id="rtog" aria-expanded="true">Hide</button></div>
     <div class="rbody">
       <button class="rtop" id="rtop" aria-label="Show the #1 market"></button>
       <div class="rviews">
@@ -480,7 +495,7 @@
         <ol class="rlist" id="rlist"></ol>
       </div>
     </div>
-    <div class="rfoot"><span>EU reach a day of the products on the board, split by the countries their ads reach. Tap a country to hunt only there.</span><button class="ghost" id="rall" hidden></button></div>
+    <div class="rfoot"><span id="rnote"></span><button class="ghost" id="rall" hidden></button></div>
   </section>
 
   <div class="rail">
@@ -498,6 +513,8 @@
     <div class="find" id="allrow2">
       <div class="chips" id="opts" role="group" aria-label="Filters">
         <button class="chip ccx" id="ccChip" hidden></button>
+        <button class="chip ccx" id="openChip" hidden></button>
+        <button class="chip" id="worldChip" aria-pressed="true" title="Untapped outside the EU: leave out products whose shop's ads already aim at every market outside the EU">🌍 Untapped</button>
         <span class="selw"><select id="sort" class="chip" aria-label="Sort">
           <option value="rpd">Reach / day</option>
           <option value="new">Newest</option>
@@ -582,7 +599,9 @@ const SORTED = { rpd: 'by reach per day', new: 'newest first', scaled: 'by ad co
 const NEW_MS = 24 * 3600e3; // found in the last day: NEW
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } } };
 
-const st = { view: 'inbox', q: '', sort: 'rpd', r2500: false, r10k: false, hidden: false, cc: '', offset: 0 };
+// world: Browse leaves out products whose shop already advertises everywhere outside the EU (the Inbox always does).
+// open: one market outside the EU (Market Radar): only products whose shop leaves it untapped.
+const st = { view: 'inbox', q: '', sort: 'rpd', r2500: false, r10k: false, hidden: false, cc: '', open: '', world: store.get('wh-world') !== '0', offset: 0 };
 let ADS = [];
 let VIEWER = false; // the server can show ads in the board (Browser Run + META_TOKEN)
 let total = 0;
@@ -606,6 +625,8 @@ function params(extra) {
     if (st.r10k) p.set('rpd', '10000'); else if (st.r2500) p.set('rpd', '2500');
     if (st.hidden) p.set('hidden', '1');
     if (st.cc) p.set('cc', st.cc);
+    if (st.open) p.set('open', st.open);
+    if (!st.world) p.set('world', '0');
   }
   for (const [k, v] of Object.entries(extra || {})) p.set(k, v);
   return p;
@@ -664,6 +685,23 @@ function bestLine(a) {
   return `<div class="bs${cls}" title="The store's own best-seller list (top 50), checked once a day">${b.rank == null ? '' : '🏆 '}${esc(bestText(b))}</div>`;
 }
 
+// The Ad Library website for one market (the API can't show ads that run only there: a check by eye): this shop's
+// own ads there, else a search for the product.
+const adLib = (cc, a) => (a.page
+  ? `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=${encodeURIComponent(cc)}&view_all_page_id=${encodeURIComponent(a.page)}&search_type=page&media_type=all`
+  : `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=${encodeURIComponent(cc)}&q=${encodeURIComponent(nice(a))}&search_type=keyword_unordered&media_type=all`);
+// Open markets outside the EU: none of the shop's ads that Meta shows (those that run in the EU or UK) aim there.
+// A campaign that runs only outside the EU and UK is invisible to Meta's API: "Check" opens the Ad Library there.
+function openLine(a) {
+  if (!Array.isArray(a.open)) return ''; // not checked yet, or can't tell
+  if (!a.open.length) return '<div class="opn ww" title="This shop\'s ads already aim at every market outside the EU (worldwide)"><b>🌍 Worldwide</b><span>its ads aim everywhere</span></div>';
+  const list = a.open.slice().sort((x, y) => (y === st.open) - (x === st.open));
+  const show = list.slice(0, 6);
+  const cc = list[0];
+  return `<div class="opn" title="None of this shop's ads seen by Meta's API (they run in the EU or UK) aim at: ${esc(a.open.map(land).join(', '))}. Ads that run only outside the EU are invisible to the API: Check opens this shop's ads in the Ad Library there."><b>Not in its ads</b><span class="fx">${show.map(flag).join('')}</span>${list.length > show.length ? `<small>+${list.length - show.length}</small>` : ''}`
+    + `<a href="${esc(adLib(cc, a))}" target="_blank" rel="noopener noreferrer" aria-label="Check this shop's ads in ${esc(land(cc))} in the Facebook Ad Library">Check ${flag(cc)} ↗</a></div>`;
+}
+
 // inbox: the one Inbox card: only the data (no photo) and one link, the ad in the Facebook Ad Library.
 function card(a, inbox) {
   const open = inbox || opened.has(a.id);
@@ -713,6 +751,7 @@ function card(a, inbox) {
       </div>
       <div class="who">${esc(shop || a.adv)}${a.products != null ? ' · ' + esc(fmt(a.products)) + ' products' : ''}</div>
       ${bestLine(a)}
+      ${openLine(a)}
       <div class="more">
         <div class="facts">
           <span><b>${esc(fmt(a.reach))}</b> EU reach</span>
@@ -771,14 +810,27 @@ function hexmap(m) {
     <div class="lg"><span>less</span><i></i><span>more reach</span></div>`;
 }
 let shownTop = '';
+// Outside EU (the default once shops are checked): markets the shops leave untapped. EU reach: where the products get
+// their reach. Your last choice is kept.
+const rmode = () => {
+  const k = store.get('wh-rm');
+  if (k === 'eu' || k === 'out') return k;
+  return MARKETS && MARKETS.outside && MARKETS.outside.checked ? 'out' : 'eu';
+};
 function radar() {
   const m = MARKETS;
-  $('radar').hidden = st.view !== 'all' || !m || !m.markets.length;
+  const mode = rmode();
+  $('radar').hidden = st.view !== 'all' || !m || (!m.markets.length && !(m.outside && m.outside.checked));
   if ($('radar').hidden) return;
   const min = store.get('wh-radar') === 'min';
   $('radar').classList.toggle('min', min);
   $('rtog').textContent = min ? 'Show' : 'Hide';
   $('rtog').setAttribute('aria-expanded', String(!min));
+  $('radar').dataset.mode = mode;
+  for (const b of document.querySelectorAll('.rmode [data-rm]')) b.setAttribute('aria-pressed', String(b.dataset.rm === mode));
+  if (mode === 'out') { radarOut(m.outside); return; }
+  $('rnote').textContent = 'EU reach a day of the products on the board, split by the countries their ads reach. Tap a country to hunt only there.';
+  if (!m.markets.length) { $('rsub').textContent = ''; $('rtop').innerHTML = ''; $('rlist').innerHTML = ''; $('hexmap').innerHTML = ''; $('rall').hidden = true; return; }
   $('rsub').textContent = `${m.markets.length} markets · ${fmt(m.total_rpd)} reach / day`;
   const top = m.markets[0];
   const fresh = shownTop !== top.cc + top.share;
@@ -808,13 +860,62 @@ function radar() {
   $('rall').hidden = m.markets.length <= n && !showAll;
   $('rall').textContent = showAll ? 'Top only' : `All ${m.markets.length} markets`;
 }
+// Outside the EU: per market, the proven products (EU reach) whose shop doesn't advertise there yet.
+function radarOut(o) {
+  const ms = (o && o.markets) || [];
+  $('rsub').textContent = o && o.checked ? `${fmt(o.checked)} products checked · ${fmt(o.worldwide)} ${o.worldwide === 1 ? 'shop' : 'shops'} already worldwide` : '';
+  $('rnote').textContent = 'Proven products (EU reach) whose shop\'s ads don\'t aim at this market, from where their Meta ads are aimed. Ads that run only outside the EU are invisible to Meta\'s API: tap a market, then Check on a card to look in the Ad Library there.'
+    + (o && o.unchecked ? ` ${fmt(o.unchecked)} products not checked yet (after the next run) or unclear.` : '');
+  if (!ms.length) {
+    $('rtop').innerHTML = `<div class="rnum"><span class="kick">Outside the EU</span><span class="lead">${o && o.checked ? 'Every shop checked so far already aims its ads everywhere.' : 'No shops checked yet: the next run looks where their ads are aimed.'}</span></div>`;
+    $('rlist').innerHTML = '';
+    $('rall').hidden = true;
+    return;
+  }
+  const top = ms[0];
+  const fresh = shownTop !== 'out' + top.cc + top.products;
+  shownTop = 'out' + top.cc + top.products;
+  $('rtop').innerHTML = `<div class="ring"><svg viewBox="0 0 104 104"><circle class="trk" cx="52" cy="52" r="44" fill="none" stroke-width="7"/><circle class="val" id="ringVal" cx="52" cy="52" r="44" fill="none" stroke-width="7" stroke-linecap="round" stroke-dasharray="0 ${RING}"/></svg><span class="fl">${flag(top.cc)}</span></div>
+    <div class="rnum"><span class="kick">#1 open market</span><span class="nm">${esc(land(top.cc))}</span>
+      <span class="big"><b class="holo" id="topShare">${esc(fmt(top.products))}</b> proven products · <span id="topRpd">${esc(fmt(top.rpd))}</span> EU reach/day</span>
+      <span class="lead">${esc(String(top.share))}% of the products checked: their shop's ads don't aim there${top.top ? ' · best: ' + esc(top.top.title.slice(0, 48)) : ''}</span></div>`;
+  $('rtop').setAttribute('aria-pressed', String(st.open === top.cc));
+  requestAnimationFrame(() => { const v = $('ringVal'); if (v) v.setAttribute('stroke-dasharray', `${(top.share / 100) * RING} ${RING}`); });
+  if (fresh) {
+    countUp($('topShare'), top.products, (v) => fmt(Math.round(v)));
+    countUp($('topRpd'), top.rpd, (v) => fmt(Math.round(v)));
+  }
+  const n = showAll ? ms.length : Math.min(ms.length, window.innerWidth >= 760 ? 10 : 5);
+  const max = top.products || 1;
+  $('rlist').innerHTML = ms.slice(0, n).map((x, i) => `<li><button class="mk" data-open="${esc(x.cc)}" aria-pressed="${st.open === x.cc}">
+      <span class="rk">${String(i + 1).padStart(2, '0')}</span><span class="fl">${flag(x.cc)}</span>
+      <span class="mid"><span class="nm">${esc(land(x.cc))}<small>${esc(fmt(x.rpd))} reach/day</small></span><span class="bar"><i></i></span></span>
+      <span class="vv"><b>${esc(fmt(x.products))}</b><span>products</span></span></button></li>`).join('');
+  const bars = [...$('rlist').querySelectorAll('.bar i')];
+  requestAnimationFrame(() => bars.forEach((b, i) => b.style.setProperty('--w', Math.max(2, (ms[i].products / max) * 100) + '%')));
+  $('rall').hidden = ms.length <= n && !showAll;
+  $('rall').textContent = showAll ? 'Top only' : `All ${ms.length} markets`;
+}
+let mkSeq = 0;
 async function loadMarkets() {
+  const my = ++mkSeq; // only the newest answer counts (the Untapped chip asks again)
   try {
-    const res = await fetch('/api/markets', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
-    if (!res.ok) return;
-    MARKETS = await res.json();
+    const res = await fetch('/api/markets' + (st.world ? '' : '?world=0'), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    if (!res.ok || my !== mkSeq) return;
+    const m = await res.json();
+    if (my !== mkSeq) return;
+    MARKETS = m;
     radar();
   } catch (e) { /* the radar is extra: the board works without it */ }
+}
+function pickOpen(cc) {
+  st.open = st.open === cc ? '' : cc;
+  radar();
+  load();
+  if (st.open) {
+    const y = $('grid').getBoundingClientRect().top + window.scrollY - document.querySelector('.rail').offsetHeight - 12;
+    window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+  }
 }
 function pickMarket(cc) {
   st.cc = st.cc === cc ? '' : cc;
@@ -825,11 +926,18 @@ function pickMarket(cc) {
     window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
   }
 }
-$('rlist').addEventListener('click', (e) => { const b = e.target.closest('[data-cc]'); if (b) pickMarket(b.dataset.cc); });
+$('rlist').addEventListener('click', (e) => { const b = e.target.closest('[data-cc], [data-open]'); if (b) (b.dataset.open ? pickOpen(b.dataset.open) : pickMarket(b.dataset.cc)); });
 $('hexmap').addEventListener('click', (e) => { const g = e.target.closest('[data-cc]'); if (g) pickMarket(g.dataset.cc); });
 $('hexmap').addEventListener('keydown', (e) => { const g = e.target.closest('[data-cc]'); if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pickMarket(g.dataset.cc); } });
 for (const b of document.querySelectorAll('.rtabs [data-rv]')) b.addEventListener('click', () => { store.set('wh-rv', b.dataset.rv); radar(); });
-$('rtop').addEventListener('click', () => MARKETS && pickMarket(MARKETS.markets[0].cc));
+$('rtop').addEventListener('click', () => {
+  if (!MARKETS) return;
+  const out = rmode() === 'out' ? (MARKETS.outside && MARKETS.outside.markets) || [] : MARKETS.markets;
+  if (out.length) (rmode() === 'out' ? pickOpen(out[0].cc) : pickMarket(out[0].cc));
+});
+for (const b of document.querySelectorAll('.rmode [data-rm]')) b.addEventListener('click', () => { store.set('wh-rm', b.dataset.rm); showAll = false; radar(); });
+$('openChip').addEventListener('click', () => pickOpen(st.open));
+$('worldChip').addEventListener('click', () => { st.world = !st.world; store.set('wh-world', st.world ? '' : '0'); load(); loadMarkets(); });
 $('rall').addEventListener('click', () => { showAll = !showAll; radar(); });
 $('rtog').addEventListener('click', () => { store.set('wh-radar', $('radar').classList.contains('min') ? '' : 'min'); radar(); });
 $('ccChip').addEventListener('click', () => pickMarket(st.cc));
@@ -859,7 +967,11 @@ function render(append, fresh) {
   $('ccChip').hidden = !st.cc;
   $('ccChip').innerHTML = st.cc ? `<b>${flag(st.cc)}</b>${esc(land(st.cc))} ✕` : '';
   $('ccChip').setAttribute('aria-label', st.cc ? `Market ${land(st.cc)}: tap to show all markets` : '');
-  const filtered = st.view === 'all' && (st.q || st.r2500 || st.r10k || st.hidden || st.cc);
+  $('openChip').hidden = !st.open;
+  $('openChip').innerHTML = st.open ? `<b>${flag(st.open)}</b>Open in ${esc(land(st.open))} ✕` : '';
+  $('openChip').setAttribute('aria-label', st.open ? `Open in ${land(st.open)}: tap to show every market` : '');
+  $('worldChip').setAttribute('aria-pressed', String(st.world));
+  const filtered = st.view === 'all' && (st.q || st.r2500 || st.r10k || st.hidden || st.cc || st.open);
   $('count').hidden = !filtered;
   const sorted = st.cc && st.sort === 'rpd' ? `by ${st.cc} reach per day` : SORTED[st.sort] || '';
   $('count').textContent = filtered ? `${total.toLocaleString('en-US')} ${total === 1 ? 'match' : 'matches'} · ${sorted}` : '';

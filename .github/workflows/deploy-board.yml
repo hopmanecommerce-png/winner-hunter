@@ -9,6 +9,7 @@ on:
     branches: [main]
     paths:
       - 'winner-hunter/worker/**'
+      - 'winner-hunter/lib/markets.mjs'
       - '.github/workflows/deploy-board.yml'
   workflow_dispatch:
 
