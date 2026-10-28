@@ -34,7 +34,10 @@ const GROUPS = new Map(Object.entries({
   europe: ['GB', 'CH', 'NO', 'IS'],
   'european union': [],
   'european economic area': ['NO', 'IS'],
+  'european economic area (eea)': ['NO', 'IS'], // seen 2026-10-28
   eea: ['NO', 'IS'],
+  'euro area': [], // the euro countries: all in the EU (seen 2026-10-28)
+  eurozone: [],
   'schengen area': ['CH', 'NO', 'IS'],
   'nordic countries': ['NO', 'IS'],
   nordics: ['NO', 'IS'],

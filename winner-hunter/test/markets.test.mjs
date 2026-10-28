@@ -34,6 +34,10 @@ test('aimedAt: the markets outside the EU an ad aims at, from its target_locatio
   assert.deepStrictEqual([...odd], ['Some New Group'], '…and is collected');
   assert.strictEqual(at([G('Latin America'), G('EMEA')]), 'AE,CH,GB,IL,IS,KW,NO,QA,SA', 'known groups by their real members (not "everywhere")');
   assert.strictEqual(at([G('Nordic countries')]), 'IS,NO');
+  const seen = new Set();
+  assert.strictEqual(at([G('Euro area'), G('European Economic Area (EEA)')]), 'IS,NO', 'names Meta used on the first real run (2026-10-28)');
+  aimedAt([G('Euro area'), G('European Economic Area (EEA)')], seen);
+  assert.strictEqual(seen.size, 0, 'both known');
   // left out: a whole region, a country (whatever Meta calls the type), but a city left out does not open its country
   assert.strictEqual(at([G('Worldwide'), G('Asia', { excluded: true })]), 'AU,CA,CH,GB,IS,NO,NZ,US', 'Worldwide without Asia leaves Asia open');
   assert.strictEqual(aimedAt([G('Worldwide'), C('New Zealand', { type: 'country', excluded: true })]).has('NZ'), false);
