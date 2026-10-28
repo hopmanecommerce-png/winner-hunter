@@ -11,6 +11,7 @@ on:
     paths:
       - 'winner-hunter/worker/**'
       - 'winner-hunter/bestsellers.mjs'
+      - 'winner-hunter/markets.mjs'
       - 'winner-hunter/lib/**'
       - '.github/workflows/preview-board.yml'
   workflow_dispatch:
@@ -25,7 +26,7 @@ concurrency:
 jobs:
   preview:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
@@ -53,6 +54,17 @@ jobs:
       - name: Store best sellers
         continue-on-error: true
         run: node winner-hunter/bestsellers.mjs
+
+      # The same for the markets outside the EU each shop's ads aim at: a part now, the rest after the next hunt. Gentle:
+      # one token, at most 400 shops, and it stops at 60% of Meta's hourly limit, before the hunt would slow down (75%).
+      - name: Markets outside the EU
+        continue-on-error: true
+        env:
+          META_TOKEN: ${{ secrets.META_TOKEN }}
+          MK_MINUTES: '10'
+          MK_MAX: '400'
+          MK_STOP_PCT: '60'
+        run: node winner-hunter/markets.mjs
 
       - name: Worker packages
         working-directory: winner-hunter/worker

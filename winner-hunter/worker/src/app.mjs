@@ -4,11 +4,13 @@
  *   GET  /api/ads     ads of a view, counts, last run, alert banner   POST /api/hide  seen / rejected / none, starred / unstarred
  *   GET  /export.csv  the current view as CSV           GET  /logout
  *   GET  /api/ad/:id  the ad itself (text, video/images, CTA) for the in-board viewer (adview.mjs)
- *   GET  /api/markets EU reach a day per country over the board's products (Market Radar)
+ *   GET  /api/markets EU reach a day per country over the board's products, and the markets outside the EU their
+ *                     shops leave untapped (Market Radar)
  * All SQL is parameterized; sort orders come from a fixed list.
  */
 
 import { adView } from './adview.mjs';
+import { FOCUS, coverOf, untappedOf } from '../../lib/markets.mjs';
 
 const COOKIE = '__Host-wh';
 const MAX_AGE = 90 * 864e2; // seconds
@@ -63,11 +65,21 @@ export const parseCountries = (s) => [...String(s || '').matchAll(/\b([A-Z]{2}) 
 
 const SNAP_SQL = `SELECT w.ad_id, ${KEY} AS gk, w.product_title, w.price, w.compare_at_price, w.currency, w.advertiser, w.active_ads,
   w.ad_age_days, w.reach_eu, w.scaled_count, w.keyword, w.store_url, w.product_url, w.ad_library_url, w.image_url,
-  w.first_seen, w.last_seen, w.data FROM winners w`;
+  w.first_seen, w.last_seen, w.data, w.advertiser_page_id AS page_id FROM winners w`;
 // Store signals (bestsellers.mjs, once a day), read with the winners and kept on each row: w.bs (best-seller rank)
 // and w.tp (the store's Trustpilot score).
 const BS_SQL = 'SELECT product_key, rank, ok, history FROM bestseller';
 const TRUST_SQL = 'SELECT store, status, score, reviews, profile FROM store_trust';
+// Where each shop's ads aim (markets.mjs, after the hunt), as markets outside the EU (lib/markets.mjs coverOf): w.cv
+// on each row. A partial shop (more ads than were read, or ads without targeting) and no worldwide ad: can't tell ('?').
+const COVER_SQL = 'SELECT page_id, aims, partial FROM market_cover WHERE sampled > 0';
+function coverRow(c) {
+  let aims = null;
+  try { aims = JSON.parse(c.aims || 'null'); } catch (e) { aims = null; }
+  if (!Array.isArray(aims) || !aims.length) return '?'; // nothing to go on: can't tell (never "open everywhere")
+  const cv = coverOf(aims);
+  return cv !== '*' && Number(c.partial) ? '?' : cv;
+}
 const VERSION_SQL = `SELECT (SELECT MAX(rowid) FROM winners) AS r, (SELECT updated_at FROM state WHERE key = 'last_run') AS u`;
 const SNAP_MS = 15 * 60000; // read again after this long anyway
 const SNAPS = new WeakMap(); // per D1 binding
@@ -81,10 +93,12 @@ export async function snapshot(DB, now = Date.now()) {
   let s = SNAPS.get(DB) || (shared ? LAST : null);
   if (!s || s.ver !== ver || now - s.at > SNAP_MS || now < s.at) {
     const optional = (sql) => DB.prepare(sql).all().then((r) => r.results || [], () => []); // no table yet: the board still works
-    const [{ results }, bs, tp] = await Promise.all([DB.prepare(SNAP_SQL).all(), optional(BS_SQL), optional(TRUST_SQL)]);
+    const [{ results }, bs, tp, cv] = await Promise.all([DB.prepare(SNAP_SQL).all(), optional(BS_SQL), optional(TRUST_SQL), optional(COVER_SQL)]);
     const best = new Map(bs.map((b) => [b.product_key, b]));
     const trust = new Map(tp.map((t) => [t.store, t]));
+    const cover = new Map(cv.map((c) => [String(c.page_id), coverRow(c)]));
     for (const w of results) {
+      if (w.page_id != null && cover.has(String(w.page_id))) w.cv = cover.get(String(w.page_id));
       const key = productKey(w.product_url);
       const b = best.get(key);
       if (b) w.bs = b;
@@ -193,7 +207,7 @@ export function products(rows, hidden = [], stars = [], now = Date.now()) {
     const age = Number.isFinite(seen) ? num(w.ad_age_days) + Math.max(Math.trunc((now - seen) / 864e5), 0) : null;
     const rpd = num(w.reach_eu) / Math.max(num(w.ad_age_days), 1);
     const pass = num(w.active_ads) >= MIN_ACTIVE_ADS && w.ad_age_days != null && age != null && age >= MIN_AGE_DAYS && age <= MAX_AGE_DAYS && rpd >= MIN_REACH_PER_DAY ? 1 : 0;
-    const r = Object.assign({}, w, { rpd, age_now: age, pass, mk: countriesOf(w) });
+    const r = Object.assign({}, w, { rpd, age_now: age, pass, mk: countriesOf(w), open: untappedOf(w.cv) });
     let g = groups.get(w.gk);
     if (!g) groups.set(w.gk, (g = { hid: 0, hat: '', star: 0, best: null, any: null, ids: [] }));
     g.ids.push(w.ad_id);
@@ -282,9 +296,19 @@ const SORTS = {
   best: (a, b) => (bsRank(a) ?? 999) - (bsRank(b) ?? 999) || better(a, b),
 };
 
-/** One view of the board: filters, one market (?cc=FR: best first by the reach a day there), sort and page. */
+// Outside the EU: a product whose shop already advertises in every market there (open = []) is tapped out. The Inbox
+// and Browse leave those out (Browse shows them again with ?world=0). Not checked yet (open = null): shown.
+const tappedOut = (r) => Array.isArray(r.open) && !r.open.length;
+const focusOf = (p) => p.get('view') === 'inbox' || p.get('world') !== '0';
+const marketOf = (p) => (FOCUS.includes(String(p.get('open') || '').toUpperCase()) ? String(p.get('open')).toUpperCase() : '');
+
+/**
+ * One view of the board: filters, one market (?cc=FR: best first by the reach a day there; ?open=NZ: only products
+ * whose shop leaves New Zealand untapped), sort and page.
+ */
 export function viewOf(p, list, { csv = false } = {}) {
   const view = ['starred', 'made', 'inbox'].includes(p.get('view')) ? p.get('view') : 'all';
+  const focus = focusOf(p);
   let out;
   let sort = SORTS.rpd;
   let limit = 100;
@@ -298,13 +322,15 @@ export function viewOf(p, list, { csv = false } = {}) {
     limit = csv ? 5000 : 100;
     offset = offsetOf(p, csv);
   } else if (view === 'inbox') {
-    out = list.v.filter((r) => inInbox(r) && !blockedBy(r, list.taste)) // not decided yet: not seen, rejected or kept (★)
+    out = list.v.filter((r) => inInbox(r) && !blockedBy(r, list.taste) && !tappedOut(r)) // not decided yet: not seen, rejected or kept (★)
       .map((r) => Object.assign({}, r, { fit: fitOf(r, list.taste), boost: sellsBoost(r) }));
     sort = (a, b) => b.rpd * b.fit * b.boost - a.rpd * a.fit * a.boost || cmp(a.ad_id, b.ad_id);
     limit = csv ? 5000 : Math.min(Math.max(parseInt(p.get('limit'), 10) || 20, 1), 100);
   } else {
     const hidden = p.get('hidden') === '1';
-    out = list.v.filter((r) => (hidden ? r.hid > 0 : r.hid === 0));
+    out = list.v.filter((r) => (hidden ? r.hid > 0 : r.hid === 0) && !(focus && tappedOut(r)));
+    const open = marketOf(p);
+    if (open) out = out.filter((r) => Array.isArray(r.open) && r.open.includes(open));
     const minRpd = Number(p.get('rpd'));
     if (minRpd === 2500 || minRpd === 10000) out = out.filter((r) => r.rpd >= minRpd);
     const q = String(p.get('q') || '').trim().slice(0, 80).toLowerCase();
@@ -322,7 +348,7 @@ export function viewOf(p, list, { csv = false } = {}) {
     offset = offsetOf(p, csv);
   }
   out.sort(sort);
-  return { view, total: out.length, offset, rows: out.slice(offset, offset + limit) };
+  return { view, focus, total: out.length, offset, rows: out.slice(offset, offset + limit) };
 }
 
 const offsetOf = (p, csv) => (csv ? 0 : Math.min(Math.max(parseInt(p.get('offset'), 10) || 0, 0), 100000));
@@ -331,10 +357,11 @@ const inInbox = (r) => r.hid === 0 && !r.star;
 const blockedBy = (r, taste) => !!(taste && taste.blocked.size && taste.blocked.has(storeOf(r.store_url)));
 const NEW_MS = 864e5; // found in the last day: new
 
-export const countsOf = (list, now = Date.now()) => ({
-  all: list.v.filter((r) => r.hid === 0).length,
-  inbox: list.v.filter((r) => inInbox(r) && !blockedBy(r, list.taste)).length,
-  fresh: list.v.filter((r) => inInbox(r) && !blockedBy(r, list.taste) && now - Date.parse(r.first_seen) < NEW_MS).length,
+/** Badge counts. focus: Browse leaves out the products whose shop is everywhere outside the EU (the Inbox always does). */
+export const countsOf = (list, now = Date.now(), focus = true) => ({
+  all: list.v.filter((r) => r.hid === 0 && !(focus && tappedOut(r))).length,
+  inbox: list.v.filter((r) => inInbox(r) && !blockedBy(r, list.taste) && !tappedOut(r)).length,
+  fresh: list.v.filter((r) => inInbox(r) && !blockedBy(r, list.taste) && !tappedOut(r) && now - Date.parse(r.first_seen) < NEW_MS).length,
   starred: list.k.filter((r) => r.star).length,
   made: list.k.filter((r) => r.hid === 1).length,
   hidden: list.v.filter((r) => r.hid > 0).length,
@@ -349,7 +376,7 @@ WHERE v.hid = 0 AND (a.fetched_at IS NULL OR a.fetched_at < ?2) ORDER BY v.rpd D
  * (reach a day × the country's share), how many products reach it, how many have it as their #1 country,
  * and the product that gets the most there. Countries by reach a day, biggest first.
  */
-export function marketsOf(rows) {
+export function marketsOf(rows, all = rows) {
   const m = new Map();
   let total = 0;
   for (const r of rows) {
@@ -367,7 +394,35 @@ export function marketsOf(rows) {
   const markets = [...m.values()]
     .map((x) => ({ ...x, rpd: Math.round(x.rpd), share: total ? Math.round((x.rpd / total) * 1000) / 10 : 0, top: x.top && { ...x.top, rpd: Math.round(x.top.rpd) } }))
     .sort((a, b) => b.rpd - a.rpd || a.cc.localeCompare(b.cc));
-  return { markets, total_rpd: Math.round(total), products: rows.length };
+  return { markets, total_rpd: Math.round(total), products: rows.length, outside: outsideOf(all) };
+}
+
+/**
+ * Market Radar, outside the EU: per market (lib/markets.mjs FOCUS) how many products on the board are proven (EU
+ * reach) while their shop's ads leave that market untapped, their reach a day together, and the strongest one.
+ * checked: products whose shop was looked at; worldwide: the shops among them whose ads already aim everywhere.
+ */
+export function outsideOf(rows) {
+  const m = new Map(FOCUS.map((cc) => [cc, { cc, products: 0, rpd: 0, top: null }]));
+  let checked = 0;
+  const everywhere = new Set();
+  for (const r of rows) {
+    if (!Array.isArray(r.open)) continue;
+    checked++;
+    if (!r.open.length) everywhere.add(r.page_id != null ? 'p' + r.page_id : 'a' + r.ad_id);
+    for (const cc of r.open) {
+      const x = m.get(cc);
+      if (!x) continue;
+      const v = Number(r.rpd) || 0;
+      x.products++;
+      x.rpd += v;
+      if (!x.top || v > x.top.rpd) x.top = { id: r.ad_id, title: String(r.product_title || '').slice(0, 120), rpd: v };
+    }
+  }
+  const markets = [...m.values()].filter((x) => x.products)
+    .map((x) => ({ ...x, rpd: Math.round(x.rpd), share: checked ? Math.round((x.products / checked) * 1000) / 10 : 0, top: x.top && { ...x.top, rpd: Math.round(x.top.rpd) } }))
+    .sort((a, b) => b.products - a.products || b.rpd - a.rpd || FOCUS.indexOf(a.cc) - FOCUS.indexOf(b.cc));
+  return { markets, checked, worldwide: everywhere.size, unchecked: rows.length - checked };
 }
 
 // ---------------------------------------------------------------------------
@@ -529,6 +584,8 @@ export function toAd(r) {
     star: !!r.star,
     pass: !!r.pass,
     mk: parseCountries(d.top_countries).slice(0, 5),
+    open: Array.isArray(r.open) ? r.open : null, // markets outside the EU the shop's ads leave untapped; null: not checked yet
+    page: r.page_id != null && /^\d{1,25}$/.test(String(r.page_id)) ? String(r.page_id) : '', // the shop's Facebook page (Ad Library check)
     crpd: r.crpd == null ? null : Math.round(r.crpd),
     hidden: r.hid === 2 ? 'rejected' : r.hid === 1 ? 'seen' : '',
     made_at: r.hid === 1 ? r.hat || '' : '', // when you marked it ✓ Made ad
@@ -552,7 +609,7 @@ const CSV_COLS = [
   ['ad_age_days', (a) => a.age], ['active_ads', (a) => a.ads], ['ads_for_product', (a) => a.scaled], ['store_products', (a) => a.products], ['advertiser', (a) => a.adv],
   ['store_url', (a) => a.store], ['product_url', (a) => a.product], ['ad_library_url', (a) => a.ad], ['image_url', (a) => a.img],
   ['keyword', (a) => a.kw], ['first_seen', (a) => a.first_seen], ['last_seen', (a) => a.last_seen], ['status', (a) => a.hidden || (a.star ? 'starred' : '')],
-  ['made_at', (a) => a.made_at],
+  ['made_at', (a) => a.made_at], ['untapped_outside_eu', (a) => (a.open == null ? '' : a.open.length ? a.open.join(' ') : 'none (worldwide)')],
 ];
 export const toCsv = (ads) => [CSV_COLS.map((c) => c[0]).join(','), ...ads.map((a) => CSV_COLS.map(([, f]) => csvCell(f(a))).join(','))].join('\r\n') + '\r\n';
 
@@ -595,7 +652,7 @@ async function login(req, env, now) {
 async function ads(url, env, now, viewer) {
   const list = await board(env, now);
   const q = viewOf(url.searchParams, list);
-  const counts = countsOf(list, now);
+  const counts = countsOf(list, now, q.view === 'all' ? q.focus : true);
   const run = await stateJson(env.DB, 'last_run');
   // While a run hunts, the board also shows what the run before it found.
   const prev = run && run.status === 'running'
@@ -814,7 +871,10 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
     if (path === '/api/ads' || path === '/api/hide' || path === '/api/markets' || path === '/export.csv' || path === '/api/feedback' || path === '/api/learned' || path === '/api/note') {
       if (!ok) return path === '/export.csv' ? text('Log in first.', 401) : json({ error: 'Log in first' }, 401);
       if (path === '/api/markets' && method === 'GET') {
-        return json(marketsOf((await board(env, now)).v.filter((r) => r.hid === 0)));
+        // The EU radar counts what Browse shows (the Untapped chip leaves out shops whose ads aim everywhere: ?world=0
+        // keeps them); the Outside EU radar counts every product, so its "already worldwide" total stays complete.
+        const rows = (await board(env, now)).v.filter((r) => r.hid === 0);
+        return json(marketsOf(url.searchParams.get('world') === '0' ? rows : rows.filter((r) => !tappedOut(r)), rows));
       }
       if (path === '/api/ads' && method === 'GET') return await ads(url, env, now, !!(launch && env.BROWSER && String(env.META_TOKEN || '').trim()));
       if (path === '/api/hide' && method === 'POST') return await hide(req, url, env, now);

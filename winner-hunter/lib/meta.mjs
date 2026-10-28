@@ -113,14 +113,26 @@ export async function hunt(opts, deps = {}) {
       url = withToken(url);
       const used = ti;
       let j;
+      // The answer included, within requestMs: a request that never answers must not hang the run (2026-10-27 one
+      // did, and Node, with nothing else left to wait for, quietly ended the hunt as "success").
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), o.requestMs ?? 90000);
       try {
-        const res = await doFetch(url);
+        const res = await doFetch(url, { signal: ctrl.signal });
         readUsage(res);
         j = await res.json();
       } catch (e) {
-        if (attempt >= 3) throw new Error('Meta API unreachable: ' + e.message);
+        if (attempt >= 3) throw new Error('Meta API unreachable: ' + (e.name === 'AbortError' ? 'no answer in time' : e.message));
+        if (e.name === 'AbortError') { // too slow: ask for a smaller page next time (Meta still counts the slow one)
+          const u = new URL(url);
+          const lim = Number(u.searchParams.get('limit') || 0);
+          if (lim > 25) u.searchParams.set('limit', String(Math.max(25, Math.floor(lim / 2))));
+          url = u.toString();
+        }
         await sleep(2000 * (attempt + 1) * waitScale);
         continue;
+      } finally {
+        clearTimeout(timer);
       }
       const err = j && j.error;
       if (!err) return j;

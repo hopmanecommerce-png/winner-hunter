@@ -29,7 +29,7 @@ concurrency:
 jobs:
   hunt:
     runs-on: ubuntu-latest
-    timeout-minutes: 330
+    timeout-minutes: 350
     env:
       META_TOKEN: ${{ secrets.META_TOKEN }}
       META_TOKEN_2: ${{ secrets.META_TOKEN_2 }}
@@ -78,3 +78,9 @@ jobs:
       - name: Store best sellers
         if: ${{ !cancelled() }}
         run: node winner-hunter/bestsellers.mjs
+
+      # Untapped markets outside the EU: where each board shop's ads are aimed (one Meta request per shop, a week
+      # apart). Stops early near Meta's hourly limit; the next run goes on. Also after a red hunt.
+      - name: Markets outside the EU
+        if: ${{ !cancelled() }}
+        run: node winner-hunter/markets.mjs
