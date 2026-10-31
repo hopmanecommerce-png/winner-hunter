@@ -93,3 +93,20 @@ test/            npm test (node --test); test/board.e2e.test.mjs opens the board
 ```
 
 Test locally: `cd winner-hunter && npm test` (Node 22+).
+
+## Outside the EU
+
+`world.mjs` (workflow `world-hunter.yml`, daily) hunts in Switzerland, Norway, Australia, New Zealand, the UAE, the US,
+Canada, Singapore, Jersey, Hong Kong, Macau, Japan, South Korea, Malaysia, Taiwan, Israel and Liechtenstein. Meta's API only
+shows ads that reach the EU or UK (2026-10-31: 23 of 26 local shops gave 0 ads for their own market), so it opens the **public Ad Library** in the runner's Chrome, logged
+out, one country and keyword at a time (`keywords-world.txt`, each market in its own language). A logged-out visitor only
+gets the first ~30 ads of a search: depth comes from many searches. The board reads D1 table `world_products`.
+
+**There is no reach outside the EU and UK.** A product shows six proof signals instead, each a plain fact on its card:
+oldest ad 30+ days, 5+ ads for the product, 2+ markets, shop with 20+ active ads in that market, in its store's top 50,
+100+ Trustpilot reviews. Rules to be listed: a Shopify store, an ad running 7+ days, not a supplement, food or drink, or
+gymwear, not shipping protection or a gift card (words in `lib/world.mjs`). Words miss some: Reject handles those.
+
+`META_TOKEN` is optional here: one request per shop answers "does it run ads in the EU at all?" (the *Not in EU* tag) and gives
+the EU reach of its ads where it does, the only reach figure that exists for these products. If
+Facebook refuses more than 80% of the searches, the run ends red and the board's 🌍 tab says so.
