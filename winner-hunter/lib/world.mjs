@@ -125,20 +125,22 @@ export function toRow(raw, cc, keyword) {
 const words = (s) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${s})(?![\\p{L}\\p{N}])`, 'iu');
 // Pet food is on the board (Connor, 2026-10-31: all of the categories he had left open stay on). Without this, the food words would take it off.
 const PET_FOOD = words('(?:dog|cat|pet|puppy|kitten)[\\s-]+(?:food|treats?)(?![\\s-]+(?:bowl|mat|dispenser|container|storage))|hundefutter|katzenfutter|hundemat|kattemat|croquettes?');
-// Words that only mean something you take or eat: they count in the name, the type and the tags. A description is not
-// read: it mentions these things on ordinary goods too ("for dietary supplements", "mix your protein powder"), and a
-// product wrongly taken off never shows again, while one wrongly kept can simply be rejected.
+// Words that only mean something you take or eat: the name, the type and the tags count. A description is not read: it
+// mentions these things on ordinary goods too. Kept narrow on purpose: a product wrongly taken off never shows again,
+// while one wrongly kept can simply be rejected.
 const OUT_ANYWHERE = [
   ['supplement', words('dietary supplements?|food supplements?|nahrungserg[äa]nzung\\w*|kosttilskudd|kosttillskott|compl[eé]ment alimentaire|gummies|protein powder|greens powder|creatine|kreatin|shilajit|ashwagandha')],
+  // No word boundaries in these scripts.
+  ['supplement', /サプリ|コラーゲン|ビタミン|健康食品|영양제|비타민|콜라겐|건강기능식품|保健食品|膠原蛋白|胶原蛋白|維他命|维生素|益生菌/u],
 ];
-// These also appear on ordinary goods ("food thermometer", "vitamin C shower filter"): the name only.
+const NOT_TAKEN = words('laundry|dishwasher|wardrobe|holder|case|organi[sz]er|filter|shaker|machine|maker|grinder|storage');
+// The name only.
 const OUT_IN_NAME = [
-  ['supplement', words('supplements?|suppl[eé]ments?|vitamins?|vitamines?|capsules|kapseln|g[ée]lules|collag[eè]ne?|kollagen|probiotics?|probiotique|whey|magnesium|omega[\\s-]?3')],
-  ['food or drink', words('food|foods|lebensmittel|nourriture|snacks?|drink mix|beverages?|energy drink|tea blend|herbal tea|matcha|protein bar|superfood|coffee creamer|mushroom coffee')],
+  ['supplement', words('supplements?|suppl[eé]ments?|capsules|kapseln|g[ée]lules|softgels|(?:vitamins?|vitamines?|collag[eè]ne?|kollagen|probiotics?|probiotique|whey|magnesium|omega[\\s-]?3)(?:\\s+[\\p{L}\\p{N}]+)?\\s+(?:capsules?|tablets?|pills?|powder|pulver|drops|sachets?)')],
+  ['food or drink', words('protein bars?|drink mix|energy drinks?|herbal tea|superfoods?|coffee creamer|mushroom coffee')],
   ['gymwear', words('gymwear|gym wear|gym[\\s-]+(?:shorts|shirts?|leggings?|tank|tops?|stringer)|workout[\\s-]+(?:shorts|shirts?|leggings?|tops?)|activewear|sportswear|sportbekleidung|fitnessbekleidung|treningsklær')],
 ];
-const NOT_A_PRODUCT = words('shipping protection|order protection|shipping (?:&|and) order protection|package protection|shipping insurance|gift ?cards?|geschenk(?:gutschein|karte)\\w*|carte cadeau|gavekort|upsell');
-const NOT_EATEN = words('food (?:processor|container|storage|warmer|chopper|scale|grade|bowl|mat|dehydrator|dispenser|thermometer|slicer)|face|serum|cream|creme|crème|lotion|shampoo|mask|masque|maske|alloy|machine|maschine|maker|grinder|wardrobe|holder|organi[sz]er|filter|laundry|dishwasher|shower');
+const NOT_A_PRODUCT = /(?:shipping|order|package) protection|shipping insurance|gift ?cards?|geschenk(?:gutschein|karte)|carte cadeau|gavekort|ギフト券|ギフトカード|상품권|禮券|禮物卡|礼品卡/iu;
 
 /** { out: '' | why it is off the board }. title: the product's name. labels: its type and tags. Words miss some: Reject handles those. */
 export function classify(title, labels = '') {
@@ -147,7 +149,8 @@ export function classify(title, labels = '') {
   if (NOT_A_PRODUCT.test(name)) return { out: 'not a product' };
   if (PET_FOOD.test(name)) return { out: '' };
   for (const [why, re] of OUT_ANYWHERE) if (re.test(all)) return { out: why };
-  if (!NOT_EATEN.test(name)) for (const [why, re] of OUT_IN_NAME) if (re.test(name)) return { out: why };
+  if (!NOT_TAKEN.test(name)) for (const [why, re] of OUT_IN_NAME.slice(0, 1)) if (re.test(name)) return { out: why };
+  for (const [why, re] of OUT_IN_NAME.slice(1)) if (re.test(name)) return { out: why };
   return { out: '' };
 }
 
@@ -228,18 +231,22 @@ export async function fetchProduct(key, { host, currency = '' }, doFetch = globa
 }
 
 const NOISE = new Set('the and for with your you our now new get buy free sale off shop store official best today shipping offer deal deals limited only this that from more'.split(' '));
-const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+const CJK_RUN = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]{2,}/gu;
+const CJK_NOISE = /送料無料|今だけ|限定|セール|新作|人気|公式|特價|特价|優惠|优惠|限時|限时|新款|免運|免运|熱賣|官方|무료배송|특가|할인|세일|공식|인기/gu;
 
 /** Is the ad's title about this product? A real word in common, not a sales word and not the shop's own name. */
 export function sameThing(title, named, store = '') {
   const text = String(named || '').toLowerCase();
-  const shop = String(store || '').toLowerCase().split('.')[0];
-  const parts = String(title || '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const shop = String(store || '').toLowerCase().replace(/^(?:www|shop|store|get|try|buy)\./, '').split('.')[0];
+  const low = String(title || '').toLowerCase();
   const theirs = new Set(text.split(/[^\p{L}\p{N}]+/u));
-  for (const w of parts) {
-    if (CJK.test(w)) {
-      for (let i = 0; i + 2 <= w.length; i++) if (text.includes(w.slice(i, i + 2))) return true; // no spaces between words here
-    } else if (w.length >= 3 && !NOISE.has(w) && !(shop && (shop.includes(w) || w.includes(shop))) && theirs.has(w)) return true;
+  for (const w of low.split(/[^\p{L}\p{N}]+/u)) {
+    if (/^[a-z0-9à-ÿ-]+$/.test(w) && w.length >= 3 && !/^\d+$/.test(w) && !NOISE.has(w) && !(shop && (shop.includes(w) || w.includes(shop))) && theirs.has(w)) return true;
+  }
+  // No spaces between words here: two characters in a row in common, after the sales words.
+  const quiet = text.replace(CJK_NOISE, ' ');
+  for (const run of low.replace(CJK_NOISE, ' ').match(CJK_RUN) || []) {
+    for (let i = 0; i + 2 <= run.length; i++) if (quiet.includes(run.slice(i, i + 2))) return true;
   }
   return false;
 }
@@ -254,7 +261,8 @@ export async function suggestProduct(title, host, doFetch = globalThis.fetch, st
   const q = cut(noTemplate(title), 60);
   if (!q) return '';
   const r = await getText(doFetch, `https://${host}/search/suggest.json?q=${encodeURIComponent(q)}&resources%5Btype%5D=product&resources%5Blimit%5D=1`, opts);
-  if (!r.status || r.status === 429) return null;
+  if (r.status === 404) return '';
+  if (r.status !== 200) return null; // an outage or a limit says nothing about the product: asked again next run
   try {
     const p = JSON.parse(r.text).resources.results.products[0];
     const m = /\/products\/([^/?#]+)/.exec(String((p && p.url) || ''));

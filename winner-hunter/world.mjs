@@ -359,7 +359,14 @@ async function main() {
     const { chromium } = await import('playwright-core').catch(() => import('playwright'));
     return chromium.launch({ channel: 'chrome' }).catch(() => chromium.launch(env.CHROME_PATH ? { executablePath: env.CHROME_PATH } : {}));
   };
-  const lib = await openLibrary({ launch });
+  let lib;
+  try {
+    lib = await openLibrary({ launch });
+  } catch (e) { // no browser on this runner: the board must say so, not show yesterday's healthy run
+    const when = new Date().toISOString();
+    await db.setState('world_run', { status: 'failed', health: 'failed', started_at: when, finished_at: when, updated_at: when, alert: `Scan buiten de EU: geen browser / Scan outside the EU: no browser (${e.message})`.slice(0, 300) }).catch(() => {});
+    throw e;
+  }
   try {
     const t = await hunt({ db, lib, keywords, deadline: Date.now() + minutes * 60000, maxPages: Math.max(Number(env.WORLD_PAGES) || 80, 0), tokens: [env.META_TOKEN],
       searchShare: Math.min(Math.max(Number(env.WORLD_SEARCH_SHARE) || 0.7, 0.05), 0.95) });

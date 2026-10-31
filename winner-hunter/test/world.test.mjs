@@ -71,11 +71,11 @@ test('an ad as a row: its store and product from the link; a marketplace or a st
 });
 
 test('off the board: supplements, food and drink, gymwear. The categories Connor kept stay on', () => {
-  for (const t of ['Collagen Capsules', 'Vitamin D3 Capsules', 'Mushroom Coffee with Collagen', 'Collagen Coffee Creamer', 'Amla Superfruit Capsules', 'Collagen gummies', 'Daily Vitamin C', 'Kollagen Pulver', 'Protein bar box', 'Sports Gym Leggings', 'men\'s activewear', 'Creatine monohydrate powder']) assert.ok(classify(t).out, t);
+  for (const t of ['Collagen Capsules', 'Collagen Capsules for Face', 'Vitamin D3 Capsules', 'Food Grade Collagen Powder', 'Mushroom Coffee with Collagen', 'Collagen Coffee Creamer', 'Amla Superfruit Capsules', 'Collagen gummies', 'Vitamin C Powder', 'Kollagen Pulver', 'Protein bar box', 'Sports Gym Leggings', 'men\'s activewear', 'Creatine monohydrate powder', 'コラーゲン サプリメント', '비타민 C 영양제', '膠原蛋白 保健食品', 'ギフト券']) assert.ok(classify(t).out, t);
   assert.ok(classify('Creatine monohydrate powder', 'home gym').out, 'a supplement stays out, whatever its labels say');
   assert.ok(classify('Collagen Capsules', 'Skin \n face anti-aging').out, 'a tag does not excuse it');
   // Reviewed 2026-10-31: ordinary goods that a loose word match took off the board.
-  for (const [h, b] of [['Vegetable chopper', 'Chops food in seconds'], ['Dog lick mat', 'spread wet food on the mat'], ['Bike frame', 'magnesium alloy'], ['Coffee machine', 'fits all capsules'], ['Collagen face mask', ''], ['Vitamin C face serum', ''], ['Capsule wardrobe set', ''], ['Coffee capsules holder', ''], ['Food Thermometer', ''], ['Food Slicer', ''], ['Silicone Lid', 'food'], ['Laundry Capsules', ''], ['Vitamin C Shower Filter', ''], ['Pill Organizer', ''], ['Shaker Bottle', ''], ['Cat food bowl', '']]) {
+  for (const [h, b] of [['Vegetable chopper', 'Chops food in seconds'], ['Dog lick mat', 'spread wet food on the mat'], ['Bike frame', 'magnesium alloy'], ['Coffee machine', 'fits all capsules'], ['Collagen face mask', ''], ['Vitamin C face serum', ''], ['Capsule wardrobe set', ''], ['Coffee capsules holder', ''], ['Food Thermometer', ''], ['Food Slicer', ''], ['Silicone Lid', 'food'], ['Laundry Capsules', ''], ['Vitamin C Shower Filter', ''], ['Pill Organizer', ''], ['Shaker Bottle', ''], ['Vacuum Food Sealer', ''], ['Food Cover Mesh', ''], ['Reusable Snack Bags', ''], ['Baby Food Jars', ''], ['Matcha Whisk Set', ''], ['Whey Protein Shaker', ''], ['Vitamin Pill Case', ''], ['Dog Snack Pouch', ''], ['Cat food bowl', '']]) {
     assert.strictEqual(classify(h, b).out, '', h);
   }
   for (const [t, f] of [['Anti-cellulite leggings', 'Shaping or cellulite leggings'], ['Running socks 3-pack', 'Running socks'], ['Adjustable dumbbells', 'Home gym gear'], ['Grain free dog food', 'Pet food'], ['Nasal strips', 'Nose strips or sprays']]) {
@@ -111,13 +111,17 @@ test('stores and products: Shopify from meta.json, product from its JSON, prices
   assert.strictEqual(await suggestProduct('The pod pillow', 'pod.test', f), 'pod.test/products/pillow');
   assert.strictEqual(await suggestProduct('The pod pillow', 'pod.test', f, 'getpod.test'), 'getpod.test/products/pillow', 'known by the name the ads use');
   assert.strictEqual(await suggestProduct('Free shipping today', 'pod.test', f), '', 'a search always answers: it must be about the same thing');
-  assert.strictEqual(await suggestProduct('The pod pillow', 'pod.test', async () => new Response('', { status: 500, headers: { 'x': '1' } })), '', 'no JSON: nothing');
   assert.strictEqual(await suggestProduct('The pod pillow', 'pod.test', async () => { throw new Error('x'); }), null, 'no answer: asked again');
   assert.ok(sameThing('강아지 하네스 특가', '강아지 하네스'));
   assert.ok(sameThing('犬用ハーネスが人気', '犬用ハーネス'));
   assert.ok(sameThing('狗胸背帶特價', '狗胸背帶'));
   assert.ok(sameThing('Dog Bed', 'Dog Bed dog bed'));
   assert.ok(!sameThing('Snuggro Official Store', 'Snuggro Blanket snuggro blanket', 'snuggro.com'), 'the shop name proves nothing');
+  assert.ok(!sameThing('Acme official', 'Acme Serum', 'shop.acme.com'), 'also on a subdomain');
+  assert.ok(!sameThing('送料無料 今だけ', '【送料無料】犬用 ベッド'), 'sales words');
+  assert.ok(!sameThing('LED燈 特價', 'Bluetooth Table Speaker'));
+  assert.ok(!sameThing('2024年 新款', 'Dog bed 2024 edition'));
+  assert.strictEqual(await suggestProduct('The pod pillow', 'pod.test', async () => new Response('<html>', { status: 503 }), 'pod.test', { tries: 1 }), null, 'an outage says nothing');
 });
 
 test('Shopify says too many requests: wait and ask again; still no: the store is unknown, not "not on Shopify"', async () => {
