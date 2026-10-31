@@ -189,12 +189,7 @@
   .tag.made { background: rgba(4, 30, 20, .7); color: var(--win); border-color: rgba(61, 255, 176, .45); letter-spacing: .05em; }
   .tag.sp { padding: 4px 6px; opacity: .85; }
   .tag.sp svg { display: block; }
-  .star { position: absolute; right: 8px; top: 8px; z-index: 1; width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .14); display: grid; place-items: center; cursor: pointer;
-    color: #fff; background: rgba(4, 5, 12, .45); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); transition: transform .2s, background .2s, box-shadow .2s; }
-  .star svg { fill: none; stroke: currentColor; stroke-width: 1.8; }
-  .star[aria-pressed="true"] { color: var(--amb); border-color: rgba(255, 201, 77, .6); background: rgba(40, 30, 6, .7); box-shadow: 0 0 18px rgba(255, 201, 77, .55); }
-  .star[aria-pressed="true"] svg { fill: currentColor; }
-  .star:active, .view:active { transform: scale(.88); }
+  .view:active { transform: scale(.88); }
   .hero { position: absolute; left: 11px; bottom: 10px; z-index: 1; color: #fff; display: grid; line-height: 1; pointer-events: none; }
   .hero b { font-size: 24px; font-weight: 800; letter-spacing: -.035em; font-variant-numeric: tabular-nums; text-shadow: 0 0 18px rgba(46, 230, 255, .55); }
   .hero span { font: 600 9.5px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--cy); margin-top: 4px; }
@@ -330,7 +325,7 @@
   .grid.one .card[data-lean="rejected"] { box-shadow: 0 0 0 2px var(--bad), 0 0 30px -8px var(--bad); }
   .dock { position: sticky; bottom: 0; z-index: 4; max-width: 760px; margin: 12px auto 0; padding: 10px 0 max(10px, env(safe-area-inset-bottom));
     display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; background: linear-gradient(transparent, var(--bg) 22%); }
-  .tri { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .tri { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .why { border: 1px solid var(--line2); border-radius: 16px; background: var(--glass); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
   .wh { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
   .wh span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -374,7 +369,6 @@
     font-weight: 750; font-size: 15px; cursor: pointer; display: grid; place-content: center; gap: 2px; }
   .tri small { font: 600 10px var(--mono); letter-spacing: .1em; color: var(--faint); }
   .tri .no { color: var(--bad); }
-  .tri .keep { color: var(--amb); }
   .tri .ok { color: var(--win); }
   body.inbox .toast { bottom: auto; top: max(14px, env(safe-area-inset-top)); }
   @media (max-width: 520px) { .lb li { grid-template-columns: 104px 1fr 24px; font-size: 13px; } }
@@ -384,7 +378,6 @@
   .zero p { margin: 0; color: var(--muted); }
   .zero .zb { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
   .zero button { height: 42px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--line2); background: var(--card2); font-weight: 650; cursor: pointer; }
-  .zero .kept { color: var(--amb); border-color: rgba(255, 201, 77, .4); }
   @media (min-width: 1200px) { /* views + search beside the filters only where all of it fits */
     .rail { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
     .search { flex: 0 1 380px; }
@@ -454,6 +447,45 @@
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
   }
+  /* Outside the EU / EU */
+  .scope { display: inline-flex; gap: 4px; padding: 4px; margin: 0 0 14px 10px; border-radius: 14px; background: var(--card2); border: 1px solid var(--line); vertical-align: top; }
+  .scope button { border: 0; background: none; border-radius: 10px; height: 34px; padding: 0 14px; color: var(--muted); font: 650 13px/1 inherit; font-family: inherit; cursor: pointer; white-space: nowrap; }
+  .scope button small { font: 500 11px var(--mono); margin-left: 5px; color: var(--faint); }
+  .scope button[aria-pressed="true"] { color: var(--ink); background: rgba(46, 230, 255, .1); box-shadow: inset 0 0 0 1px rgba(46, 230, 255, .45); }
+  .scope button[aria-pressed="true"] small { color: var(--cy); }
+  .radar.world .rtabs, .radar.world .hexmap { display: none !important; }
+  .radar.world .rlist { display: grid !important; align-items: start; }
+  .radar.world .rnum .nm { font-size: clamp(24px, 2.6vw, 32px); overflow-wrap: normal; }
+  .radar.world .mk .nm { white-space: normal; overflow: visible; text-overflow: clip; }
+  .radar.world .mk .nm small { display: block; margin-left: 0; }
+  .chip[hidden] { display: none; }
+  .rules { margin: 2px 0 8px; padding: 0 2px 0 34px; font-size: 12px; line-height: 1.4; color: var(--muted); }
+  .rules summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+  .rules summary::-webkit-details-marker { display: none; }
+  .rules .rm { color: var(--cy); font: 600 11px var(--mono); white-space: nowrap; }
+  .rules .rm::after { content: ' ▾'; }
+  .rules[open] .rm::after { content: ' ▴'; }
+  .rules ul { margin: 8px 0 4px; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .rules li b { color: var(--ink); font-weight: 650; margin-right: 6px; }
+  .rules li p { margin: 2px 0 0; }
+  .rules a { color: var(--cy); white-space: nowrap; }
+  .rt { font: 600 9.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 1px 5px; border-radius: 99px; border: 1px solid var(--line); }
+  .rt.fact { color: var(--win); border-color: rgba(61, 255, 176, .4); }
+  .rt.estimate { color: var(--cy); border-color: rgba(46, 230, 255, .4); }
+  .rt.unverified { color: var(--amb); border-color: rgba(255, 201, 77, .45); }
+  .tag.noteu { background: rgba(61, 255, 176, .16); color: var(--win); border-color: rgba(61, 255, 176, .4); }
+  .meta .m.yes b { color: var(--win); }
+  .meta .m.idk b { color: var(--faint); }
+  .proofl { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; font: 500 11px/1.35 var(--mono); color: var(--muted); }
+  .proofl li.yes { color: var(--win); }
+  .proofl li.idk { color: var(--faint); }
+  @media (min-width: 760px) {
+    .radar.world .rbody { grid-template-columns: minmax(250px, 310px) minmax(0, 1fr); }
+  }
+  @media (max-width: 759px) {
+    .scope { margin-left: 0; display: flex; }
+    .scope button { flex: 1; }
+  }
 </style>
 </head>
 <body>
@@ -469,6 +501,7 @@
     </div>
   </header>
   <div class="status" id="runbox"><i class="dot"></i><span class="run" id="run">Loading…</span></div>
+  <div class="scope" role="group" aria-label="Which markets"><button data-scope="world" aria-pressed="true">🌍 Outside EU <small id="nworld"></small></button><button data-scope="eu" aria-pressed="false">🇪🇺 EU <small id="neu"></small></button></div>
 
   <section class="radar" id="radar" aria-label="Market Radar" hidden>
     <div class="rh"><span class="kick holo">Market Radar</span><span class="sub" id="rsub"></span><button class="ghost" id="rtog" aria-expanded="true">Hide</button></div>
@@ -480,7 +513,7 @@
         <ol class="rlist" id="rlist"></ol>
       </div>
     </div>
-    <div class="rfoot"><span>EU reach a day of the products on the board, split by the countries their ads reach. Tap a country to hunt only there.</span><button class="ghost" id="rall" hidden></button></div>
+    <div class="rfoot"><span id="rfootT">EU reach a day of the products on the board, split by the countries their ads reach. Tap a country to hunt only there.</span><button class="ghost" id="rall" hidden></button></div>
   </section>
 
   <div class="rail">
@@ -488,7 +521,6 @@
       <div class="seg" role="group" aria-label="View">
         <button data-view="inbox" aria-pressed="true">Inbox <small id="nin"></small></button>
         <button data-view="all" aria-pressed="false">Browse <small id="nall"></small></button>
-        <button data-view="starred" aria-pressed="false" aria-label="Starred">★ <small id="nstar"></small></button>
         <button data-view="made" aria-pressed="false" aria-label="Made ad" title="Products you made an ad for"><i class="ok">✓</i> <small id="nmade"></small></button>
         <button data-view="learned" aria-pressed="false" aria-label="What the board learned" title="What the board learned">🧠</button>
       </div>
@@ -508,6 +540,9 @@
         </select></span>
         <button class="chip" data-f="r2500" aria-pressed="false">2.5K+/day</button>
         <button class="chip" data-f="r10k" aria-pressed="false">10K+/day</button>
+        <button class="chip" data-f="p4" aria-pressed="false" title="At least 4 of the 6 proof signals">4+ proof</button>
+        <button class="chip" data-f="noteu" aria-pressed="false" title="The shop runs no active ads in the EU (Meta's API)">Not in EU</button>
+        <button class="chip" data-f="fresh" aria-pressed="false" title="Ads for this product started in the last 14 days">New ads 14d</button>
         <button class="chip" data-f="hidden" aria-pressed="false" title="Products you made an ad for or rejected">Made ad &amp; rejected</button>
       </div>
     </div>
@@ -528,7 +563,6 @@
     <div class="why" id="why" aria-label="Why? The board learns from it" hidden></div>
     <div class="tri" id="tri" role="group" aria-label="Decide">
       <button class="no" data-tri="rejected">✗ Reject<small>R · ←</small></button>
-      <button class="keep" data-tri="keep">★ Keep<small>K · ↑</small></button>
       <button class="ok" data-tri="seen">✓ Made ad<small>D · →</small></button>
     </div>
   </div>
@@ -572,7 +606,6 @@ let regions = null;
 try { regions = new Intl.DisplayNames(['en'], { type: 'region' }); } catch (e) { /* old browser: codes */ }
 const land = (cc) => { try { return (regions && regions.of(cc)) || cc; } catch (e) { return cc; } };
 const ICON = {
-  star: '<svg width="18" height="18" viewBox="0 0 24 24" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>',
   play: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 001.5.86l12-7.5a1 1 0 000-1.72l-12-7.5A1 1 0 007 4.5z"/></svg>',
   check: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   x: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
@@ -582,7 +615,11 @@ const SORTED = { rpd: 'by reach per day', new: 'newest first', scaled: 'by ad co
 const NEW_MS = 24 * 3600e3; // found in the last day: NEW
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } } };
 
-const st = { view: 'inbox', q: '', sort: 'rpd', r2500: false, r10k: false, hidden: false, cc: '', offset: 0 };
+const WSORTED = { eu: 'by EU reach a day', proof: 'most proof first', days: 'by oldest ad', ads: 'by ads for the product', markets: 'by number of markets', shop: 'by shop ads', fresh: 'by new ads in 14 days', best: 'by store best-seller rank', reviews: 'by Trustpilot reviews', new: 'newest first' };
+const WSORT_LABEL = { proof: 'Most proof', days: 'Oldest ad', ads: 'Most ads for product', markets: 'Most markets', shop: 'Most shop ads', fresh: 'New ads 14d', best: 'Store best seller', reviews: 'Trustpilot reviews', eu: 'EU reach / day', new: 'Newest' };
+const ESORT_LABEL = { rpd: 'Reach / day', new: 'Newest', scaled: 'Most ad copies', ads: 'Most shop ads', reach: 'Total reach', best: 'Store best seller' };
+const scope0 = store.get('wh-scope') === 'eu' ? 'eu' : 'world'; // the markets outside the EU come first
+const st = { scope: scope0, view: scope0 === 'world' ? 'all' : 'inbox', q: '', sort: 'rpd', wsort: 'proof', r2500: false, r10k: false, p4: false, noteu: false, fresh: false, hidden: false, cc: '', offset: 0 };
 let ADS = [];
 let VIEWER = false; // the server can show ads in the board (Browser Run + META_TOKEN)
 let total = 0;
@@ -592,7 +629,6 @@ let showAll = false;
 const opened = new Set();
 const DONE = new Set(); // decided in the inbox here: skipped even if the server list is a moment behind
 let FRESH = 0; // inbox products found in the last day
-let STARS = 0;
 let MADE = 0;
 let MADE_SEQ = 0; // Made ad saves finished here: a load answered across one has an old count
 let PENDING_MADE = 0; // Made ad saves still on their way to the server
@@ -600,10 +636,17 @@ let marketsStale = false;
 
 function params(extra) {
   const p = new URLSearchParams({ view: st.view });
+  const world = st.scope === 'world';
+  if (world) p.set('scope', 'world');
   if (st.view === 'all') {
     if (st.q) p.set('q', st.q);
-    if (st.sort !== 'rpd') p.set('sort', st.sort);
-    if (st.r10k) p.set('rpd', '10000'); else if (st.r2500) p.set('rpd', '2500');
+    if (world) {
+      if (st.wsort !== 'proof') p.set('sort', st.wsort);
+      for (const f of ['p4', 'noteu', 'fresh']) if (st[f]) p.set(f, '1');
+    } else {
+      if (st.sort !== 'rpd') p.set('sort', st.sort);
+      if (st.r10k) p.set('rpd', '10000'); else if (st.r2500) p.set('rpd', '2500');
+    }
     if (st.hidden) p.set('hidden', '1');
     if (st.cc) p.set('cc', st.cc);
   }
@@ -664,8 +707,85 @@ function bestLine(a) {
   return `<div class="bs${cls}" title="The store's own best-seller list (top 50), checked once a day">${b.rank == null ? '' : '🏆 '}${esc(bestText(b))}</div>`;
 }
 
+// A product outside the EU: no reach exists there, so the big number is how many proof signals it has.
+const PROOF_TEXT = { yes: '✓', no: '–', idk: '?' };
+const proofState = (i) => (i.ok == null ? 'idk' : i.ok ? 'yes' : 'no');
+function proofItem(a, k) { return (a.world.proof ? a.world.proof.items : []).find((i) => i.k === k) || { ok: null }; }
+function worldStat(a, k, value, label, tip) {
+  const s = proofState(proofItem(a, k));
+  return `<div class="m ${s}" title="${esc(proofItem(a, k).text || tip || '')}"><b>${esc(value)}</b><span>${esc(label)}</span></div>`;
+}
+function worldCard(a, inbox) {
+  const w = a.world;
+  const open = inbox || opened.has(a.id);
+  const isNew = Date.now() - Date.parse(a.first_seen) < NEW_MS;
+  const tags = (isNew ? '<span class="tag new">New</span>' : '')
+    + (w.in_eu === 0 ? '<span class="tag noteu" title="The shop has no active ads in the EU (Meta\'s API)">Not in EU</span>' : '')
+    + (a.fit >= 1.5 ? '<span class="tag fit" title="You liked products from this niche">♥ Your niche</span>' : '')
+    + (a.hidden === 'seen' ? `<span class="tag made" title="You made an ad for it">✓ Made${a.made_at ? ' ' + esc(day(a.made_at)) : ' ad'}</span>` : a.hidden ? '<span class="tag">Rejected</span>' : '')
+    + (a.pass === false ? '<span class="tag out" title="Its ads were not seen in the last scans">Not seen lately</span>' : '');
+  const photo = safe(a.img) ? `<img src="${safe(a.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<div class="dom">${esc(host(a.store) || a.adv)}</div>`;
+  const price = a.price != null ? `<div class="price"><span>${esc(money(a.price, a.cur))}</span>${a.was > a.price ? `<s>${esc(money(a.was, a.cur))}</s><span class="off">−${esc(a.off)}%</span>` : ''}</div>` : '';
+  const acts = a.hidden === 'seen' ? '<button class="un" data-act="none" data-confirm="1">Remove from ✓</button>'
+    : a.hidden ? '<button class="un" data-act="none">Unhide</button>'
+    : `<button class="ok" data-act="seen" title="You made an ad for it: it moves to ✓">${ICON.check}Made ad</button><button class="no" data-act="rejected" title="Not for me: hide it">${ICON.x}Reject</button>`;
+  const proof = w.proof || { n: 0, of: 6, items: [] };
+  const list = proof.items.map((i) => `${PROOF_TEXT[proofState(i)]} ${i.text}`).join('\n');
+  const hero = `<b>${esc(proof.n)}/${esc(proof.of)}</b><span>proof</span>`;
+  const mk = w.markets.slice().sort((x, y) => (y[0] === st.cc) - (x[0] === st.cc));
+  const flags = `<div class="flags" title="Where its ads run: ads for the product and the age of the oldest">${mk.map(([c, n, d]) => `<span class="${c === st.cc ? 'hit' : ''}"><i>${flag(c)}</i>${esc(c)} ${esc(d)}d</span>`).join('')}</div>`;
+  const cc = (st.cc && w.markets.some(([c]) => c === st.cc) ? st.cc : (w.markets[0] || [])[0]) || 'ALL';
+  const shopAds = w.page_id ? `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=${encodeURIComponent(cc)}&media_type=all&search_type=page&view_all_page_id=${encodeURIComponent(w.page_id)}` : '';
+  const trust = a.trust && (a.trust.status === 'page' || a.trust.status === 'widget') ? a.trust.reviews ?? 0 : a.trust && a.trust.status === 'nopage' ? 0 : null;
+  const rank = a.best ? (a.best.rank == null ? '50+' : '#' + a.best.rank) : '?';
+  return `<article class="card${open ? ' open' : ''}" data-id="${esc(a.id)}">
+    ${inbox ? '' : `<div class="ph">${photo}
+      <div class="badges">${tags}</div>
+      <div class="hero" title="${esc(list)}">${hero}</div>
+      ${safe(a.ad) ? `<a class="view" href="${safe(a.ad)}" target="_blank" rel="noopener noreferrer" aria-label="View ad">${ICON.play}</a>` : ''}
+    </div>`}
+    <div class="bd">
+      ${inbox && tags ? `<div class="tags">${tags}</div>` : ''}
+      <h2 class="t">${esc(nice(a))}</h2>
+      ${price}
+      ${flags}
+      <div class="meta">
+        ${worldStat(a, 'days', (a.age ?? '–') + 'd', 'oldest ad')}
+        ${worldStat(a, 'ads', fmt(a.scaled || 1), 'ads')}
+        ${worldStat(a, 'markets', w.markets.length, 'markets')}
+        ${worldStat(a, 'shop', a.ads == null ? '?' : fmt(a.ads), 'shop ads')}
+        ${worldStat(a, 'best', rank, 'store rank')}
+        ${worldStat(a, 'trust', trust == null ? '?' : fmt(trust), 'reviews')}
+      </div>
+      <div class="who">${esc(host(a.store) || a.adv)}${a.products != null ? ' · ' + esc(fmt(a.products)) + ' products' : ''}</div>
+      ${w.eu_rpd != null ? `<div class="bs" title="Meta's API: EU reach per day of this product's best ad that also runs in the EU. No reach is published for the other markets.">📡 ${esc(fmt(w.eu_rpd))} EU reach / day</div>`
+        : w.shop_eu_rpd != null ? `<div class="bs no" title="Meta's API: EU reach per day of this shop's best ad in the EU, not necessarily this product.">Shop's best EU ad: ${esc(fmt(w.shop_eu_rpd))} reach / day</div>` : ''}
+      ${inbox ? `<ul class="proofl">${proof.items.map((i) => `<li class="${proofState(i)}">${PROOF_TEXT[proofState(i)]} ${esc(i.text)}</li>`).join('')}</ul>` : ''}
+      <div class="more">
+        <div class="facts">
+          ${w.new14 ? `<span><b>${esc(w.new14)}</b> ads started in 14 days</span>` : ''}
+          <span>${w.creatives} creatives</span>
+          ${w.likes != null ? `<span>${esc(fmt(w.likes))} page likes</span>` : ''}
+          ${w.in_eu === 1 ? '<span>Also runs in the EU</span>' : ''}
+          ${a.adv ? `<span>${esc(a.adv)}</span>` : ''}
+          <span>search “${esc(a.kw)}”</span>
+          <span>found ${esc(String(a.first_seen || '').slice(0, 10))}</span>
+        </div>
+      </div>
+    </div>
+    <div class="links">
+      ${safe(a.ad) ? `<a class="pri" href="${safe(a.ad)}" target="_blank" rel="noopener noreferrer">Ad ↗</a>` : ''}
+      ${shopAds ? `<a href="${esc(shopAds)}" target="_blank" rel="noopener noreferrer" title="This shop's ads in ${esc(land(cc))}">Shop's ads ↗</a>` : ''}
+      ${safe(a.product) ? `<a href="${safe(a.product)}" target="_blank" rel="noopener noreferrer">Product ↗</a>` : ''}
+      ${inbox ? '' : `<a class="src" href="${esc(src1688(a.zh || a.title))}" target="_blank" rel="noopener noreferrer">Search 1688 ↗</a>`}
+    </div>
+    ${inbox ? '' : `<div class="acts">${acts}</div>`}
+  </article>`;
+}
+
 // inbox: the one Inbox card: only the data (no photo) and one link, the ad in the Facebook Ad Library.
 function card(a, inbox) {
+  if (a.world) return worldCard(a, inbox);
   const open = inbox || opened.has(a.id);
   const isNew = Date.now() - Date.parse(a.first_seen) < NEW_MS;
   const tags = (isNew ? '<span class="tag new">New</span>' : '')
@@ -695,7 +815,6 @@ function card(a, inbox) {
   return `<article class="card${open ? ' open' : ''}" data-id="${esc(a.id)}">
     ${inbox ? '' : `<div class="ph">${photo}
       <div class="badges">${tags}</div>
-      <button class="star" data-act="star" aria-pressed="${a.star}" aria-label="Star">${ICON.star}</button>
       <div class="hero" title="${reachTip}">${reach}</div>
       ${view}
     </div>`}
@@ -779,6 +898,9 @@ function radar() {
   $('radar').classList.toggle('min', min);
   $('rtog').textContent = min ? 'Show' : 'Hide';
   $('rtog').setAttribute('aria-expanded', String(!min));
+  $('radar').classList.toggle('world', st.scope === 'world');
+  if (st.scope === 'world') { worldRadar(m); return; }
+  $('rfootT').textContent = 'EU reach a day of the products on the board, split by the countries their ads reach. Tap a country to hunt only there.';
   $('rsub').textContent = `${m.markets.length} markets · ${fmt(m.total_rpd)} reach / day`;
   const top = m.markets[0];
   const fresh = shownTop !== top.cc + top.share;
@@ -808,11 +930,47 @@ function radar() {
   $('rall').hidden = m.markets.length <= n && !showAll;
   $('rall').textContent = showAll ? 'Top only' : `All ${m.markets.length} markets`;
 }
+// The rules for selling there, right under the country: one line, the rest one tap away. Each says how far it was checked.
+const RULE_TAG = { fact: 'Fact', estimate: 'Estimate', unverified: 'Unverified' };
+const openRules = new Set();
+function rulesHtml(x) {
+  const r = x.rules;
+  if (!r) return '';
+  const items = (r.items || []).map((i) => {
+    const tag = RULE_TAG[i.status] ? i.status : 'unverified';
+    const src = safe(i.source);
+    return `<li><b>${esc(i.label)}</b><span class="rt ${tag}">${esc(RULE_TAG[tag])}</span><p>${esc(i.text)}${src ? ` <a href="${src}" target="_blank" rel="noopener noreferrer">source ↗</a>` : ''}</p></li>`;
+  }).join('');
+  return `<details class="rules" data-rules="${esc(x.cc)}"${openRules.has(x.cc) ? ' open' : ''}><summary><span class="rs">${esc(r.short)}</span><span class="rm">Selling rules</span></summary><ul>${items}</ul></details>`;
+}
+// Outside the EU there is no reach: every market with plain facts. All seven always show, also an empty one.
+function worldRadar(m) {
+  const top = m.markets[0];
+  $('rsub').textContent = `${m.markets.length} markets · ${fmt(m.products)} products · public Ad Library`;
+  $('rfootT').textContent = `No reach exists here (Meta only publishes it for the EU and UK). A product's proof: oldest ad ${m.proof.days}+ days, ${m.proof.ads}+ ads, ${m.proof.markets}+ markets, shop with ${m.proof.shop}+ active ads, in its store's top 50, ${m.proof.reviews}+ Trustpilot reviews. Tap a country to hunt only there. Selling rules checked ${m.rules_as_of}: ${m.rules_note}`;
+  $('rtop').innerHTML = `<div class="ring"><svg viewBox="0 0 104 104"><circle class="trk" cx="52" cy="52" r="44" fill="none" stroke-width="7"/><circle class="val" id="ringVal" cx="52" cy="52" r="44" fill="none" stroke-width="7" stroke-linecap="round" stroke-dasharray="0 ${RING}"/></svg><span class="fl">${flag(top.cc)}</span></div>
+    <div class="rnum"><span class="kick">${m.products ? 'Most products' : 'No scan yet'}</span><span class="nm">${esc(land(top.cc))}</span>
+      <span class="big"><b class="holo">${esc(fmt(top.products))}</b> ${top.products === 1 ? 'product' : 'products'} · ${esc(fmt(top.shops))} ${top.shops === 1 ? 'shop' : 'shops'}</span>
+      <span class="lead">${esc(fmt(top.strong))} with 4+ proof · oldest ad ${esc(fmt(top.days))} days${top.top ? ' · most proof: ' + esc(top.top.title.slice(0, 48)) : ''}</span></div>`;
+  $('rtop').setAttribute('aria-pressed', String(st.cc === top.cc));
+  requestAnimationFrame(() => { const v = $('ringVal'); if (v) v.setAttribute('stroke-dasharray', `${(top.share / 100) * RING} ${RING}`); });
+  const max = top.products || 1;
+  $('rlist').innerHTML = m.markets.map((x, i) => `<li><button class="mk" data-cc="${esc(x.cc)}" aria-pressed="${st.cc === x.cc}">
+      <span class="rk">${String(i + 1).padStart(2, '0')}</span><span class="fl">${flag(x.cc)}</span>
+      <span class="mid"><span class="nm">${esc(x.cc === 'AE' ? 'Dubai / UAE' : land(x.cc))}<small>${esc(fmt(x.shops))} ${x.shops === 1 ? 'shop' : 'shops'} · ${esc(fmt(x.strong))} with 4+ proof</small></span><span class="bar"><i></i></span></span>
+      <span class="vv"><b>${esc(fmt(x.products))}</b><span>${esc(fmt(x.new14))} new ads</span></span></button>${rulesHtml(x)}</li>`).join('');
+  const bars = [...$('rlist').querySelectorAll('.bar i')];
+  requestAnimationFrame(() => bars.forEach((b, i) => b.style.setProperty('--w', Math.max(2, (m.markets[i].products / max) * 100) + '%')));
+  $('rall').hidden = true;
+}
 async function loadMarkets() {
+  const asked = st.scope;
   try {
-    const res = await fetch('/api/markets', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
-    if (!res.ok) return;
-    MARKETS = await res.json();
+    const res = await fetch('/api/markets' + (asked === 'world' ? '?scope=world' : ''), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    if (!res.ok || asked !== st.scope) return;
+    const got = await res.json();
+    if (asked !== st.scope) return;
+    MARKETS = got;
     radar();
   } catch (e) { /* the radar is extra: the board works without it */ }
 }
@@ -826,6 +984,7 @@ function pickMarket(cc) {
   }
 }
 $('rlist').addEventListener('click', (e) => { const b = e.target.closest('[data-cc]'); if (b) pickMarket(b.dataset.cc); });
+$('rlist').addEventListener('toggle', (e) => { const d = e.target; if (d.dataset && d.dataset.rules) { if (d.open) openRules.add(d.dataset.rules); else openRules.delete(d.dataset.rules); } }, true);
 $('hexmap').addEventListener('click', (e) => { const g = e.target.closest('[data-cc]'); if (g) pickMarket(g.dataset.cc); });
 $('hexmap').addEventListener('keydown', (e) => { const g = e.target.closest('[data-cc]'); if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pickMarket(g.dataset.cc); } });
 for (const b of document.querySelectorAll('.rtabs [data-rv]')) b.addEventListener('click', () => { store.set('wh-rv', b.dataset.rv); radar(); });
@@ -856,23 +1015,29 @@ function render(append, fresh) {
   for (const b of document.querySelectorAll('[data-view]')) b.setAttribute('aria-pressed', String(b.dataset.view === st.view));
   for (const b of document.querySelectorAll('[data-f]')) b.setAttribute('aria-pressed', String(!!st[b.dataset.f]));
   $('allrow').hidden = $('allrow2').hidden = st.view !== 'all';
+  const world = st.scope === 'world';
+  for (const b of document.querySelectorAll('[data-f]')) {
+    const f = b.dataset.f;
+    b.hidden = (f === 'r2500' || f === 'r10k') ? world : (f === 'p4' || f === 'noteu' || f === 'fresh') ? !world : false;
+  }
   $('ccChip').hidden = !st.cc;
   $('ccChip').innerHTML = st.cc ? `<b>${flag(st.cc)}</b>${esc(land(st.cc))} ✕` : '';
   $('ccChip').setAttribute('aria-label', st.cc ? `Market ${land(st.cc)}: tap to show all markets` : '');
-  const filtered = st.view === 'all' && (st.q || st.r2500 || st.r10k || st.hidden || st.cc);
+  const filtered = st.view === 'all' && (st.q || st.hidden || st.cc || (world ? st.p4 || st.noteu || st.fresh : st.r2500 || st.r10k));
   $('count').hidden = !filtered;
-  const sorted = st.cc && st.sort === 'rpd' ? `by ${st.cc} reach per day` : SORTED[st.sort] || '';
+  const sorted = world ? WSORTED[st.wsort] || '' : st.cc && st.sort === 'rpd' ? `by ${st.cc} reach per day` : SORTED[st.sort] || '';
   $('count').textContent = filtered ? `${total.toLocaleString('en-US')} ${total === 1 ? 'match' : 'matches'} · ${sorted}` : '';
   $('empty').hidden = ADS.length > 0;
-  const msg = st.view === 'starred' ? 'No starred products yet. Tap ☆ on a card to keep it here.'
-    : st.view === 'made' ? 'No ads made yet. Tap ✓ Made ad on a product and it shows here, the last one first.'
-    : filtered ? 'No products match.' : 'Nothing yet: products need a Shopify store, 75+ active ads, 7–42 days live and 500+ EU reach a day.';
+  const msg = st.view === 'made' ? 'No ads made yet. Tap ✓ Made ad on a product and it shows here, the last one first.'
+    : filtered ? 'No products match.'
+    : world ? 'Nothing yet outside the EU: the first scan has not finished. Products need a Shopify store and an ad running 7+ days.'
+    : 'Nothing yet: products need a Shopify store, 75+ active ads, 7–42 days live and 500+ EU reach a day.';
   $('empty').innerHTML = `${EMPTY_ICON}<div>${esc(msg)}</div>`;
   $('moreBtn').hidden = (st.view !== 'all' && st.view !== 'made') || ADS.length >= total;
   $('csv').href = '/export.csv?' + params().toString();
 }
 
-// ---- Inbox: every product you have not decided on, one at a time. Reject, Keep (★) or Made ad until none are left.
+// ---- Inbox: every product you have not decided on, one at a time. Reject or Made ad until none are left.
 const today = () => new Date().toLocaleDateString('sv'); // YYYY-MM-DD, this phone's day
 function cleared(add) {
   let c = {};
@@ -947,7 +1112,7 @@ function renderInbox() {
     $('zero').innerHTML = `<div class="big">🎉</div><h2>Inbox zero</h2>
       <p>${done ? `${esc(done)} cleared today` : 'Nothing left to decide'}</p>
       <p>${HUNTING ? 'Hunting now: new products are coming in' : esc(nextHunt())}</p>
-      <div class="zb">${STARS ? `<button class="kept" data-go="starred">★ ${esc(STARS)} kept → make ads</button>` : ''}<button data-go="all">Browse all</button></div>`;
+      <div class="zb"><button data-go="all">Browse all</button></div>`;
     return;
   }
   $('grid').innerHTML = card(a, true);
@@ -968,7 +1133,7 @@ async function decide(kind, dir) {
   if (c && !calm) {
     const dx = dir != null ? dir : kind === 'seen' ? 1 : kind === 'rejected' ? -1 : 0;
     c.classList.remove('drag');
-    c.style.transform = `translate(${dx * 120}%, ${kind === 'keep' ? '-60px' : '0'}) rotate(${dx * 10}deg)`;
+    c.style.transform = `translate(${dx * 120}%, 0) rotate(${dx * 10}deg)`;
     c.style.opacity = '0';
     await sleep(170);
   }
@@ -976,10 +1141,10 @@ async function decide(kind, dir) {
   ADS.shift();
   total = Math.max(0, total - 1);
   if (isNew(a)) FRESH = Math.max(0, FRESH - 1);
-  if (kind === 'keep') { STARS++; $('nstar').textContent = STARS; } else $('nall').textContent = Math.max(0, (Number($('nall').textContent) || 0) - 1); // kept ones stay in Browse
+  $('nall').textContent = Math.max(0, (Number($('nall').textContent) || 0) - 1);
   cleared(1);
   marketsStale = true;
-  const saved = setStatus(a.id, kind === 'keep' ? 'starred' : kind);
+  const saved = setStatus(a.id, kind);
   if (kind === 'seen') madeOne(saved);
   LAST = { a, kind, reasons: new Set(), saved: saved.catch(() => {}) };
   renderInbox();
@@ -1037,7 +1202,7 @@ const REASON_LABELS = {
   bad: { price: 'Too expensive', saturated: 'Saturated', niche: 'Not my niche', quality: 'Looks low quality', store: 'Bad store', ship: 'Hard to ship', ad: 'Weak ad' },
   good: { wow: 'Wow product', margin: 'Good margin', ad: 'Strong ad', niche: 'My niche', easy: 'Easy to ship' },
 };
-const VERB = { seen: '✓ Made ad', keep: '★ Kept', rejected: '✗ Rejected', note: '📝 Note' };
+const VERB = { seen: '✓ Made ad', rejected: '✗ Rejected', note: '📝 Note' };
 let LAST = null; // the last decision: { a, kind, reasons, saved }
 function renderWhy() {
   const w = LAST;
@@ -1067,7 +1232,7 @@ async function undoLast() {
   if (DONE.delete(w.a.id)) cleared(-1);
   renderWhy();
   await w.saved;
-  try { await setStatus(w.a.id, w.kind === 'keep' ? 'unstarred' : 'none'); } catch (e) { /* shown by the reload */ }
+  try { await setStatus(w.a.id, 'none'); } catch (e) { /* shown by the reload */ }
   load();
 }
 $('why').addEventListener('click', (e) => {
@@ -1143,9 +1308,9 @@ $('learn').addEventListener('submit', async (e) => {
 function header(j, madeFresh = true) {
   $('nin').textContent = j.counts.inbox || '';
   $('nall').textContent = j.counts.all;
-  $('nstar').textContent = j.counts.starred || '';
+  $('nworld').textContent = j.counts.world ?? '';
+  $('neu').textContent = j.counts.eu ?? '';
   FRESH = j.counts.fresh || 0;
-  STARS = j.counts.starred || 0;
   if (madeFresh && !PENDING_MADE) setMade(j.counts.made || 0);
   const al = j.alert;
   $('alert').hidden = !al;
@@ -1154,6 +1319,19 @@ function header(j, madeFresh = true) {
   const r = j.last_run;
   const box = $('runbox');
   HUNTING = !!r && r.status === 'running';
+  if (st.scope === 'world') {
+    const w = j.world_run;
+    if (!w) { box.className = 'status'; $('run').textContent = 'No scan outside the EU yet'; return; }
+    if (w.status === 'running') {
+      const still = Date.now() - Date.parse(w.updated_at || w.started_at) > 45 * 60000;
+      box.className = 'status ' + (still ? 'warn' : 'live');
+      $('run').textContent = still ? `Scan stuck? Started ${ago(w.started_at)} · no progress for ${ago(w.updated_at || w.started_at).replace(' ago', '')}` : `Scanning now · started ${ago(w.started_at)} · ${fmt(w.ads)} ads so far`;
+      return;
+    }
+    box.className = 'status ' + (w.health === 'failed' ? 'bad' : w.health === 'warning' ? 'warn' : 'ok');
+    $('run').innerHTML = `Last scan <b>${esc(ago(w.finished_at))}</b> · ${esc(fmt(w.ads))} ads outside the EU · <b>${esc(fmt(w.new_products ?? 0))}</b> new products${w.blocked ? ` · ${esc(w.blocked)} searches refused` : ''}`;
+    return;
+  }
   if (!r) { box.className = 'status'; $('run').textContent = 'No run yet'; return; }
   if (r.status === 'running') {
     // last_run is saved after every batch: no update for 45 minutes is a run that does not move.
@@ -1256,7 +1434,7 @@ $('undo').addEventListener('click', async () => {
   loadMarkets();
 });
 
-// A product decided in the Inbox on this phone that is undecided again (removed from ✓, unhidden, unstarred):
+// A product decided in the Inbox on this phone that is undecided again (removed from ✓, unhidden):
 // back in the Inbox without a reload, and its Why? strip goes.
 function forget(id) {
   if (DONE.delete(id)) cleared(-1);
@@ -1273,16 +1451,6 @@ $('grid').addEventListener('click', async (e) => {
     const act = b.dataset.act;
     if (act === 'view') { openAd(a); return; }
     try {
-      if (act === 'star') {
-        await setStatus(id, a.star ? 'unstarred' : 'starred');
-        a.star = !a.star;
-        b.setAttribute('aria-pressed', String(a.star));
-        const n = Math.max(0, (Number($('nstar').textContent) || 0) + (a.star ? 1 : -1));
-        $('nstar').textContent = n || '';
-        if (!a.star) forget(id);
-        if (st.view === 'starred' && !a.star) load();
-        return;
-      }
       if (b.dataset.confirm && !b.dataset.sure) { // a second tap, so a slip never wipes the day and the reasons
         b.dataset.sure = '1';
         b.textContent = 'Tap again to remove';
@@ -1391,7 +1559,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !$('sheet').hidden) closeAd();
   // "/" jumps to the search (not while typing somewhere)
   if (e.key === '/' && $('sheet').hidden && st.view === 'all' && !e.target.closest('input, select, textarea')) { e.preventDefault(); $('q').focus(); }
-  // Inbox: R / ← reject, K / ↑ keep, D / → made ad, Enter or V: the ad in the Facebook Ad Library
+  // Inbox: R / ← reject, D / → made ad, Enter or V: the ad in the Facebook Ad Library
   if (st.view !== 'inbox' || !$('sheet').hidden || e.metaKey || e.ctrlKey || e.altKey || e.target.closest('input, select, textarea')) return;
   if (LAST && /^[1-9]$/.test(e.key)) {
     const k = Object.keys(REASON_LABELS[LAST.kind === 'rejected' ? 'bad' : 'good'])[Number(e.key) - 1];
@@ -1399,7 +1567,7 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (e.key.toLowerCase() === 'n' && ADS[0]) { e.preventDefault(); $('pn').focus(); return; }
-  const kind = { r: 'rejected', ArrowLeft: 'rejected', k: 'keep', ArrowUp: 'keep', d: 'seen', ArrowRight: 'seen' }[e.key.length === 1 ? e.key.toLowerCase() : e.key];
+  const kind = { r: 'rejected', ArrowLeft: 'rejected', d: 'seen', ArrowRight: 'seen' }[e.key.length === 1 ? e.key.toLowerCase() : e.key];
   if (kind) { e.preventDefault(); decide(kind); return; }
   if ((e.key === 'Enter' || e.key.toLowerCase() === 'v') && ADS[0] && !e.target.closest('a, button')) { e.preventDefault(); if (safe(ADS[0].ad)) window.open(ADS[0].ad, '_blank', 'noopener'); }
 });
@@ -1445,7 +1613,34 @@ for (const b of document.querySelectorAll('[data-f]')) {
 }
 let qTimer = 0;
 $('q').addEventListener('input', (e) => { clearTimeout(qTimer); qTimer = setTimeout(() => { st.q = e.target.value.trim(); load(); }, 300); });
-$('sort').addEventListener('change', (e) => { st.sort = e.target.value; load(); });
+$('sort').addEventListener('change', (e) => { if (st.scope === 'world') st.wsort = e.target.value; else st.sort = e.target.value; load(); });
+function sortOptions() {
+  const world = st.scope === 'world';
+  const labels = world ? WSORT_LABEL : ESORT_LABEL;
+  $('sort').innerHTML = Object.entries(labels).map(([k, t]) => `<option value="${k}">${esc(t)}</option>`).join('');
+  $('sort').value = world ? st.wsort : st.sort;
+}
+function goScope(s) {
+  if (st.scope === s) return;
+  st.scope = s;
+  store.set('wh-scope', s);
+  st.cc = '';
+  st.view = s === 'world' ? 'all' : 'inbox';
+  ADS = [];
+  MARKETS = null;
+  shownTop = '';
+  for (const b of document.querySelectorAll('[data-scope]')) b.setAttribute('aria-pressed', String(b.dataset.scope === s));
+  sortOptions();
+  radar();
+  load();
+  loadMarkets();
+  window.scrollTo({ top: 0 });
+}
+for (const b of document.querySelectorAll('[data-scope]')) {
+  b.setAttribute('aria-pressed', String(b.dataset.scope === st.scope));
+  b.addEventListener('click', () => goScope(b.dataset.scope));
+}
+sortOptions();
 const more = () => { if (loading || $('moreBtn').hidden) return; st.offset = ADS.length; load(true); };
 $('moreBtn').addEventListener('click', more);
 // Endless scroll: the next page loads before you reach the end.

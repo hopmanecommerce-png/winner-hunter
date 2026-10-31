@@ -11,6 +11,7 @@ on:
     paths:
       - 'winner-hunter/worker/**'
       - 'winner-hunter/bestsellers.mjs'
+      - 'winner-hunter/world.mjs'
       - 'winner-hunter/lib/**'
       - '.github/workflows/preview-board.yml'
   workflow_dispatch:
@@ -25,7 +26,7 @@ concurrency:
 jobs:
   preview:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
@@ -53,6 +54,16 @@ jobs:
       - name: Store best sellers
         continue-on-error: true
         run: node winner-hunter/bestsellers.mjs
+
+      # A small hunt outside the EU, so the test link has products there before the first daily run. Only the world_*
+      # tables and state keys world_run / world_cursor change; the live board does not read them until this is merged.
+      - name: Hunt outside the EU
+        continue-on-error: true
+        env:
+          META_TOKEN: ${{ secrets.META_TOKEN }}
+          WORLD_MINUTES: '10'
+          WORLD_PAGES: '20'
+        run: node winner-hunter/world.mjs
 
       - name: Worker packages
         working-directory: winner-hunter/worker

@@ -1,0 +1,60 @@
+# The hunt outside the EU: every day the next keywords in every market of lib/world.mjs (Switzerland, Norway, Australia,
+# New Zealand, the UAE, the US, Canada and ten more), through the public Ad Library (Meta's API has no shop ads for these markets). No login. Writes only the
+# world_* tables and the store signals; the board shows the result under 🌍 Outside EU.
+# Run it by hand: Actions → World Hunter → Run workflow.
+# Secrets: CF_API_TOKEN, CF_ACCOUNT_ID. META_TOKEN is optional: it answers "does this shop run ads in the EU at all?".
+name: World Hunter
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: 'Minutes the hunt may take (it stops in time and keeps what it found)'
+        required: false
+        default: '120'
+      pages:
+        description: 'At most this many shop pages to count per run'
+        required: false
+        default: '80'
+  schedule:
+    - cron: '37 11 * * *' # every day; the EU hunt runs in the morning and uses Meta's API, this one does not compete with it
+
+permissions:
+  contents: read
+
+concurrency:
+  group: world-hunter
+  cancel-in-progress: false
+
+jobs:
+  hunt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID || '8934aca9-51d3-4f87-9c62-e897843149a1' }}
+      META_TOKEN: ${{ secrets.META_TOKEN }}
+      WORLD_MINUTES: ${{ inputs.minutes || '120' }}
+      WORLD_PAGES: ${{ inputs.pages || '80' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Database tables
+        run: node winner-hunter/migrate.mjs
+
+      # The Ad Library page only answers a real browser: the runner's Google Chrome.
+      - name: Install Playwright
+        working-directory: winner-hunter
+        run: npm install --no-save --no-package-lock playwright-core@1.56.1
+
+      - name: Hunt outside the EU
+        run: node winner-hunter/world.mjs
+
+      # Each new product's rank in its store's best-seller list and the store's Trustpilot. Also after a red hunt.
+      - name: Store signals
+        if: ${{ !cancelled() }}
+        run: node winner-hunter/bestsellers.mjs

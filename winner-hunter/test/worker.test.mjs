@@ -94,7 +94,7 @@ test('/api/ads: All is the default view (no Top 20): ads that pass the rules, on
   assert.ok(!ids.includes('9100'), 'second ad of the same product collapsed');
   assert.ok(!ids.includes('9300'), 'too young');
   assert.ok(!ids.includes('9200'), '272 reach a day');
-  assert.deepStrictEqual(Object.keys(j.counts), ['all', 'inbox', 'fresh', 'starred', 'made', 'hidden']);
+  assert.deepStrictEqual(Object.keys(j.counts), ['all', 'inbox', 'fresh', 'starred', 'made', 'hidden', 'world', 'eu']);
   assert.strictEqual(j.counts.inbox, 27, 'nothing decided yet: everything is in the inbox');
   assert.strictEqual(j.counts.all, 27);
   assert.strictEqual(j.last_run.new_winners, 23);
@@ -226,7 +226,7 @@ test('/api/ads?view=made: every product marked ✓ Made ad, the last one first, 
   assert.match(csv.headers.get('content-disposition'), /winners-made-/);
   const rows = (await csv.text()).trim().split('\r\n');
   assert.strictEqual(rows.length, 4, 'header + 3');
-  assert.ok(rows[0].endsWith(',status,made_at') && rows[1].endsWith(',seen,' + new Date(NOW).toISOString()), 'with the day you made it');
+  assert.ok(rows[0].includes(',status,made_at,') && rows[1].includes(',seen,' + new Date(NOW).toISOString() + ','), 'with the day you made it');
   // Undo takes it off ✓
   assert.strictEqual((await s.post('/api/hide', { ad_id: '9003', status: 'none' })).status, 200);
   const after = await made();
@@ -414,7 +414,7 @@ test('CSV export: header, quotes, commas, newlines and formulas made harmless', 
   assert.match(res.headers.get('content-disposition'), /^attachment; filename="winners-all-2026-10-17\.csv"$/);
   const csv = await res.text();
   const [head] = csv.split('\r\n');
-  assert.strictEqual(head, 'ad_id,product,price,compare_at,currency,discount_pct,reach_eu,reach_per_day,ad_age_days,active_ads,ads_for_product,store_products,advertiser,store_url,product_url,ad_library_url,image_url,keyword,first_seen,last_seen,status,made_at');
+  assert.strictEqual(head, 'ad_id,product,price,compare_at,currency,discount_pct,reach_eu,reach_per_day,ad_age_days,active_ads,ads_for_product,store_products,advertiser,store_url,product_url,ad_library_url,image_url,keyword,first_seen,last_seen,status,made_at,proof_signals,markets_outside_eu,new_ads_14d,in_eu,eu_reach_per_day_product,eu_reach_per_day_shop_best_ad');
   assert.strictEqual(csv.trim().split('\r\n').length, 28, 'header + the 27 that pass the rules');
   for (const out of ['9200', '9300', '9600', '9700', '9800', '9900']) assert.ok(!csv.includes(out + ','), out + ' fails a rule');
   assert.ok(csv.includes(`"'=HYPERLINK(""http://evil.test"",""x"") <img src=x onerror=alert(1)>, ""quoted""\nline2"`));
@@ -482,7 +482,7 @@ test('no ad text on the cards (the ad itself is one tap away); every card has a 
   const me = await loggedIn(env);
   assert.strictEqual((await me.get('/ad/1234567890')).status, 404);
   assert.doesNotMatch(HTML, /class="copy"|a\.copy/, 'no ad text on the cards');
-  assert.strictEqual(HTML.match(/class="view"[^>]*aria-label="View ad"/g).length, 2, 'button (viewer on) and link (viewer off)');
+  assert.strictEqual(HTML.match(/class="view"[^>]*aria-label="View ad"/g).length, 3, 'EU card: button (viewer on) and link (viewer off); outside-EU card: link');
 });
 
 // ---- The ad viewer: GET /api/ad/:id
