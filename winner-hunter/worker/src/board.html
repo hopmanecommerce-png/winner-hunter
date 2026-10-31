@@ -474,6 +474,7 @@
   .rt.estimate { color: var(--cy); border-color: rgba(46, 230, 255, .4); }
   .rt.unverified { color: var(--amb); border-color: rgba(255, 201, 77, .45); }
   .tag.noteu { background: rgba(61, 255, 176, .16); color: var(--win); border-color: rgba(61, 255, 176, .4); }
+  .meta.w6 { row-gap: 8px; }
   .meta .m.yes b { color: var(--win); }
   .meta .m.idk b { color: var(--faint); }
   .proofl { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; font: 500 11px/1.35 var(--mono); color: var(--muted); }
@@ -494,7 +495,7 @@
   <div class="alert" id="alert" role="alert" hidden></div>
   <header class="top">
     <span class="orb" aria-hidden="true"></span>
-    <div class="brand"><span class="kick">EU ad intelligence</span><h1>Winner Hunter</h1></div>
+    <div class="brand"><span class="kick">Ad intelligence</span><h1>Winner Hunter</h1></div>
     <div class="tools">
       <a class="ic" id="csv" href="/export.csv?view=all" download title="Export this view as CSV"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>CSV</a>
       <a class="ic" href="/logout" title="Log out" aria-label="Log out"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3M10 16l-4-4 4-4M6 12h10"/></svg></a>
@@ -749,12 +750,12 @@ function worldCard(a, inbox) {
       <h2 class="t">${esc(nice(a))}</h2>
       ${price}
       ${flags}
-      <div class="meta">
+      <div class="meta w6">
         ${worldStat(a, 'days', (a.age ?? '–') + 'd', 'oldest ad')}
         ${worldStat(a, 'ads', fmt(a.scaled || 1), 'ads')}
-        ${worldStat(a, 'markets', w.markets.length, 'markets')}
+        ${worldStat(a, 'markets', w.markets.length, 'mkts')}
         ${worldStat(a, 'shop', a.ads == null ? '?' : fmt(a.ads), 'shop ads')}
-        ${worldStat(a, 'best', rank, 'store rank')}
+        ${worldStat(a, 'best', rank, 'rank')}
         ${worldStat(a, 'trust', trust == null ? '?' : fmt(trust), 'reviews')}
       </div>
       <div class="who">${esc(host(a.store) || a.adv)}${a.products != null ? ' · ' + esc(fmt(a.products)) + ' products' : ''}</div>

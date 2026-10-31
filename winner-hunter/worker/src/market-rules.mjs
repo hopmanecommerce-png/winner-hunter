@@ -1,6 +1,6 @@
 // The rules for selling into each market outside the EU, shown under that country on the board. General research, not
-// legal advice. Source: research/2026-10-31-market-rules in the product-research repo (README.md has the detail and every
-// source). Each item says how far it was checked: fact, estimate or unverified. Check again before relying on one.
+// legal advice. Source: research/2026-10-31-market-rules in the product-research repo (README.md and extra-countries.md have the
+// detail and every source). Each item says how far it was checked: fact, estimate or unverified. Check again before relying on one.
 export const MARKET_RULES = {
   "as_of": "2026-10-31",
   "note": "General research, not legal advice.",
@@ -484,6 +484,624 @@ export const MARKET_RULES = {
           "text": "FCC supplier declaration (SDoC) needs a responsible party located in the US. Affects electronics using that route.",
           "status": "fact",
           "source": "https://www.law.cornell.edu/cfr/text/47/2.1077",
+          "checked": "2026-10-31"
+        }
+      ]
+    },
+    "SG": {
+      "short": "GST 9%, register above S$1M global + S$100k SG. To S$400 by air: no GST at the door.",
+      "items": [
+        {
+          "k": "tax",
+          "label": "Tax",
+          "text": "GST 9%. Overseas sellers register above S$1M global and S$100,000 Singapore consumer sales a year. No local agent mentioned.",
+          "status": "fact",
+          "source": "https://www.iras.gov.sg/taxes/goods-services-tax-(gst)/gst-and-digital-economy/overseas-businesses",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "customs",
+          "label": "Customs",
+          "text": "Air up to S$400 with freight and insurance: GST relief. Post not clearly stated. Duty only on liquor, tobacco, cars, petrol.",
+          "status": "fact",
+          "source": "https://customs.gov.sg/businesses/customs-schemes-licences-framework/iras-schemes/overseas-vendor-registration-regime/",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "safety",
+          "label": "Safety",
+          "text": "SAFETY Mark on controlled goods, incl. AC adaptors and plugs. Extra rules for toys, childcare items and power banks.",
+          "status": "fact",
+          "source": "https://www.consumerproductsafety.gov.sg/about/faqs/for-suppliers/",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "labels",
+          "label": "Labels",
+          "text": "Cosmetics: label details in English, with the party placing them on the market. No general language rule found.",
+          "status": "fact",
+          "source": "https://www.hsa.gov.sg/cosmetic-products/overview/",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "claims",
+          "label": "Claims",
+          "text": "Specific medical claims can make a product a medical device: licence, usually registration. Advertiser is responsible.",
+          "status": "fact",
+          "source": "https://www.hsa.gov.sg/medical-devices/regulatory-overview",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "returns",
+          "label": "Returns",
+          "text": "Defect within 6 months presumed present at delivery. Repair or replace, then price cut or refund. Not for change of mind.",
+          "status": "fact",
+          "source": "https://www.meti.gov.sg/resources/laws-and-regulations/general-advisory-on-amendments-to-the-consumer-protection-fair-trading-act-and-hire-purchase-act",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "pricing",
+          "label": "Pricing",
+          "text": "Mandatory charges belong in the headline price. Discounts and strikethroughs must be genuine. Applies online.",
+          "status": "fact",
+          "source": "https://www.ccs.gov.sg/consumer-protection/legislation-and-guidelines/guidelines-on-price-transparency/",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "blocker",
+          "label": "Blocker",
+          "text": "One party in the chain must register controlled goods. Portal uses ACRA company data; local entity implied, not stated.",
+          "status": "unverified",
+          "source": "https://www.consumerproductsafety.gov.sg/about/faqs/for-suppliers/",
+          "checked": "2026-10-31"
+        }
+      ]
+    },
+    "JE": {
+      "short": "GST 5%, register above £300k. Under £60 with shipping: usually nothing at the door.",
+      "items": [
+        {
+          "k": "tax",
+          "label": "Tax",
+          "text": "GST 5%. Overseas retailers register above £300,000 Jersey sales in 12 months. No local representative mentioned.",
+          "status": "fact",
+          "source": "https://www.gov.je/TaxesMoney/GST/Businesses/Industry/Pages/OverseasRetailersGST.aspx",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "customs",
+          "label": "Customs",
+          "text": "Personal parcels under £60 with shipping usually pay no GST or duty. From £60: 5% GST, paid before delivery.",
+          "status": "fact",
+          "source": "https://www.jerseypost.com/letters-and-parcels/receiving/customs-when-receiving/",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "safety",
+          "label": "Safety",
+          "text": "Distributors and producers answer for the safety of goods. Trading Standards can issue safety notices.",
+          "status": "fact",
+          "source": "https://gov.je/Industry/BusinessAdviceHub/TradeSell/Pages/SellingRules.aspx",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "claims",
+          "label": "Claims",
+          "text": "Falsely claiming a product cures illness, dysfunction or malformation is banned outright.",
+          "status": "fact",
+          "source": "https://www.gov.je/StayingSafe/ConsumerProtection/ShoppersRights/Pages/UnfairCommercialPractices.aspx",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "returns",
+          "label": "Returns",
+          "text": "Cancel up to 7 working days after delivery, refund within 30 days. Law text names no rule for sellers outside Jersey.",
+          "status": "fact",
+          "source": "https://www.jerseylaw.je/laws/current/l_37_2007",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "pricing",
+          "label": "Pricing",
+          "text": "Bait pricing and false time-limited offers are banned. Price with all taxes and delivery cost must be given before sale.",
+          "status": "fact",
+          "source": "https://www.gov.je/StayingSafe/ConsumerProtection/ShoppersRights/Pages/UnfairCommercialPractices.aspx",
+          "checked": "2026-10-31"
+        }
+      ]
+    },
+    "HK": {
+      "short": "No VAT, no tariff on ordinary goods: nothing to register for or pay at the door.",
+      "items": [
+        {
+          "k": "tax",
+          "label": "Tax",
+          "text": "No value added or general services tax, so nothing to register for.",
+          "status": "fact",
+          "source": "https://www.customs.gov.hk/en/service-enforcement-information/cargo-clearance/index.html",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "customs",
+          "label": "Customs",
+          "text": "No customs tariff, quota or surcharge on imports of ordinary goods.",
+          "status": "fact",
+          "source": "https://www.customs.gov.hk/en/service-enforcement-information/cargo-clearance/index.html",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "safety",
+          "label": "Safety",
+          "text": "Makers, importers and suppliers must keep goods reasonably safe. Toys and listed child goods have set standards.",
+          "status": "fact",
+          "source": "https://www.cedb.gov.hk/en/policies/consumer-protection.html",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "labels",
+          "label": "Labels",
+          "text": "Cautionary notices on packs or labels must be in English and Chinese. Also for toys and listed child goods.",
+          "status": "fact",
+          "source": "https://www.cedb.gov.hk/en/policies/consumer-protection.html",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "claims",
+          "label": "Claims",
+          "text": "Ads can't claim a medicine, surgical appliance or treatment cures or prevents scheduled diseases. Schedule not read.",
+          "status": "fact",
+          "source": "https://www.cmro.gov.hk/files/en/whats_new/letter_trader/2012/Commencement_of_the_Undesirable_Medical_Advertisements_Amendment_Ordinance_2005_Eng.pdf",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "returns",
+          "label": "Returns",
+          "text": "Government's 2020 answer: no statutory cooling-off for online shopping, none planned. Nothing newer checked.",
+          "status": "fact",
+          "source": "https://www.info.gov.hk/gia/general/202006/03/P2020060300290.htm",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "pricing",
+          "label": "Pricing",
+          "text": "False descriptions, misleading omissions, bait advertising and wrongly taking payment are banned practices.",
+          "status": "fact",
+          "source": "https://www.cedb.gov.hk/en/policies/consumer-protection.html",
+          "checked": "2026-10-31"
+        }
+      ]
+    },
+    "MO": {
+      "short": "No VAT and no duty on ordinary goods (PwC, secondary). Postal fee not confirmed.",
+      "items": [
+        {
+          "k": "tax",
+          "label": "Tax",
+          "text": "No VAT regime, so nothing to register for. PwC, secondary; no official tax page opened.",
+          "status": "fact",
+          "source": "https://taxsummaries.pwc.com/macau-sar/corporate/other-taxes",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "customs",
+          "label": "Customs",
+          "text": "No duty except tobacco and spirits (PwC). Macau Post: recipient shows any permit required by law. No fee stated.",
+          "status": "fact",
+          "source": "https://www.ctt.gov.mo/MacauPost/Contents/Prohibited.aspx?lang=en-us",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "safety",
+          "label": "Safety",
+          "text": "Right to goods meeting health and safety criteria. No approval scheme found. Gazette would not load; law firm note.",
+          "status": "unverified",
+          "source": "https://conventuslaw.com/report/china-protection-of-consumer-rights-and-interests/",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "labels",
+          "label": "Labels",
+          "text": "Info in Chinese and Portuguese, or Chinese and English if imported. Gazette would not load; law firm note.",
+          "status": "unverified",
+          "source": "https://conventuslaw.com/report/china-protection-of-consumer-rights-and-interests/",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "returns",
+          "label": "Returns",
+          "text": "7-day cancel on distance sales, 1 year on defects, only if the seller operates in Macau. Gazette would not load; IFLR 2021.",
+          "status": "unverified",
+          "source": "https://www.iflr.com/article/2a63733ixysbvclr1awj9/new-regime-for-the-protection-of-consumer-rights-and-interests-in-macau-sar",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "pricing",
+          "label": "Pricing",
+          "text": "Price and payment terms are required information. No discount rule found. Gazette would not load; law firm note.",
+          "status": "unverified",
+          "source": "https://conventuslaw.com/report/china-protection-of-consumer-rights-and-interests/",
+          "checked": "2026-10-31"
+        }
+      ]
+    },
+    "JP": {
+      "short": "Consumption tax 10%. Customs value to ¥10,000: no duty or tax at the door.",
+      "items": [
+        {
+          "k": "tax",
+          "label": "Tax",
+          "text": "Consumption tax 10%. ¥10M is the general threshold. Whether a seller shipping from abroad must register: not confirmed.",
+          "status": "fact",
+          "source": "https://www.nta.go.jp/english/taxes/consumption_tax/01.htm",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "customs",
+          "label": "Customs",
+          "text": "Customs value of ¥10,000 or less: no duty or consumption tax. How that value is worked out: not checked.",
+          "status": "fact",
+          "source": "https://www.customs.go.jp/english/c-answer_e/imtsukan/1006_e.htm",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "safety",
+          "label": "Safety",
+          "text": "PSE on listed electrical goods, incl. mobile batteries. Child PSC mark on baby beds and baby toys.",
+          "status": "fact",
+          "source": "https://www.meti.go.jp/policy/consumer/seian/shouan/contents/guideline_en.pdf",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "labels",
+          "label": "Labels",
+          "text": "Quality labels under the Household Goods Act for textiles, plastics, electrics and others. Japanese wording not confirmed.",
+          "status": "fact",
+          "source": "https://www.japaneselawtranslation.go.jp/en/laws/view/3935",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "claims",
+          "label": "Claims",
+          "text": "PMD Act Art. 68 bars advertising the efficacy of a device without approval. Which goods count: not checked. Law firm note.",
+          "status": "fact",
+          "source": "https://monolith.law/en/general-corporate/medical-supplies-law",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "returns",
+          "label": "Returns",
+          "text": "Buyer can cancel within 8 days of delivery and pays return post, unless the ad shows other return terms.",
+          "status": "fact",
+          "source": "https://www.no-trouble.caa.go.jp/what/mailorder/",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "pricing",
+          "label": "Pricing",
+          "text": "A comparison price that is false, vague or not recently charged can mislead. Mail-order price must show shipping.",
+          "status": "fact",
+          "source": "https://www.caa.go.jp/policies/policy/representation/fair_labeling/representation_regulation/double_price",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "blocker",
+          "label": "Blocker",
+          "text": "Selling covered goods direct: notify, and appoint a domestic administrator in Japan. In force 25 Dec 2025 (METI).",
+          "status": "fact",
+          "source": "https://www.meti.go.jp/policy/consumer/seian/shouan/contents/guideline_en.pdf",
+          "checked": "2026-10-31"
+        }
+      ]
+    },
+    "KR": {
+      "short": "VAT 10%. Personal goods to $150 with shipping: no duty or VAT. Buyer gives a code.",
+      "items": [
+        {
+          "k": "tax",
+          "label": "Tax",
+          "text": "VAT 10% (PwC, secondary). Seller registration for goods shipped from abroad: not found.",
+          "status": "fact",
+          "source": "https://taxsummaries.pwc.com/republic-of-korea/corporate/other-taxes",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "customs",
+          "label": "Customs",
+          "text": "Personal goods up to $150 with shipping: no duty or VAT. Buyer must give a personal clearance code.",
+          "status": "fact",
+          "source": "https://www.customs.go.kr/english/cm/cntnts/cntntsView.do?mi=8058&cntntsId=2734",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "safety",
+          "label": "Safety",
+          "text": "KC mark run by KATS. 2024 ban on uncertified direct imports scrapped; 80 item types checked instead. Current state not read.",
+          "status": "fact",
+          "source": "https://www.kedglobal.com/newsView/ked202405190002",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "labels",
+          "label": "Labels",
+          "text": "Commercial shipments need origin marks and Korean labels (US guide, 2026). Direct-to-buyer case not addressed.",
+          "status": "fact",
+          "source": "https://www.trade.gov/country-commercial-guides/south-korea-labelingmarking-requirements",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "claims",
+          "label": "Claims",
+          "text": "Advertising a general product as having medical-device effect: up to 3 years or KRW 30M (news, Jul 2026).",
+          "status": "fact",
+          "source": "https://en.nocutnews.co.kr/news/6544035",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "returns",
+          "label": "Returns",
+          "text": "E-Commerce Act: full refund if withdrawn within 7 days (news on a 2026 court case). Foreign store reach not confirmed.",
+          "status": "fact",
+          "source": "https://mbiz.heraldcorp.com/article/10811430",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "pricing",
+          "label": "Pricing",
+          "text": "KFTC fined Temu KRW 358M in 2025 over a false countdown and unclear free offers. False-discount rule text not found.",
+          "status": "fact",
+          "source": "https://www.legal500.com/intelligence/south-korea/media-telecoms-it-entertainment/kftc-sanctions-temu-for-violations-of-advertising-and-e-commerce-regulations",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "blocker",
+          "label": "Blocker",
+          "text": "Domestic agent from 21 Jan 2027: KRW 1tn sales, 1M users or KFTC request. Draft figures; final decree not read.",
+          "status": "unverified",
+          "source": "https://www.hwawoo.com/eng/insights/newsletter/2658",
+          "checked": "2026-10-31"
+        }
+      ]
+    },
+    "MY": {
+      "short": "Sales tax 10%, register above RM500k. Air courier to RM500: exempt at the door.",
+      "items": [
+        {
+          "k": "tax",
+          "label": "Tax",
+          "text": "Low-value goods tax 10%. Sellers inside or outside Malaysia register above RM500,000 in 12 months. No rep mentioned.",
+          "status": "fact",
+          "source": "https://mylvg.customs.gov.my/FAQ",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "customs",
+          "label": "Customs",
+          "text": "Air courier parcel up to RM500 with shipping keeps its duty and tax exemption. Postal route not confirmed.",
+          "status": "fact",
+          "source": "https://mylvg.customs.gov.my/FAQ",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "safety",
+          "label": "Safety",
+          "text": "Listed electrical goods need Energy Commission approval with a lab test report, and the ST-SIRIM label.",
+          "status": "fact",
+          "source": "https://www.st.gov.my/how-do-i-apply-certificate-approval-coa",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "claims",
+          "label": "Claims",
+          "text": "Act 737 sets registration of medical devices. Where beauty, pain or posture goods fall: not found.",
+          "status": "fact",
+          "source": "https://portal.mda.gov.my/introduction/background.html",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "returns",
+          "label": "Returns",
+          "text": "Consumer Protection Act has covered electronic trade since 2007. Online cooling-off not found. Law firm note, 2022.",
+          "status": "fact",
+          "source": "https://mahwengkwai.com/e-commerce-laws-regulations-malaysia/",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "pricing",
+          "label": "Pricing",
+          "text": "Online sellers must show total price with transport and tax, plus business details. Law firm note, 2022.",
+          "status": "fact",
+          "source": "https://mahwengkwai.com/e-commerce-laws-regulations-malaysia/",
+          "checked": "2026-10-31"
+        }
+      ]
+    },
+    "TW": {
+      "short": "Tax 5%. Customs value to NT$2,000: no duty or tax. China-goods limit unresolved.",
+      "items": [
+        {
+          "k": "tax",
+          "label": "Tax",
+          "text": "Import business tax 5%. Seller registration rule for physical goods: not found.",
+          "status": "fact",
+          "source": "https://www.etax.nat.gov.tw/etwmain/tax-info/network-transaction-taxtation-area/seller/import-notice",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "customs",
+          "label": "Customs",
+          "text": "Customs value to NT$2,000: no duty or tax. After 6 exempt parcels in a half year, the exemption stops for that buyer.",
+          "status": "fact",
+          "source": "https://www.etax.nat.gov.tw/etwmain/tax-info/network-transaction-taxtation-area/consumer/oversea-online-shopping-notice",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "safety",
+          "label": "Safety",
+          "text": "Listed goods must pass BSMI inspection before entry. Parcels of listed goods follow those rules too.",
+          "status": "fact",
+          "source": "https://www.trade.gov/country-commercial-guides/taiwan-standards-trade",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "labels",
+          "label": "Labels",
+          "text": "Imported goods need labels and instructions in Mandarin, no less complete than at origin (Art. 24).",
+          "status": "fact",
+          "source": "https://law.moj.gov.tw/ENG/LawClass/LawAll.aspx?pcode=J0170001",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "claims",
+          "label": "Claims",
+          "text": "Non-devices can't promote therapeutic effects (Art. 46). Fine NT$600,000 to NT$25M (Art. 65).",
+          "status": "fact",
+          "source": "https://law.moj.gov.tw/ENG/LawClass/LawAll.aspx?pcode=L0030106",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "returns",
+          "label": "Returns",
+          "text": "Distance sales: return within 7 days of receipt, no reason needed; some exceptions. Foreign seller reach not confirmed.",
+          "status": "fact",
+          "source": "https://law.moj.gov.tw/ENG/LawClass/LawAll.aspx?pcode=J0170001",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "pricing",
+          "label": "Pricing",
+          "text": "False or misleading ads on price are banned (Fair Trade Act Art. 21).",
+          "status": "fact",
+          "source": "https://law.moj.gov.tw/ENG/LawClass/LawAll.aspx?pcode=J0150002",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "blocker",
+          "label": "Blocker",
+          "text": "Australia Post lists mainland China goods as banned by post. MOEA rule returned 403, so scope is unknown.",
+          "status": "unverified",
+          "source": "https://auspost.com.au/sending/parcels-overseas/international-post-guide/results/taiwan",
+          "checked": "2026-10-31"
+        }
+      ]
+    },
+    "IL": {
+      "short": "VAT 18%. To $75: no VAT or duty at the door (news; gov.il blocked). Hebrew labels.",
+      "items": [
+        {
+          "k": "tax",
+          "label": "Tax",
+          "text": "VAT 18% (PwC, secondary). Seller registration for goods from abroad not found. gov.il returned 403.",
+          "status": "unverified",
+          "source": "https://taxsummaries.pwc.com/israel/corporate/other-taxes",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "customs",
+          "label": "Customs",
+          "text": "Tax-free limit back to $75 after Knesset vote, 2 Jun 2026 (news). gov.il returned 403; some guides still say $150.",
+          "status": "unverified",
+          "source": "https://www.timesofisrael.com/knesset-revokes-smotrichs-order-expanding-personal-import-tax-exemption-to-130/amp/",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "safety",
+          "label": "Safety",
+          "text": "Some standards mandatory. High-risk electrical goods and toys need Israeli lab tests. Direct-to-buyer not addressed.",
+          "status": "fact",
+          "source": "https://www.trade.gov/country-commercial-guides/israel-trade-standards",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "labels",
+          "label": "Labels",
+          "text": "Goods marking must be in Hebrew unless rules say otherwise (s.17(c), law text on Wikisource).",
+          "status": "fact",
+          "source": "https://he.wikisource.org/wiki/%D7%97%D7%95%D7%A7_%D7%94%D7%92%D7%A0%D7%AA_%D7%94%D7%A6%D7%A8%D7%9B%D7%9F",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "claims",
+          "label": "Claims",
+          "text": "Misleading on a product's use, benefit or risks is banned, also in ads (s.2). Medical device law not read.",
+          "status": "fact",
+          "source": "https://he.wikisource.org/wiki/%D7%97%D7%95%D7%A7_%D7%94%D7%92%D7%A0%D7%AA_%D7%94%D7%A6%D7%A8%D7%9B%D7%9F",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "returns",
+          "label": "Returns",
+          "text": "Distance sale: cancel within 14 days of receipt. Fee up to 5% or NIS 100, the lower. Foreign seller reach not confirmed.",
+          "status": "fact",
+          "source": "https://he.wikisource.org/wiki/%D7%97%D7%95%D7%A7_%D7%94%D7%92%D7%A0%D7%AA_%D7%94%D7%A6%D7%A8%D7%9B%D7%9F",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "pricing",
+          "label": "Pricing",
+          "text": "Goods and ads show only the total price with VAT, in shekels (s.17B, 17D). Misleading on usual price is banned (s.2).",
+          "status": "fact",
+          "source": "https://he.wikisource.org/wiki/%D7%97%D7%95%D7%A7_%D7%94%D7%92%D7%A0%D7%AA_%D7%94%D7%A6%D7%A8%D7%9B%D7%9F",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "blocker",
+          "label": "Blocker",
+          "text": "Imports must show an Israeli importer's name (US guide). Direct-to-buyer not addressed; gov.il returned 403.",
+          "status": "unverified",
+          "source": "https://trade.gov/country-commercial-guides/israel-labelingmarking-requirements",
+          "checked": "2026-10-31"
+        }
+      ]
+    },
+    "LI": {
+      "short": "VAT 8.1%. Swiss duties apply. Swiss door rule assumed: about CHF 62 before charges.",
+      "items": [
+        {
+          "k": "tax",
+          "label": "Tax",
+          "text": "VAT 8.1%, Swiss VAT law, exempt below CHF 100,000 domestic turnover (PwC, secondary). Tax rep rule not confirmed.",
+          "status": "fact",
+          "source": "https://taxsummaries.pwc.com/liechtenstein/corporate/other-taxes",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "customs",
+          "label": "Customs",
+          "text": "Customs union: Swiss duties apply (PwC). My inference: Swiss CHF 5 tax rule too, so about CHF 62 is free at the door.",
+          "status": "estimate",
+          "source": "https://taxsummaries.pwc.com/liechtenstein/corporate/other-taxes",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "safety",
+          "label": "Safety",
+          "text": "EEA and Swiss rules run in parallel: goods can be sold under either. Goods barred in Switzerland can't pass on there.",
+          "status": "fact",
+          "source": "https://llv.li/en/business/safety-protection/market-monitoring/fmd-market-surveillance-and-control-system-",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "claims",
+          "label": "Claims",
+          "text": "Medical devices not fit for Switzerland: duty to warn and keep files 5 years. Claim rules for ordinary goods not found.",
+          "status": "fact",
+          "source": "https://www.llv.li/en/business/industry-professional-associations/health-professions-and-therapeutic-products/medical-devices/market-access",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "returns",
+          "label": "Returns",
+          "text": "KSchG (Mar 2026) names distance sales; warranty law dated Dec 2025. Distance withdrawal text not found, so term unknown.",
+          "status": "unverified",
+          "source": "https://www.gesetze.li/konso/pdf/2002164000",
+          "checked": "2026-10-31"
+        },
+        {
+          "k": "pricing",
+          "label": "Pricing",
+          "text": "Before binding, trader gives total price with taxes and delivery (KSchG Art. 7a). Distance cover and discount rule not found.",
+          "status": "fact",
+          "source": "https://www.gesetze.li/konso/pdf/2002164000",
           "checked": "2026-10-31"
         }
       ]

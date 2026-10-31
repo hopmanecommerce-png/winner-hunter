@@ -247,9 +247,9 @@ test('/api/ads?view=inbox: not seen, rejected or kept (★), best first; Inbox z
   await s.post('/api/hide', { ad_id: b, status: 'rejected' });
   await s.post('/api/hide', { ad_id: c, status: 'starred' });
   const after = await inbox();
-  assert.strictEqual(after.total, 24);
-  assert.ok(!after.ads.some((x) => [a, b, c].includes(x.id)), 'decided products leave the inbox');
-  assert.strictEqual(after.counts.inbox, 24);
+  assert.strictEqual(after.total, 25, 'an old star no longer keeps a product out: the board has no ★ any more');
+  assert.ok(!after.ads.some((x) => [a, b].includes(x.id)), 'decided products leave the inbox');
+  assert.strictEqual(after.counts.inbox, 25);
   assert.ok((await (await s.get('/api/ads?view=all&limit=100')).json()).ads.some((x) => x.id === c), 'a kept product is still in Browse');
   await s.post('/api/hide', { ad_id: c, status: 'unstarred' });
   assert.strictEqual((await inbox()).total, 25, 'undo Keep: back in the inbox');

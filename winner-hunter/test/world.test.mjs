@@ -4,10 +4,10 @@ import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import { d1Client, migrate } from '../lib/d1.mjs';
-import { MARKETS, LANGS, euFacts, resetCooling, parseWorldKeywords, searchesOf, libraryUrl, readLibrary, toRow, classify, checkStore, fetchProduct, suggestProduct, addUp, MIN_DAYS } from '../lib/world.mjs';
+import { MARKETS, LANGS, euFacts, sameThing, resetCooling, parseWorldKeywords, searchesOf, libraryUrl, readLibrary, toRow, classify, checkStore, fetchProduct, suggestProduct, addUp, MIN_DAYS } from '../lib/world.mjs';
 import { hunt, ADS_SQL } from '../world.mjs';
 import { openLibrary } from '../lib/adlibrary.mjs';
-import { handle, makeToken, proofOf, worldRow, worldMarketsOf, worldAlert, PROOF, WORLD_MARKETS } from '../worker/src/app.mjs';
+import { handle, makeToken, products, proofOf, worldRow, worldMarketsOf, worldAlert, PROOF, WORLD_MARKETS } from '../worker/src/app.mjs';
 import { MARKET_RULES } from '../worker/src/market-rules.mjs';
 import { d1Binding, d1Rest, memoryDb } from './helpers/sqlite-d1.mjs';
 import { seededEnv } from './helpers/seed.mjs';
@@ -71,10 +71,11 @@ test('an ad as a row: its store and product from the link; a marketplace or a st
 });
 
 test('off the board: supplements, food and drink, gymwear. The categories Connor kept stay on', () => {
-  for (const t of ['Collagen gummies', 'Daily Vitamin C', 'Kollagen Pulver', 'Protein bar box', 'Sports Gym Leggings', 'men\'s activewear', 'Creatine monohydrate powder']) assert.ok(classify(t).out, t);
-  assert.ok(classify('Creatine monohydrate powder', 'perfect for your home gym').out, 'a supplement stays out, whatever its text says');
+  for (const t of ['Collagen Capsules', 'Vitamin D3 Capsules', 'Mushroom Coffee with Collagen', 'Collagen Coffee Creamer', 'Amla Superfruit Capsules', 'Collagen gummies', 'Daily Vitamin C', 'Kollagen Pulver', 'Protein bar box', 'Sports Gym Leggings', 'men\'s activewear', 'Creatine monohydrate powder']) assert.ok(classify(t).out, t);
+  assert.ok(classify('Creatine monohydrate powder', 'home gym').out, 'a supplement stays out, whatever its labels say');
+  assert.ok(classify('Collagen Capsules', 'Skin \n face anti-aging').out, 'a tag does not excuse it');
   // Reviewed 2026-10-31: ordinary goods that a loose word match took off the board.
-  for (const [h, b] of [['Vegetable chopper', 'Chops food in seconds'], ['Dog lick mat', 'spread wet food on the mat'], ['Bike frame', 'magnesium alloy'], ['Coffee machine', 'fits all capsules'], ['Collagen face mask', ''], ['Vitamin C face serum', ''], ['Capsule wardrobe set', ''], ['Cat food bowl', '']]) {
+  for (const [h, b] of [['Vegetable chopper', 'Chops food in seconds'], ['Dog lick mat', 'spread wet food on the mat'], ['Bike frame', 'magnesium alloy'], ['Coffee machine', 'fits all capsules'], ['Collagen face mask', ''], ['Vitamin C face serum', ''], ['Capsule wardrobe set', ''], ['Coffee capsules holder', ''], ['Food Thermometer', ''], ['Food Slicer', ''], ['Silicone Lid', 'food'], ['Laundry Capsules', ''], ['Vitamin C Shower Filter', ''], ['Pill Organizer', ''], ['Shaker Bottle', ''], ['Cat food bowl', '']]) {
     assert.strictEqual(classify(h, b).out, '', h);
   }
   for (const [t, f] of [['Anti-cellulite leggings', 'Shaping or cellulite leggings'], ['Running socks 3-pack', 'Running socks'], ['Adjustable dumbbells', 'Home gym gear'], ['Grain free dog food', 'Pet food'], ['Nasal strips', 'Nose strips or sprays']]) {
@@ -95,6 +96,8 @@ test('stores and products: Shopify from meta.json, product from its JSON, prices
     return new Response('no', { status: 404 });
   };
   assert.deepStrictEqual(await checkStore('pod.test', f), { shopify: 1, host: 'pod.test', currency: 'AUD', products: 9, myshopify: 'pod.myshopify.com' });
+  const wwwOnly = async (url) => { if (new URL(url).hostname === 'www.only.test') return json({ myshopify_domain: 'o.myshopify.com', currency: 'USD' }); throw new Error('no'); };
+  assert.strictEqual((await checkStore('only.test', wwwOnly)).host, 'www.only.test', 'the address that answered');
   assert.strictEqual((await checkStore('other.test', f)).shopify, 0);
   assert.strictEqual((await checkStore('down.test', async () => { throw new Error('x'); })).shopify, null);
   const p = await fetchProduct('pod.test/products/pillow', { host: 'pod.test', currency: 'AUD' }, f);
@@ -108,6 +111,13 @@ test('stores and products: Shopify from meta.json, product from its JSON, prices
   assert.strictEqual(await suggestProduct('The pod pillow', 'pod.test', f), 'pod.test/products/pillow');
   assert.strictEqual(await suggestProduct('The pod pillow', 'pod.test', f, 'getpod.test'), 'getpod.test/products/pillow', 'known by the name the ads use');
   assert.strictEqual(await suggestProduct('Free shipping today', 'pod.test', f), '', 'a search always answers: it must be about the same thing');
+  assert.strictEqual(await suggestProduct('The pod pillow', 'pod.test', async () => new Response('', { status: 500, headers: { 'x': '1' } })), '', 'no JSON: nothing');
+  assert.strictEqual(await suggestProduct('The pod pillow', 'pod.test', async () => { throw new Error('x'); }), null, 'no answer: asked again');
+  assert.ok(sameThing('강아지 하네스 특가', '강아지 하네스'));
+  assert.ok(sameThing('犬用ハーネスが人気', '犬用ハーネス'));
+  assert.ok(sameThing('狗胸背帶特價', '狗胸背帶'));
+  assert.ok(sameThing('Dog Bed', 'Dog Bed dog bed'));
+  assert.ok(!sameThing('Snuggro Official Store', 'Snuggro Blanket snuggro blanket', 'snuggro.com'), 'the shop name proves nothing');
 });
 
 test('Shopify says too many requests: wait and ask again; still no: the store is unknown, not "not on Shopify"', async () => {
@@ -285,6 +295,30 @@ test('a run cut short while writing the board leaves the board as it was', async
   assert.strictEqual(mem.prepare('SELECT COUNT(*) AS n FROM world_products WHERE active = 1').get().n, 1);
 });
 
+test('an ad its store did not answer about is asked again next run; one it answered about is not', async () => {
+  const { client, mem } = await setup();
+  const w = fakeWorld({ 'AU|pillow': [raw('2', { days: 50, link: 'https://pod.test/', title: 'Pod Pillow Deluxe' })] });
+  let up = false;
+  let asked = 0;
+  const flaky = async (url, init) => {
+    if (/search\/suggest/.test(url)) {
+      asked++;
+      if (!up) throw new Error('down');
+      return json({ resources: { results: { products: [] } } });
+    }
+    return w.doFetch(url, init);
+  };
+  const night = (when) => hunt({ db: client, lib: w.lib, keywords: KEYWORDS.slice(0, 1), doFetch: flaky, tokens: [], ...quiet, now: () => when, maxPages: 0 });
+  await night(NOW);
+  assert.strictEqual(asked, 1);
+  assert.strictEqual(mem.prepare("SELECT COALESCE(guessed, 0) AS g FROM world_ads WHERE ad_id = '2' LIMIT 1").get().g, 0);
+  up = true;
+  await night(NOW + DAY);
+  assert.strictEqual(asked, 2, 'asked again');
+  await night(NOW + 2 * DAY);
+  assert.strictEqual(asked, 2, 'it answered: not asked again');
+});
+
 test('real product links are fetched before any guessing: slow guesses cannot starve them', async () => {
   const { client, mem } = await setup();
   let t0 = NOW;
@@ -309,7 +343,7 @@ test('refusals: a few in a row wait, more stop the night, the run says so and wh
   assert.strictEqual(t.health, 'failed', 'six of seven refused: red, so GitHub sends its failure mail');
   assert.strictEqual(mem.prepare('SELECT COUNT(*) AS n FROM world_products').get().n, 1, 'what it found still reaches the board');
   assert.ok(t.alert.includes('refused'));
-  assert.strictEqual(mem.prepare("SELECT value FROM state WHERE key = 'world_cursor'").get(), undefined, 'the keyword cut short is searched again');
+  assert.strictEqual(JSON.parse(mem.prepare("SELECT value FROM state WHERE key = 'world_cursor'").get().value).next, 0, 'the keyword cut short is searched again');
 
   const all = fakeWorld({}, { refuse: () => true });
   const f = await hunt({ db: client, lib: all.lib, keywords: KEYWORDS, doFetch: all.doFetch, tokens: [], ...quiet, maxPages: 0 });
@@ -400,6 +434,13 @@ test('proof: six plain signals; unknown is not no', () => {
   assert.deepStrictEqual(Object.fromEntries(no.items.map((i) => [i.k, i.ok])), { days: false, ads: false, markets: false, shop: false, best: false, trust: false });
 });
 
+test('age outside the EU is the age at the scan, not counted twice', () => {
+  const w = worldRow(P('a.test/products/x', '1', { days: 25, last_seen: new Date(NOW - 6 * DAY).toISOString() }));
+  const { w: list } = products([w], [], [], NOW);
+  assert.strictEqual(list[0].age_now, 25);
+  assert.strictEqual(list[0].proof.items.find((i) => i.k === 'days').ok, false);
+});
+
 test('the board outside the EU: most proof first, one market, filters, sorts, and products that stopped stay away', async () => {
   const { env, mem } = await setup();
   seedWorld(mem);
@@ -432,7 +473,7 @@ test('decisions work on them as on any product: reject, star, note; ★ and ✓ 
   assert.deepStrictEqual((await J(env, '/api/ads?scope=world&view=all')).ads.map((a) => a.id), ['100', '300']);
   assert.deepStrictEqual((await J(env, '/api/ads?scope=world&view=all&hidden=1')).ads.map((a) => a.id), ['200']);
   await post('/api/hide', { ad_id: '100', status: 'starred' });
-  assert.deepStrictEqual((await J(env, '/api/ads?scope=world&view=inbox')).ads.map((a) => a.id), ['300'], 'decided: out of the inbox');
+  assert.deepStrictEqual((await J(env, '/api/ads?scope=world&view=inbox')).ads.map((a) => a.id), ['100', '300'], 'rejected: out of the inbox; an old star does not count');
   await post('/api/hide', { ad_id: '400', status: 'seen' }); // no longer running
   assert.deepStrictEqual((await J(env, '/api/ads?view=made')).ads.map((a) => a.id), ['400']);
   const stars = await J(env, '/api/ads?view=starred');
@@ -465,7 +506,7 @@ test('the radar outside the EU: all seven markets with facts; the EU radar is un
 });
 
 test('selling rules: every market has them, each says how far it was checked and has a source unless unverified', async () => {
-  for (const cc of Object.keys(MARKET_RULES.markets)) assert.ok(MARKETS.includes(cc), cc);
+  assert.deepStrictEqual(Object.keys(MARKET_RULES.markets).sort(), [...MARKETS].sort());
   for (const [cc, m] of Object.entries(MARKET_RULES.markets)) {
     assert.ok(m.short.length > 0 && m.short.length <= 90, cc);
     assert.ok(m.items.length > 0 && m.items.length <= 8, cc);

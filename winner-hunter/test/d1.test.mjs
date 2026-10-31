@@ -114,7 +114,7 @@ test('migrate(): all files over the REST client, twice; the ADD COLUMN already t
   const first = await migrate(c, texts);
   const calls = rest.calls.length;
   const second = await migrate(c, texts);
-  assert.strictEqual(second, first - 1, 'second time: the ALTER TABLE is skipped');
+  assert.strictEqual(second, first - 2, 'second time: the two ALTER TABLEs are skipped');
   assert.strictEqual(rest.calls.length, calls * 2, 'a duplicate column is not retried');
   assert.ok(rest.db.prepare('PRAGMA table_info(runs)').all().some((r) => r.name === 'status'));
   await assert.rejects(migrate(c, ['CREATE TABLE nope (;']), /Cloudflare D1/);

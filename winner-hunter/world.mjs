@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
  * The hunt outside the EU: every run the next keywords in every market of lib/world.mjs, through the public Ad Library.
- *   CF_API_TOKEN=… CF_ACCOUNT_ID=… [META_TOKEN=…] [WORLD_MINUTES=120] [WORLD_PAGES=80] node winner-hunter/world.mjs
+ *   CF_API_TOKEN=… CF_ACCOUNT_ID=… [META_TOKEN=…] [WORLD_MINUTES=120] [WORLD_PAGES=80] [WORLD_SEARCH_SHARE=0.7] node winner-hunter/world.mjs
  *
  * Saved after every few searches, so a run cut short loses little; the keyword cursor is in D1 state 'world_cursor'.
  * After the searches: which stores run on Shopify, what the products are, how many active ads their shops run per
@@ -92,7 +92,7 @@ export async function hunt(opts) {
   }
 }
 
-async function night({ db, lib, keywords, doFetch = globalThis.fetch, now = Date.now, log = console.log, deadline = Infinity, maxPages = 80, tokens = [],
+async function night({ db, lib, keywords, doFetch = globalThis.fetch, now = Date.now, log = console.log, deadline = Infinity, maxPages = 80, tokens = [], searchShare = 0.7,
   sleep = (ms) => new Promise((r) => setTimeout(r, ms)), pauseMs = PAUSE_MS, waitMs = WAIT_MS, base = 'https://graph.facebook.com', api = 'v24.0' }, t) {
   const started = now();
   const startIso = new Date(started).toISOString();
@@ -120,11 +120,14 @@ async function night({ db, lib, keywords, doFetch = globalThis.fetch, now = Date
 
   // A search; blocked ones in a row make it wait, then stop for tonight. false: stop.
   let inRow = 0;
+  let rowNow = 0; // the keyword being searched
+  let firstRefused = 0; // the keyword where the refusals in a row began: the next run starts there
   const one = async (what, keyword, into) => {
     const got = await lib.search(what);
     t.searches++;
     if (got.blocked) {
       t.blocked++;
+      if (!inRow) firstRefused = rowNow;
       inRow++;
       log(`${what.cc} "${what.q || what.pageId}": refused${got.error ? ` (${got.error})` : ''}`);
       if (inRow >= BLOCKS_THEN_STOP) {
@@ -149,18 +152,22 @@ async function night({ db, lib, keywords, doFetch = globalThis.fetch, now = Date
   };
 
   // ---- 1. the next keywords in every market (the rest of the time goes to the stores and products) ----
-  const searchEnd = Number.isFinite(deadline) ? started + (deadline - started) * 0.7 : Infinity;
+  const searchEnd = Number.isFinite(deadline) ? started + (deadline - started) * searchShare : Infinity;
   let pending = [];
   let n = 0;
   search: for (let i = 0; i < total; i++) {
     const row = keywords[(cursor + i) % total];
+    rowNow = i;
     for (const what of searchesOf(row)) {
       if (now() > searchEnd) {
         t.stopped = 'time';
         break search;
       }
       const got = await one(what, row.en, pending);
-      if (!got) break search;
+      if (!got) {
+        await db.setState('world_cursor', { next: (cursor + firstRefused) % total }, new Date(now()));
+        break search;
+      }
       if (++n % SAVE_EVERY === 0 && pending.length) {
         t.ads += pending.length;
         await saveAds(pending);
@@ -209,14 +216,14 @@ async function night({ db, lib, keywords, doFetch = globalThis.fetch, now = Date
   t.items = await fetchItems();
   await progress();
 
-  // ---- 4. new ads without a product link: the store's own search with the ad's title, once, in part of the time left ----
+  // ---- 4. ads without a product link: the store's own search with the ad's title, until it answers, in part of the time left ----
   const guessEnd = Number.isFinite(deadline) ? now() + (deadline - now()) * 0.3 : Infinity;
   const unlinked = await db.query(`SELECT DISTINCT a.store, a.title FROM world_ads a JOIN world_stores s ON s.store = a.store AND s.shopify = 1
-    WHERE a.product_key = '' AND a.title != '' AND a.first_seen >= ?1 LIMIT ${MAX_GUESSES}`, [startIso]);
+    WHERE a.product_key = '' AND a.title != '' AND COALESCE(a.guessed, 0) = 0 AND a.last_seen >= ?1 LIMIT ${MAX_GUESSES}`, [since]);
   await pool(unlinked, 3, async ({ store, title }) => {
     if (now() > guessEnd) return;
-    const key = await suggestProduct(title, (stores.get(store) || {}).host || store, doFetch, store).catch(() => '');
-    if (key) await db.query("UPDATE world_ads SET product_key = ?1 WHERE store = ?2 AND title = ?3 AND product_key = ''", [key, store, title]);
+    const key = await suggestProduct(title, (stores.get(store) || {}).host || store, doFetch, store).catch(() => null);
+    if (key != null) await db.query("UPDATE world_ads SET product_key = ?1, guessed = 1 WHERE store = ?2 AND title = ?3 AND product_key = ''", [key, store, title]);
   });
   t.items += await fetchItems();
   await progress();
@@ -354,7 +361,8 @@ async function main() {
   };
   const lib = await openLibrary({ launch });
   try {
-    const t = await hunt({ db, lib, keywords, deadline: Date.now() + minutes * 60000, maxPages: Math.max(Number(env.WORLD_PAGES) || 80, 0), tokens: [env.META_TOKEN] });
+    const t = await hunt({ db, lib, keywords, deadline: Date.now() + minutes * 60000, maxPages: Math.max(Number(env.WORLD_PAGES) || 80, 0), tokens: [env.META_TOKEN],
+      searchShare: Math.min(Math.max(Number(env.WORLD_SEARCH_SHARE) || 0.7, 0.05), 0.95) });
     if (env.GITHUB_STEP_SUMMARY) {
       fs.appendFileSync(env.GITHUB_STEP_SUMMARY, `\n**Outside the EU:** ${t.searches} searches, ${t.blocked} refused, ${t.ads} ads, ${t.products} products on the board (${t.health}).\n`);
     }

@@ -15,7 +15,7 @@ const DAY = 864e5;
 export const MARKETS = ['CH', 'NO', 'AU', 'NZ', 'AE', 'US', 'CA', 'SG', 'JE', 'HK', 'MO', 'JP', 'KR', 'MY', 'TW', 'IL', 'LI'];
 export const LANGS = { CH: ['de', 'fr'], NO: ['no'], AU: ['en'], NZ: ['en'], AE: ['en'], US: ['en'], CA: ['en'], SG: ['en'], JE: ['en'], HK: ['en', 'zh'], MO: ['zh'], JP: ['ja'], KR: ['ko'], MY: ['en'], TW: ['zh'], IL: ['en'], LI: ['de'] };
 export const MIN_DAYS = 7; // a younger ad proves nothing yet (the same lower limit as the EU board)
-export const KEEP_DAYS = 10; // an ad counts as running for this long after it was last seen (the keywords take 2-3 nights)
+export const KEEP_DAYS = 21; // an ad counts as running for this long after it was last seen (one round of the keywords takes many nights)
 
 /** keywords-world.txt: 'en: dog harness | de: hundegeschirr | fr: harnais chien | no: hundesele | …' → [{ en, de, fr, no, … }]. */
 export function parseWorldKeywords(text) {
@@ -125,27 +125,25 @@ export function toRow(raw, cc, keyword) {
 const words = (s) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${s})(?![\\p{L}\\p{N}])`, 'iu');
 // Pet food is on the board (Connor, 2026-10-31: all of the categories he had left open stay on). Without this, the food words would take it off.
 const PET_FOOD = words('(?:dog|cat|pet|puppy|kitten)[\\s-]+(?:food|treats?)(?![\\s-]+(?:bowl|mat|dispenser|container|storage))|hundefutter|katzenfutter|hundemat|kattemat|croquettes?');
-// Words that only mean something you take or eat: they count anywhere, also in a product's description.
+// Words that only mean something you take or eat: they count in the name, the type and the tags. A description is not
+// read: it mentions these things on ordinary goods too ("for dietary supplements", "mix your protein powder"), and a
+// product wrongly taken off never shows again, while one wrongly kept can simply be rejected.
 const OUT_ANYWHERE = [
   ['supplement', words('dietary supplements?|food supplements?|nahrungserg[äa]nzung\\w*|kosttilskudd|kosttillskott|compl[eé]ment alimentaire|gummies|protein powder|greens powder|creatine|kreatin|shilajit|ashwagandha')],
 ];
-// These also appear on ordinary goods ("cuts food in seconds", "magnesium alloy", "vitamin C serum"): name and type only.
+// These also appear on ordinary goods ("food thermometer", "vitamin C shower filter"): the name only.
 const OUT_IN_NAME = [
-  ['supplement', words('supplements?|suppl[eé]ments?|vitamins?|vitamines?|kapseln|g[ée]lules|collag[eè]ne?|kollagen|probiotics?|probiotique|whey|magnesium|omega[\\s-]?3')],
-  ['food or drink', words('food|foods|lebensmittel|nourriture|snacks?|drink mix|beverages?|energy drink|tea blend|herbal tea|matcha|protein bar|superfood')],
+  ['supplement', words('supplements?|suppl[eé]ments?|vitamins?|vitamines?|capsules|kapseln|g[ée]lules|collag[eè]ne?|kollagen|probiotics?|probiotique|whey|magnesium|omega[\\s-]?3')],
+  ['food or drink', words('food|foods|lebensmittel|nourriture|snacks?|drink mix|beverages?|energy drink|tea blend|herbal tea|matcha|protein bar|superfood|coffee creamer|mushroom coffee')],
   ['gymwear', words('gymwear|gym wear|gym[\\s-]+(?:shorts|shirts?|leggings?|tank|tops?|stringer)|workout[\\s-]+(?:shorts|shirts?|leggings?|tops?)|activewear|sportswear|sportbekleidung|fitnessbekleidung|treningsklær')],
 ];
-// Not products at all, though stores list them as products.
 const NOT_A_PRODUCT = words('shipping protection|order protection|shipping (?:&|and) order protection|package protection|shipping insurance|gift ?cards?|geschenk(?:gutschein|karte)\\w*|carte cadeau|gavekort|upsell');
-const NOT_EATEN = words('food (?:processor|container|storage|warmer|chopper|scale|grade|bowl|mat|dehydrator|dispenser)|face|serum|cream|creme|crème|lotion|shampoo|mask|masque|maske|alloy|machine|maschine');
+const NOT_EATEN = words('food (?:processor|container|storage|warmer|chopper|scale|grade|bowl|mat|dehydrator|dispenser|thermometer|slicer)|face|serum|cream|creme|crème|lotion|shampoo|mask|masque|maske|alloy|machine|maschine|maker|grinder|wardrobe|holder|organi[sz]er|filter|laundry|dishwasher|shower');
 
-/**
- * { out: '' | why it is off the board }. head: the product's name, type and tags.
- * body: its description. Words miss some: Reject handles those.
- */
-export function classify(head, body = '') {
-  const name = String(head || '');
-  const all = `${name}\n${body || ''}`;
+/** { out: '' | why it is off the board }. title: the product's name. labels: its type and tags. Words miss some: Reject handles those. */
+export function classify(title, labels = '') {
+  const name = String(title || '');
+  const all = `${name}\n${labels || ''}`;
   if (NOT_A_PRODUCT.test(name)) return { out: 'not a product' };
   if (PET_FOOD.test(name)) return { out: '' };
   for (const [why, re] of OUT_ANYWHERE) if (re.test(all)) return { out: why };
@@ -199,7 +197,8 @@ export async function checkStore(store, doFetch = globalThis.fetch, opts = {}) {
     }
     const shop = j && /\.myshopify\.com$/i.test(j.myshopify_domain || '');
     if (shop || SHOPIFY_HDR.test(r.headers)) {
-      return { shopify: 1, host: hostKey(hostOf(r.url) || host), currency: (shop && j.currency) || '', products: shop && typeof j.published_products_count === 'number' ? j.published_products_count : null,
+      // host: the address that answered, some stores only answer on www.
+      return { shopify: 1, host: hostOf(r.url) || host, currency: (shop && j.currency) || '', products: shop && typeof j.published_products_count === 'number' ? j.published_products_count : null,
         myshopify: shop ? j.myshopify_domain : '' };
     }
   }
@@ -207,7 +206,6 @@ export async function checkStore(store, doFetch = globalThis.fetch, opts = {}) {
 }
 
 const price = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) || Number(v) === 0 ? null : Number(v));
-const strip = (h) => String(h || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').slice(0, 1500);
 
 /** A product from its store: /products/handle.json. Prices there are in the store's own currency. null when it has none. */
 export async function fetchProduct(key, { host, currency = '' }, doFetch = globalThis.fetch, opts = {}) {
@@ -223,30 +221,46 @@ export async function fetchProduct(key, { host, currency = '' }, doFetch = globa
   if (!p || !p.title) return null;
   const v = (Array.isArray(p.variants) && p.variants[0]) || {};
   const tags = Array.isArray(p.tags) ? p.tags.join(' ') : p.tags;
-  const c = classify([p.title, p.product_type, tags].filter(Boolean).join(' \n '), strip(p.body_html));
+  const c = classify(p.title, [p.product_type, tags].filter(Boolean).join(' \n '));
   const src = (p.image && p.image.src) || (Array.isArray(p.images) && p.images[0] && p.images[0].src) || '';
   return { title: cut(p.title, 200), price: price(v.price), compare_at_price: price(v.compare_at_price), currency: cut(v.price_currency || currency, 8), image_url: src ? sized(src) : '',
     product_type: cut(p.product_type, 100), out: c.out ? 1 : 0 };
 }
 
-const wordsOf = (t) => new Set(String(t || '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 4));
+const NOISE = new Set('the and for with your you our now new get buy free sale off shop store official best today shipping offer deal deals limited only this that from more'.split(' '));
+const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+
+/** Is the ad's title about this product? A real word in common, not a sales word and not the shop's own name. */
+export function sameThing(title, named, store = '') {
+  const text = String(named || '').toLowerCase();
+  const shop = String(store || '').toLowerCase().split('.')[0];
+  const parts = String(title || '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const theirs = new Set(text.split(/[^\p{L}\p{N}]+/u));
+  for (const w of parts) {
+    if (CJK.test(w)) {
+      for (let i = 0; i + 2 <= w.length; i++) if (text.includes(w.slice(i, i + 2))) return true; // no spaces between words here
+    } else if (w.length >= 3 && !NOISE.has(w) && !(shop && (shop.includes(w) || w.includes(shop))) && theirs.has(w)) return true;
+  }
+  return false;
+}
 
 /**
- * The product an ad without a product link is about: the store's own search with the ad's title. Its key, or ''. A search
- * always answers something, so the product must share a word with the ad's title ("Free shipping today" finds nothing).
+ * The product an ad without a product link is about: the store's own search with the ad's title. Its key, '' when the
+ * store has no such product, or null when the store did not answer (asked again next run). A search always answers
+ * something, so it must be about the same thing ("Free shipping today" finds nothing).
  * store: the name the store is known by here, so the key matches links from ads (a store's host can be another domain).
  */
-export async function suggestProduct(title, host, doFetch = globalThis.fetch, store = host) {
+export async function suggestProduct(title, host, doFetch = globalThis.fetch, store = host, opts = {}) {
   const q = cut(noTemplate(title), 60);
   if (!q) return '';
-  const r = await getText(doFetch, `https://${host}/search/suggest.json?q=${encodeURIComponent(q)}&resources%5Btype%5D=product&resources%5Blimit%5D=1`);
+  const r = await getText(doFetch, `https://${host}/search/suggest.json?q=${encodeURIComponent(q)}&resources%5Btype%5D=product&resources%5Blimit%5D=1`, opts);
+  if (!r.status || r.status === 429) return null;
   try {
     const p = JSON.parse(r.text).resources.results.products[0];
     const m = /\/products\/([^/?#]+)/.exec(String((p && p.url) || ''));
     if (!m) return '';
     const handle = decodeURIComponent(m[1]).toLowerCase();
-    const named = wordsOf(`${p.title || ''} ${handle}`);
-    if (![...wordsOf(q)].some((w) => named.has(w))) return '';
+    if (!sameThing(q, `${p.title || ''} ${handle.replace(/[-_]+/g, ' ')}`, hostKey(store))) return '';
     return `${hostKey(store)}/products/${handle}`;
   } catch (e) {
     return '';

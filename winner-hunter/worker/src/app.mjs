@@ -232,7 +232,8 @@ export function products(rows, hidden = [], stars = [], now = Date.now()) {
   const groups = new Map();
   for (const w of rows) {
     const seen = Date.parse(w.last_seen);
-    const age = Number.isFinite(seen) ? num(w.ad_age_days) + Math.max(Math.trunc((now - seen) / 864e5), 0) : null;
+    // A product outside the EU: its age was worked out at the scan, and its ad may have been last seen days before that.
+    const age = w.world ? num(w.ad_age_days) : Number.isFinite(seen) ? num(w.ad_age_days) + Math.max(Math.trunc((now - seen) / 864e5), 0) : null;
     const rpd = num(w.reach_eu) / Math.max(num(w.ad_age_days), 1);
     // A product from outside the EU has no reach: it is judged by its proof signals and never reaches the EU tabs.
     const pass = !w.world && num(w.active_ads) >= MIN_ACTIVE_ADS && w.ad_age_days != null && age != null && age >= MIN_AGE_DAYS && age <= MAX_AGE_DAYS && rpd >= MIN_REACH_PER_DAY ? 1 : 0;
@@ -407,7 +408,7 @@ export function viewOf(p, list, { csv = false } = {}) {
 
 const offsetOf = (p, csv) => (csv ? 0 : Math.min(Math.max(parseInt(p.get('offset'), 10) || 0, 0), 100000));
 
-const inInbox = (r) => r.hid === 0 && !r.star;
+const inInbox = (r) => r.hid === 0; // the ★ is gone from the board (2026-10-31): an old star no longer keeps a product out
 const blockedBy = (r, taste) => !!(taste && taste.blocked.size && taste.blocked.has(storeOf(r.store_url)));
 const NEW_MS = 864e5; // found in the last day: new
 

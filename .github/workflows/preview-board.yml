@@ -55,14 +55,15 @@ jobs:
         continue-on-error: true
         run: node winner-hunter/bestsellers.mjs
 
-      # A small hunt outside the EU, so the test link has products there before the first daily run. Only the world_*
+      # A short hunt outside the EU, so the test link has products there before the first daily run. Only the world_*
       # tables and state keys world_run / world_cursor change; the live board does not read them until this is merged.
       - name: Hunt outside the EU
         continue-on-error: true
         env:
           META_TOKEN: ${{ secrets.META_TOKEN }}
-          WORLD_MINUTES: '10'
+          WORLD_MINUTES: '22'
           WORLD_PAGES: '20'
+          WORLD_SEARCH_SHARE: '0.2' # mostly the shops and products of what earlier runs found: a test link needs products
         run: node winner-hunter/world.mjs
 
       - name: Worker packages
