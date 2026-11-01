@@ -3,7 +3,8 @@
 # checklist. Winners and promising ads (score 55+) go into the Cloudflare D1 database after every batch of 2
 # keywords; the board (deploy-board.yml) shows them live. Each run goes on where the last one stopped.
 # Run it: Actions → Winner Hunter → Run workflow (also in the GitHub app).
-# Secrets: META_TOKEN, CF_API_TOKEN, CF_ACCOUNT_ID (see winner-hunter/README.md). Optional: META_TOKEN_2, META_TOKEN_3.
+# Secrets: META_TOKEN, CF_API_TOKEN, CF_ACCOUNT_ID (see winner-hunter/README.md). Optional: META_TOKEN_2, META_TOKEN_3,
+# CF_D1_TOKEN (a D1-only Cloudflare token, used instead of CF_API_TOKEN when it is there).
 name: Winner Hunter
 
 on:
@@ -33,7 +34,7 @@ jobs:
       META_TOKEN: ${{ secrets.META_TOKEN }}
       META_TOKEN_2: ${{ secrets.META_TOKEN_2 }}
       META_TOKEN_3: ${{ secrets.META_TOKEN_3 }}
-      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CF_API_TOKEN: ${{ secrets.CF_D1_TOKEN || secrets.CF_API_TOKEN }}
       CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
       D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID || '8934aca9-51d3-4f87-9c62-e897843149a1' }}
       COUNTRIES: ${{ vars.HUNT_COUNTRIES || 'NL,BE,DE,FR,AT,ES,IT,IE,DK,SE,PL' }}
@@ -52,8 +53,8 @@ jobs:
           fi
           case "$MINUTES" in ''|*[!0-9]*) echo "::error::minutes must be a number"; exit 1;; esac
 
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
 

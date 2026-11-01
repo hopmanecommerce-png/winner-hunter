@@ -156,15 +156,14 @@ test('the board without the bestseller table (not migrated yet) still works, jus
   assert.ok((await res.json()).ads.every((a) => a.best === null));
 });
 
-test('workflows: ranks after every hunt (also a red one) and before every test link', () => {
+test('workflows: ranks after every hunt (also a red one); a test link no longer does (it writes nothing to the live database)', () => {
   const flow = (f) => fs.readFileSync(new URL(`../../.github/workflows/${f}.yml`, import.meta.url), 'utf8');
   assert.match(flow('world-hunter'), /- name: Store signals\n\s+if: \$\{\{ !cancelled\(\) \}\}\n\s+run: node winner-hunter\/bestsellers\.mjs/);
   const hunt = flow('winner-hunter');
   assert.match(hunt, /- name: Store best sellers\n\s+if: \$\{\{ !cancelled\(\) \}\}\n\s+run: node winner-hunter\/bestsellers\.mjs/);
-  const prev = fs.readFileSync(new URL('../../.github/workflows/preview-board.yml', import.meta.url), 'utf8');
-  const at = (x) => prev.indexOf(x);
-  assert.ok(at('run: node winner-hunter/migrate.mjs') > 0 && at('run: node winner-hunter/migrate.mjs') < at('run: node winner-hunter/bestsellers.mjs'));
-  assert.ok(at('run: node winner-hunter/bestsellers.mjs') < at('versions upload'));
+  const prev = flow('preview-board');
+  assert.doesNotMatch(prev, /node winner-hunter\/(?:migrate|bestsellers)\.mjs/);
+  assert.match(prev, /versions upload/);
 });
 
 test('all capacity goes outside the EU: only the world hunt runs by itself, four times a day, and its products are checked first', () => {

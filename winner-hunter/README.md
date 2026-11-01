@@ -40,7 +40,7 @@ After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, o
   No page there: a real Trustpilot widget on the store still counts (a page on another domain); else "Not on
   Trustpilot". "Badge only" / "No Trustpilot on the store": only the store was checked (no token that run).
 - Per product: photo, price/discount, a ✓ per rule (active ads, days live, reach per day), ads for this product,
-  the store's product count, shop. **▶** and a tap on the card open the ad in the Facebook Ad Library (new tab); the shop name links to the product (or the store), **1688 ↗** searches 1688. The in-board ad viewer (`/api/ad/:id`, `ad-prefetch.yml`) is off: the board no longer uses it.
+  the store's product count, shop. **▶** and a tap on the card open the ad in the Facebook Ad Library (new tab); the shop name links to the product (or the store), **1688 ↗** searches 1688. The in-board ad viewer (`/api/ad/:id`, `ad-prefetch.yml`) is off: the board no longer uses it, the Worker only answers it with `AD_VIEWER = "on"` (wrangler.toml), and the deploy no longer gives the Worker a Meta token. A token an older deploy left there is never used; remove it once: `cd winner-hunter/worker && npx wrangler secret delete META_TOKEN`.
 - **✓ Approved** moves a product to **✓**; **✗ Reject** (not for me) hides it; **Undo** brings it back.
 - **CSV** downloads what you are looking at.
 - A "store photo" label means: photo from the shop's page, not the product photo of the ad.
@@ -55,14 +55,30 @@ Add these 4 secrets in GitHub: **Settings → Secrets and variables → Actions 
 | `CF_API_TOKEN` | Cloudflare API token. Make it at dash.cloudflare.com → My Profile → API Tokens → Create Token → Custom token, with **Account → D1 → Edit** and **Account → Workers Scripts → Edit**. |
 | `CF_ACCOUNT_ID` | Your Cloudflare account ID (Cloudflare dashboard → Workers & Pages, right side). |
 | `BOARD_PIN` | The PIN for the board. Use 6+ digits. |
+| `CF_D1_TOKEN` | Optional, better: a second Cloudflare token with only **Account → D1 → Edit**. The hunts (World Hunter, Winner Hunter, Jev check, Ad prefetch) then use it instead of `CF_API_TOKEN`, so the jobs that open Facebook and shops hold no token that can change the board. |
 
 Then, in **Actions**:
 
-1. **Deploy board** → Run workflow. At the end it prints the board link (`https://winner-hunter-clean.<your-name>.workers.dev`).
+1. **Deploy board** → Run workflow. It runs the tests first (**Tests**, also on every pull request): a red test stops the deploy. At the end it prints the board link (`https://winner-hunter-clean.<your-name>.workers.dev`; while the repository is public the `<your-name>` part shows as `***`).
 2. **World Hunter** (markets outside the EU) runs by itself four times a day. **Winner Hunter** (the EU) and **Ad prefetch** are off since 1 Nov 2026 and only run when you start them by hand (Run workflow).
 
 The workflows must be on the main branch for "Run workflow" and the scheduled runs to appear.
-The database tables are made automatically (`worker/migrations/*.sql`).
+The database tables are made automatically (`worker/migrations/*.sql`). A test link from a branch (**Preview board**) changes
+nothing in the database except the decisions you make on it: new tables only come with the merge.
+
+### Undo a migration
+
+Before it makes the tables, every run notes D1's Time Travel bookmark in its log ("D1 restore point"). To put the database
+back as it was then: `cd winner-hunter/worker && npx wrangler d1 time-travel restore winner-hunter-clean --bookmark=<bookmark>`.
+Without a bookmark: `--timestamp=<Unix time or RFC3339>`. The free plan goes back 7 days, the paid plan 30.
+
+### This repository is public
+
+Anyone can read its Actions logs and summaries. New runs keep the board's address out of them (the deploy and the test
+link show `***` for your workers.dev name); older runs may still show it: delete those (Actions → the run → ⋯ → Delete
+workflow run). The PIN keeps the board closed either way. GitHub also turns scheduled workflows off after 60 days without
+activity in a public repository: the 🌍 tab then shows "No scan outside the EU in 24 hours". Turn it back on: Actions →
+World Hunter → Enable workflow (any commit also resets the 60 days).
 
 ## How an EU run works (started by hand)
 
@@ -94,7 +110,8 @@ import.mjs       one-time import of the old winners
 keywords.txt     the search words
 lib/             score.mjs (the four rules) · meta.mjs (Ad Library search) · d1.mjs (database) · storephoto.mjs · record.mjs
 worker/          the board: src/app.mjs (API + PIN) · src/board.html (page) · wrangler.toml · migrations/
-test/            npm test (node --test); test/board.e2e.test.mjs opens the board in Chromium at iPhone size
+test/            npm test (node --test); test/board.e2e.test.mjs opens the board in Chromium at iPhone size;
+                 test/ops.test.mjs runs the workflows' deploy steps and checks the rules that keep the live board safe
 ```
 
 Test locally: `cd winner-hunter && npm test` (Node 22+).
@@ -114,4 +131,7 @@ gymwear, not shipping protection or a gift card (words in `lib/world.mjs`). Word
 
 `META_TOKEN` is optional here: one request per shop answers "does it run ads in the EU at all?" (the *Not in EU* tag) and gives
 the EU reach of its ads where it does, the only reach figure that exists for these products. If
-Facebook refuses more than 80% of the searches, the run ends red and the board's 🌍 tab says so.
+Facebook refuses more than 80% of the searches, the run ends red and the board's 🌍 tab says so. If Shopify still refuses
+(429) more than half of the store requests after waiting, the run ends yellow: those stores and products are asked again
+next run. A run searches for at most 135 minutes (`minutes`), so the job's 180 still hold the board's table, Jev and the
+store signals.

@@ -1,0 +1,43 @@
+# The tests (winner-hunter/test, npm test): on every pull request, and before every deploy of the board (deploy-board.yml
+# calls this, so a red test stops the deploy). The browser tests run in the runner's own Google Chrome.
+# GitHub skips this on a pull request whose last commit says [skip actions]; the deploy after the merge still runs it.
+# Nothing here reaches Cloudflare: no secrets, an in-memory database.
+name: Tests
+
+on:
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+
+      # Playwright drives the runner's own Google Chrome: no browser download.
+      - name: Install Playwright
+        working-directory: winner-hunter
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: npm install --no-save --no-package-lock playwright@1.56.1
+
+      # A browser test that finds no browser skips instead of failing: before a deploy, a skipped test is a failure.
+      - name: Tests
+        working-directory: winner-hunter
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/tests.log"
+          if ! grep -Eq '^(# |ℹ )skipped 0$' "$RUNNER_TEMP/tests.log"; then
+            echo "::error::Tests were skipped (no browser?): $(grep -E '# SKIP' "$RUNNER_TEMP/tests.log" | head -5 | tr '\n' ' ')"
+            exit 1
+          fi

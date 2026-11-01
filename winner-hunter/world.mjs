@@ -7,6 +7,7 @@
  * After the searches: which stores run on Shopify, what the products are, how many active ads their shops run per
  * market, whether the shop runs ads in the EU at all (needs META_TOKEN), then the board's table world_products.
  * The run's status is in D1 state 'world_run' (shown on the board). It ends red when Facebook refused almost every search.
+ * D1 state 'world_data' changes only when the board's table did: then the board reads its tables again.
  */
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +26,8 @@ const WAIT_MS = 120000;
 const STORE_DAYS = 14; // a store's Shopify check and a product's facts are read again after this long
 const PAGE_DAYS = 7; // a shop's ad count per market is read again after this long
 const MAX_GUESSES = 400; // ad titles per run looked up in their store's search
+export const MAX_MINUTES = 135; // the job's 180 minutes (world-hunter.yml) also hold the board table, Jev and the store signals
+const SHOP_STORM = 0.5; // share of Shopify requests still refused (429) after waiting: a rate-limit storm, the run says so
 
 const USAGE_STOP = 90; // % of Meta's hourly limit: the EU check stops here, before Meta blocks the token at 100. Only hand-started EU runs share it now.
 
@@ -59,9 +62,14 @@ SELECT ${['page_id', 'counts', 'in_eu', 'checked_at', 'eu_checked_at', 'eu_rpd',
 ON CONFLICT(page_id) DO UPDATE SET counts = excluded.counts, in_eu = excluded.in_eu, checked_at = excluded.checked_at, eu_checked_at = excluded.eu_checked_at, eu_rpd = excluded.eu_rpd, eu_ads = excluded.eu_ads`;
 const PRODUCT_COLS = ['product_key', 'ad_id', 'active', 'product_title', 'price', 'compare_at_price', 'currency', 'image_url', 'store_url', 'product_url', 'ad_library_url', 'advertiser', 'page_id', 'likes',
   'keyword', 'markets', 'ads', 'creatives', 'days', 'new14', 'shop_ads', 'in_eu', 'eu_rpd', 'shop_eu_rpd', 'store_products', 'first_seen', 'last_seen', 'run_id'];
+// A row a newer run wrote is never overwritten: run ids are start times, so they sort in time (see step 7).
 export const PRODUCTS_SQL = `INSERT INTO world_products (${PRODUCT_COLS.join(', ')})
 SELECT ${PRODUCT_COLS.map(num).join(', ')} FROM json_each(?1) WHERE true
-ON CONFLICT(product_key) DO UPDATE SET ${PRODUCT_COLS.filter((c) => !['product_key', 'ad_id', 'first_seen'].includes(c)).map((c) => `${c} = excluded.${c}`).join(', ')}`;
+ON CONFLICT(product_key) DO UPDATE SET ${PRODUCT_COLS.filter((c) => !['product_key', 'ad_id', 'first_seen'].includes(c)).map((c) => `${c} = excluded.${c}`).join(', ')}
+  WHERE excluded.run_id >= COALESCE(world_products.run_id, '')`;
+// Only products an older run wrote go inactive, and only those still active: a run never takes a newer run's products
+// off the board, so two runs at once cannot empty it, and rows already off are not written again.
+export const DEACTIVATE_SQL = 'UPDATE world_products SET active = 0 WHERE active = 1 AND (run_id IS NULL OR run_id < ?1)';
 
 /** Every row of a query, a slice at a time (one big answer can fail). */
 async function allRows(db, sql, args = [], size = 5000) {
@@ -75,8 +83,9 @@ async function allRows(db, sql, args = [], size = 5000) {
 }
 
 /**
- * deps: { db, lib (openLibrary's answer), keywords, doFetch, now, log, deadline, maxPages, tokens, sleep, pauseMs, base }.
- * Returns { searches, blocked, ads, stores, products, health ('ok' | 'failed'), stopped ('done' | 'time' | 'blocked') }.
+ * deps: { db, lib (openLibrary's answer), keywords, doFetch, now, log, deadline, maxPages, tokens, sleep, pauseMs, base,
+ * shopOpts (how Shopify requests wait and try again, lib/world.mjs) }.
+ * Returns { searches, blocked, ads, stores, products, health ('ok' | 'warning' | 'failed'), stopped ('done' | 'time' | 'blocked') }.
  */
 export async function hunt(opts) {
   const t = {};
@@ -88,18 +97,30 @@ export async function hunt(opts) {
     const when = new Date(now()).toISOString();
     Object.assign(t, { status: 'failed', health: 'failed', alert: `Scan buiten de EU gestopt / Scan outside the EU stopped: ${e.message}`.slice(0, 300), finished_at: when, updated_at: when });
     await db.setState('world_run', t, new Date(now())).catch((x) => log(`::warning::Could not mark the scan failed: ${x.message}`));
+    // Whatever it wrote to the board's table before it stopped shows now, not after the board's 15-minute read.
+    await db.setState('world_data', { run: t.id, step: 'failed' }, new Date(now())).catch(() => {});
     throw e;
   }
 }
 
 async function night({ db, lib, keywords, doFetch = globalThis.fetch, now = Date.now, log = console.log, deadline = Infinity, maxPages = 80, tokens = [], searchShare = 0.7,
-  sleep = (ms) => new Promise((r) => setTimeout(r, ms)), pauseMs = PAUSE_MS, waitMs = WAIT_MS, base = 'https://graph.facebook.com', api = 'v24.0' }, t) {
+  sleep = (ms) => new Promise((r) => setTimeout(r, ms)), pauseMs = PAUSE_MS, waitMs = WAIT_MS, base = 'https://graph.facebook.com', api = 'v24.0', shopOpts = {} }, t) {
   const started = now();
   const startIso = new Date(started).toISOString();
   Object.assign(t, { id: startIso, started_at: startIso, status: 'running', searches: 0, blocked: 0, ads: 0, new_ads: 0, stores: 0, products: 0, per_market: {}, pages: 0, eu_checked: 0, stopped: 'done', health: null, alert: '' });
   const progress = () => {
     t.updated_at = new Date(now()).toISOString();
     return db.setState('world_run', t, new Date(now()));
+  };
+  // The board reads its tables again when this changes (worker/src/app.mjs VERSION_SQL): when the board's table was
+  // written, not on every progress save.
+  const dataChanged = (step) => db.setState('world_data', { run: t.id, step }, new Date(now()));
+  // Shopify's last answer per address (a 429 is asked again: the last answer counts), for the run's health.
+  const shopAnswers = new Map();
+  const shopFetch = async (url, init) => {
+    const res = await doFetch(url, init);
+    shopAnswers.set(String(url), res.status);
+    return res;
   };
   await progress();
 
@@ -190,7 +211,7 @@ async function night({ db, lib, keywords, doFetch = globalThis.fetch, now = Date
   const storeRows = [];
   await pool(wantStores, 4, async (store) => {
     if (now() > deadline) return;
-    const s = await checkStore(store, doFetch).catch(() => ({ shopify: null, host: store }));
+    const s = await checkStore(store, shopFetch, shopOpts).catch(() => ({ shopify: null, host: store }));
     if (s.shopify != null) storeRows.push({ store, ...s }); // no answer: asked again next run
   });
   for (const part of chunks(storeRows, 200)) await db.query(STORES_SQL, [JSON.stringify(part), new Date(now()).toISOString()]);
@@ -207,7 +228,7 @@ async function night({ db, lib, keywords, doFetch = globalThis.fetch, now = Date
     await pool(want, 4, async ({ product_key: key, store }) => {
       if (now() > deadline) return;
       const s = stores.get(store) || {};
-      const p = await fetchProduct(key, { host: s.host || store, currency: s.currency || '' }, doFetch).catch(() => null);
+      const p = await fetchProduct(key, { host: s.host || store, currency: s.currency || '' }, shopFetch, shopOpts).catch(() => null);
       if (p) rows.push({ product_key: key, ...p });
     });
     for (const part of chunks(rows, 200)) await db.query(ITEMS_SQL, [JSON.stringify(part), new Date(now()).toISOString()]);
@@ -222,7 +243,7 @@ async function night({ db, lib, keywords, doFetch = globalThis.fetch, now = Date
     WHERE a.product_key = '' AND a.title != '' AND COALESCE(a.guessed, 0) = 0 AND a.last_seen >= ?1 LIMIT ${MAX_GUESSES}`, [since]);
   await pool(unlinked, 3, async ({ store, title }) => {
     if (now() > guessEnd) return;
-    const key = await suggestProduct(title, (stores.get(store) || {}).host || store, doFetch, store).catch(() => null);
+    const key = await suggestProduct(title, (stores.get(store) || {}).host || store, shopFetch, store, shopOpts).catch(() => null);
     if (key != null) await db.query("UPDATE world_ads INDEXED BY world_ads_store_title SET product_key = ?1, guessed = 1 WHERE store = ?2 AND title = ?3 AND product_key = ''", [key, store, title]);
   });
   t.items += await fetchItems();
@@ -329,22 +350,32 @@ async function night({ db, lib, keywords, doFetch = globalThis.fetch, now = Date
   const products = addUp(rows1, { items: items2, stores, pages: parsedPages, known, now: now() });
   // Written first, and only then the rest goes inactive: a run cut short here leaves the board as it was.
   for (const part of chunks(products.map((p) => ({ ...p, run_id: t.id })), 200)) await db.query(PRODUCTS_SQL, [JSON.stringify(part)]);
-  await db.query('UPDATE world_products SET active = 0 WHERE run_id IS NOT ?1', [t.id]);
+  await db.query(DEACTIVATE_SQL, [t.id]);
+  await dataChanged('board');
   t.products = products.length;
   t.new_products = products.filter((p) => p.first_seen >= startIso || !known.has(p.product_key)).length;
 
   // ---- 8. tidy up: products nobody decided on and no longer seen, old ads ----
   await db.query('DELETE FROM world_ads WHERE last_seen < ?1', [new Date(started - 30 * DAY).toISOString()]);
   await db.query(`DELETE FROM world_products WHERE active = 0 AND last_seen < ?1 AND ad_id NOT IN (SELECT ad_id FROM stars) AND ad_id NOT IN (SELECT ad_id FROM hidden)`, [new Date(started - 60 * DAY).toISOString()]);
+  await dataChanged('end');
 
   const refused = t.searches ? t.blocked / t.searches : 1;
   // Facebook limits one address after a few hundred searches, so a run ending that way is normal: the next one goes on.
   t.health = refused > 0.8 || t.searches === 0 ? 'failed' : refused > 0.2 ? 'warning' : 'ok';
   if (t.health !== 'ok') t.alert = `Ad Library weigerde ${t.blocked} van ${t.searches} zoekopdrachten / Ad Library refused ${t.blocked} of ${t.searches} searches`;
+  // Shopify answers 429 across its stores once one address asks too much (lib/world.mjs): those stores and products are
+  // asked again next run, so a storm is a warning, not a failure. It used to pass as a healthy run.
+  t.shop_asked = shopAnswers.size;
+  t.shop_limited = [...shopAnswers.values()].filter((s) => s === 429).length;
+  if (t.shop_asked >= 20 && t.shop_limited / t.shop_asked > SHOP_STORM) {
+    if (t.health === 'ok') t.health = 'warning';
+    t.alert = [t.alert, `Shopify weigerde ${t.shop_limited} van ${t.shop_asked} winkelvragen / Shopify rate-limited ${t.shop_limited} of ${t.shop_asked} store requests (429): asked again next run`].filter(Boolean).join(' · ');
+  }
   t.status = t.stopped;
   t.finished_at = new Date(now()).toISOString();
   await progress();
-  log(`Outside the EU: ${t.searches} searches · ${t.blocked} refused · ${t.ads} ads · ${t.stores} new Shopify stores · ${t.pages} shops counted · ${t.eu_checked} EU checks · ${t.products} products · ${t.health}`);
+  log(`Outside the EU: ${t.searches} searches · ${t.blocked} refused · ${t.ads} ads · ${t.stores} new Shopify stores · ${t.pages} shops counted · ${t.eu_checked} EU checks · ${t.products} products · Shopify limited ${t.shop_limited} of ${t.shop_asked} · ${t.health}`);
   return t;
 }
 
@@ -366,12 +397,15 @@ export async function saveTokenCheck(db, token, { check = checkTokens, now = Dat
   return '';
 }
 
+/** WORLD_MINUTES as the hunt's time budget: 120 by default, at most MAX_MINUTES (more would be cut off by the job's timeout before the board is written). */
+export const minutesOf = (v) => Math.min(Math.max(Number(v) || 120, 1), MAX_MINUTES);
+
 async function main() {
   const env = process.env;
   const s = d1Settings(env);
   if (!s) throw new Error('No CF_API_TOKEN / CF_ACCOUNT_ID: add them as GitHub secrets (see winner-hunter/README.md)');
   const keywords = parseWorldKeywords(fs.readFileSync(new URL('./keywords-world.txt', import.meta.url), 'utf8'));
-  const minutes = Math.min(Math.max(Number(env.WORLD_MINUTES) || 120, 1), 300);
+  const minutes = minutesOf(env.WORLD_MINUTES);
   const db = d1Client(s);
   const metaToken = String(env.META_TOKEN || '').replace(/\s+/g, '');
   const tokenTrouble = await saveTokenCheck(db, metaToken);

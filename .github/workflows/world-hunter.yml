@@ -3,13 +3,17 @@
 # world_* tables and the store signals; the board shows the result under 🌍 Outside EU.
 # Run it by hand: Actions → World Hunter → Run workflow.
 # Secrets: CF_API_TOKEN, CF_ACCOUNT_ID. META_TOKEN is optional: it answers "does this shop run ads in the EU at all?".
+# CF_D1_TOKEN (optional, better): a Cloudflare token with only Account → D1 → Edit. When it is there the hunt uses it
+# instead of CF_API_TOKEN, so this job holds no token that can change the board's Worker.
+# GitHub turns the schedule off after 60 days without activity in this public repository: the board's 🌍 tab then
+# says "No scan outside the EU in 24 hours". Turn it on again: Actions → World Hunter → Enable workflow.
 name: World Hunter
 
 on:
   workflow_dispatch:
     inputs:
       minutes:
-        description: 'Minutes the hunt may take (it stops in time and keeps what it found)'
+        description: 'Minutes the hunt may take (max 135; it stops in time and keeps what it found)'
         required: false
         default: '120'
       pages:
@@ -34,9 +38,11 @@ concurrency:
 jobs:
   hunt:
     runs-on: ubuntu-latest
+    # world.mjs stops searching after at most 135 minutes (MAX_MINUTES), which leaves time for the board's table, Jev and
+    # the store signals. A hunt cut off by this timeout would never write the board.
     timeout-minutes: 180
     env:
-      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CF_API_TOKEN: ${{ secrets.CF_D1_TOKEN || secrets.CF_API_TOKEN }}
       CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
       D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID || '8934aca9-51d3-4f87-9c62-e897843149a1' }}
       META_TOKEN: ${{ secrets.META_TOKEN }}
@@ -44,8 +50,8 @@ jobs:
       WORLD_MINUTES: ${{ inputs.minutes || '120' }}
       WORLD_PAGES: ${{ inputs.pages || '80' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
 
