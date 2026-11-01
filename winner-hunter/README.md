@@ -74,6 +74,36 @@ rejected. Per product: what it is (a plain name), niche, the ads' hook, the buye
 - **Browse**: everything that passes, most reach per day first, with search, sort and filters. **★**: your kept products.
   **✓**: every product you approved, the last one first, with the day you approved it (also after it ages out of
   the rules). The ✓ count jumps each time you tap **✓ Approved**.
+- **💶 Unit economics** (the € button, after 🚀): what one order costs you landed in the EU and what it leaves you, for
+  every product in the Inbox and on ✓ (and every TikTok product you approved), with a **red / amber / green verdict** and
+  every reason written out. One order: their store's price (in euros) − VAT 21% (IOSS) − payment fees (2.9% + €0.30) −
+  refunds (5% of orders) − the landed cost (supplier price + agent €1 + shipping by weight + the EU's 2026 customs on a
+  parcel from China: **€3 duty per parcel up to €150 from 1 July 2026, €2 handling per item line from 1 November 2026**)
+  = the margin before ads. Break-even ROAS = price ÷ margin; break-even CPA = the margin; profit per order at ROAS 2.5.
+  Red: an order loses money, break-even ROAS 3 or more, over €150 before VAT (no IOSS), or a red risk from Jev (people or
+  pets take it, cosmetics, a medical claim, a brand, hard to ship). Amber: break-even ROAS over 2, under €10 an order for
+  ads, ads younger than 14 days, a store with 500+ products, an amber risk (a battery, sizing, fragile, …). Else green.
+  Until you type a product's supplier price it is a guess (15% of the price, "est." on the card); the weight a guess of
+  300 g. A supplier you **choose in 🔎 Sourcing** counts too (its price, packed weight and shipping quote, from
+  `product_sourcing`), unless you typed your own. Every assumption is in **Settings** (the € view), saved in D1
+  (`econ_settings`).
+  - **Decision card** on top of the Inbox: the verdict, margin per order, break-even ROAS, how long its ads run, the
+    store's size and the reasons, with Reject and Approved below: decide in ten seconds. Type the 1688 price (`23.50` is
+    yuan; `$3.20` and `€2,80` work too, a range `12.50-15.00` counts its top), the weight (`200` or `0,2 kg`) or your own
+    price: the numbers follow as you type and save on their own (D1 `econ_inputs`, by product page). It also says what
+    makes it green: "Green at a supplier price of at most €4.02 (¥33.48)" or "Green from a selling price of €51.07".
+    "Landed cost and margin, line by line" shows every euro.
+  - **Every card** in Browse and ✓ shows the margin per order and the break-even ROAS; **Sort** has *Margin / order*
+    (most first) and *Break-even ROAS* (lowest first).
+  - **The € view**: a table of every Inbox and ✓ product (filter by EU / outside EU / TikTok, Inbox / ✓, green / amber
+    / red, your prices only). Tap a column to sort by it, again for the other way; tap a product to type its prices.
+  - **Decision log** (in the € view, or from the Decision card): every Approved and Reject, on the board or the TikTok
+    tab, with what the board showed at that moment (price, landed cost, margin, break-even ROAS, ad age, store size, the
+    verdict and its reasons; D1 `decision_log`). **Undo** takes the newest decision on a product back: undecided again,
+    back in the Inbox. Undo, Remove from ✓ and Unhide on the board are written in it too. On top: every decision the
+    board holds now (also from before the log) and your approval rate.
+  - The 🚀 Launch card's margin step stays your own final numbers for one product; the € view is the quick estimate for
+    all of them.
 - **🏆 Store best seller**: proof that a product sells. Once a day (after the hunt) every board product gets its rank in
   its own store's best-seller list (Shopify's sales order, top 50) and how it moved in a week: "#2 best seller in its
   store · ↑3 in 8d". The Inbox puts sellers first (× 1.5 in the store's top 10 and top 2% of its products, × 1.2 in its top 50
@@ -213,7 +243,8 @@ migrate.mjs      creates the D1 tables (safe to run every time)
 import.mjs       one-time import of the old winners
 keywords.txt     the search words (keywords-optin.txt: only with KEYWORDS_OPTIN=1)
 lib/             score.mjs (the four rules) · meta.mjs (Ad Library search) · d1.mjs (database) · storephoto.mjs · record.mjs
-worker/          the board: src/app.mjs (API + PIN) · src/board.html (page) · wrangler.toml · migrations/
+worker/          the board: src/app.mjs (API + PIN) · src/board.html (page) · src/launch.mjs (🚀) · src/econ.mjs (💶 unit
+                 economics, decision log) · wrangler.toml · migrations/
 test/            npm test (node --test); test/board.e2e.test.mjs opens the board in Chromium at iPhone size;
                  test/ops.test.mjs runs the workflows' deploy steps and checks the rules that keep the live board safe
 ```
