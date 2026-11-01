@@ -137,6 +137,7 @@ for (const [name, viewport] of [['phone', { width: 390, height: 844 }], ['deskto
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|net::ERR/.test(m.text())) errors.push(m.text()); });
+    await page.addInitScript(() => localStorage.setItem('wh-risk', 'all')); // the tab as before: risk.e2e.test.mjs has Block hidden
     try {
       await page.goto(base);
       await page.fill('input[type=password], input[name=pin], input', env.BOARD_PIN);

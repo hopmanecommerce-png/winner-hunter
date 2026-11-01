@@ -910,6 +910,56 @@
   @media (min-width: 760px) { .sxedit { grid-template-columns: repeat(3, minmax(0, 1fr)); } .sxlinks span { flex: 0 0 auto; min-width: 64px; } }
 </style>
 <script nonce="__NONCE__" src="/momentum.js" id="mokit" defer></script>
+<style nonce="__NONCE__">
+  /* 🛡 Risk radar (risk.mjs): Block, Docs or OK on every product, the reasons one tap away. */
+  .crl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; max-width: 100%; }
+  .crb { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; min-height: 28px; padding: 3px 8px 3px 3px; border-radius: 8px; border: 1px solid var(--line); background: var(--card2); color: var(--muted); font: 500 12px/1.3 var(--sans); text-align: left; }
+  button.crb { cursor: pointer; }
+  button.crb:hover { border-color: var(--line2); }
+  .crb b { flex: none; padding: 3px 7px; border-radius: 5px; font-weight: 600; font-size: 11px; line-height: 1.2; color: #141415; background: var(--faint); }
+  .crb span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .crl.block .crb { border-color: rgba(229, 72, 77, .45); }
+  .crl.block .crb b { background: var(--bad); color: #fff; }
+  .crl.docs .crb b { background: var(--amb); }
+  .crl.ok .crb b { background: var(--win); }
+  .crret { font: 400 12px var(--sans); color: var(--muted); white-space: nowrap; }
+  .crp { flex: 1 1 100%; min-width: 0; }
+  .crp { display: grid; gap: 10px; margin-top: 4px; padding: 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--deep); font-size: 13px; line-height: 1.4; color: var(--muted); cursor: default; }
+  .crr { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .crr li { position: relative; padding-left: 16px; color: var(--ink); font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+  .crr li::before { content: ''; position: absolute; left: 2px; top: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+  .crr li.block::before { background: var(--bad); }
+  .crr li.docs::before, .crr li.ret::before { background: var(--amb); }
+  .crr li.done::before, .crr li.ok::before { background: var(--win); }
+  .crr li.off { color: var(--faint); text-decoration: line-through; }
+  .crr small { display: block; color: var(--faint); font-size: 12px; text-decoration: none; }
+  .crp p { margin: 0; overflow-wrap: anywhere; }
+  .crp b { color: var(--ink); font-weight: 500; }
+  .crpay.block { color: var(--bad); }
+  .crrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  .crrow a { color: var(--ink); font-weight: 500; text-decoration: none; padding: 6px 0; overflow-wrap: anywhere; }
+  .crrow a:hover { text-decoration: underline; }
+  .crseg { display: inline-flex; gap: 4px; }
+  .crbtn, .crseg button { min-height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line2); background: var(--card2); color: var(--ink); font: 500 12px var(--sans); cursor: pointer; white-space: nowrap; }
+  .crseg button[aria-pressed="true"][data-crval="clear"] { border-color: var(--win); color: var(--win); background: rgba(76, 195, 138, .12); }
+  .crseg button[aria-pressed="true"][data-crval="conflict"] { border-color: var(--bad); color: var(--bad); background: rgba(229, 72, 77, .12); }
+  .crcheck { display: flex; align-items: center; gap: 8px; color: var(--ink); cursor: pointer; }
+  .crcheck input { width: 20px; height: 20px; margin: 0; accent-color: var(--win); flex: none; }
+  .crcall select.chip { height: 34px; font-size: 13px; font-weight: 500; max-width: 100%; }
+  .crinfo { font-size: 12px; color: var(--faint); }
+  .crtext { width: 100%; min-height: 120px; border-radius: 8px; border: 1px solid var(--line2); background: var(--card2); color: var(--ink); padding: 8px; font: 400 12px/1.4 var(--sans); resize: vertical; }
+  .crin .crb { border: 0; background: none; padding: 0; min-height: 0; }
+  .grid > .card:has(.crp) { grid-column: 1 / -1; } /* the radar opened: the card gets the row */
+  .crbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font: 400 12px/1.4 var(--sans); color: var(--muted); min-width: 0; }
+  .crbar b { font-weight: 500; }
+  .crbar b.block { color: var(--bad); }
+  .crbar b.docs { color: var(--amb); }
+  .crbar b.ok { color: var(--win); }
+  .crbar .crbtn { min-height: 28px; }
+  .lncard .crl { margin-top: -4px; }
+  #crttn:not(:empty) { margin-left: 6px; font: 500 11px var(--num); color: var(--faint); }
+  @media (pointer: coarse) { .crbtn, .crseg button { min-height: 40px; } .crb { min-height: 36px; } }
+</style>
 </head>
 <body>
 <div class="wrap">
@@ -980,6 +1030,7 @@
       </div>
     </div>
     <div class="count" id="count" aria-live="polite" hidden></div>
+    <div class="crbar" id="crbar" aria-live="polite" hidden></div>
   </div>
 
   <section class="ibox" id="ibox" aria-label="Inbox" hidden>
@@ -1027,6 +1078,7 @@
           <button class="chip" data-tf="p25" aria-pressed="false" title="The lowest price is $25 or more. Placeholder prices stay out.">$25+</button>
           <button class="chip" data-tf="gap" aria-pressed="false" title="The shop's Meta page runs US ads, none in Australia or New Zealand">US ads, not AU/NZ</button>
           <button class="chip" data-tf="done" aria-pressed="false" title="Products you approved or rejected">Approved &amp; rejected</button>
+          <button class="chip" data-tf="riskAll" aria-pressed="false" title="Products the risk radar blocks stay hidden unless this is on">Show blocked<small id="crttn"></small></button>
         </div>
       </div>
       <div class="count" id="ttcount" aria-live="polite"></div>
@@ -1130,6 +1182,7 @@ function params(extra) {
     if (st.cc) p.set('cc', st.cc);
   }
   for (const [k, v] of Object.entries(extra || {})) p.set(k, v);
+  if (!(st.riskAll ?? store.get('wh-risk') === 'all')) p.set('risk', 'hide'); // the risk radar's Block products stay out (risk.mjs)
   return p;
 }
 
@@ -1338,6 +1391,7 @@ function worldCard(a, inbox) {
       ${inbox && tags ? `<div class="tags">${tags}</div>` : ''}
       ${inbox ? `<div class="iproof" title="${esc(list)}">${esc(proof.n)}/${esc(proof.of)} proof ${meter}</div>` : ''}
       <h2 class="t">${esc(nice(a))}</h2>
+      ${crLine(a, inbox)}
       ${price}
       ${econLine(a, inbox)}
       ${flags}
@@ -1435,6 +1489,7 @@ function googleCard(a, inbox) {
     <div class="bd">
       ${inbox && tags ? `<div class="tags">${tags}</div>` : ''}
       <h2 class="t">${esc(nice(a))}</h2>
+      ${crLine(a, inbox)}
       ${price}
       ${flags}
       ${gRules(a, inbox)}
@@ -1518,6 +1573,7 @@ function card(a, inbox) {
     <div class="bd">
       ${inbox && tags ? `<div class="tags">${tags}</div>` : ''}
       <h2 class="t">${esc(nice(a))}</h2>
+      ${crLine(a, inbox)}
       ${price}
       ${econLine(a, inbox)}
       ${flags}
@@ -2148,6 +2204,7 @@ async function load(append) {
     ADS = append ? ADS.concat(got) : got;
     total = j.total - (j.ads.length - got.length);
     header(j, madeSeq === MADE_SEQ);
+    crOn(j); // the risk radar: your checks on these products, what it hides
     if (st.view === 'inbox') FRESH = Math.max(0, FRESH - j.ads.filter((a) => DONE.has(a.id) && isNew(a)).length);
     render(append, got);
     radar();
@@ -2283,6 +2340,7 @@ const ttList = () => {
     && (!tt.cat || a.cat === tt.cat)
     && (!tt.p25 || (a.p >= 25 && !a.ps))
     && (!tt.gap || (a.ms === 'matched' && a.us > 0 && !a.au && !a.nz))
+    && (tt.riskAll || !crBlockedTT(a)) // the risk radar's Block products stay out unless shown
     && (!q || `${a.title} ${a.shop || ''} ${a.cat || ''}`.toLowerCase().includes(q))).sort(TT_SORT[tt.sort][1]);
 };
 const ttTitle = (t) => String(t || '').replace(/^\s*【[^】]*】\s*/, ''); // shops open their titles with 【Black Friday】
@@ -2314,6 +2372,7 @@ function ttCard(a) {
     </div>
     <div class="bd">
       <h2 class="t"><a href="${url}" target="_blank" rel="noopener noreferrer">${esc(ttTitle(a.title))}</a></h2>
+      ${crLine(a, false, 'tt')}
       ${price}
       ${window.MOMENTUM ? MOMENTUM.ttRow(a) : ''}
       <div class="meta">
@@ -2544,6 +2603,7 @@ function lnCardHtml(l) {
     <div class="lnprod"><span class="lnth big">${lnImg(f)}</span>
       <div class="lnpt"><h3>${esc(l.title || f.title)}</h3><small>${esc([price, host(f.store) || f.adv, extra].filter(Boolean).join(' · '))}</small>
         <div class="lnlinks">${f.source === 'tiktok' ? lnA(f.product, 'TikTok') + lnA(f.ad, 'Meta ads') : lnA(f.ad, 'Ad') + lnA(f.product || f.store, 'Shop')}</div></div></div>
+    ${crLine(l, false, 'ln')}
     <div id="lndec">${lnDecHtml(l)}</div>
     <div class="tri lndec" role="group" aria-label="Launch decision">
       <button class="no" data-ld="no" aria-pressed="${no}"><span class="tl">${ICON.x}No go</span></button>
@@ -3668,6 +3728,247 @@ async function sxCopy() {
 }
 new MutationObserver(sxMount).observe($('lnbox'), { childList: true });
 sxReady.then(sxMount, () => {});
+</script>
+<script nonce="__NONCE__" src="/risk.js" id="crkit" defer></script>
+<script nonce="__NONCE__">
+'use strict';
+// ---- 🛡 Risk radar (risk.mjs): Block, Docs or OK on every product, and why. What it blocks leaves the Inbox, Browse and
+// the TikTok list unless "Show" is on (the Worker filters the board with ?risk=hide, this page the TikTok list); ✓ Approved
+// keeps it, with its badge. The rules come from /risk.js (window.RISK): the code the Worker runs. Your checks (trademark,
+// the supplier's documents, your own call) save at once, one after the other. The Inbox card shows the data only.
+const CR = { kit: null, checks: new Map(), ver: 0, memo: new WeakMap(), open: new Set(), lines: new Map(), who: new Map(), hidden: 0, levels: null, chain: Promise.resolve(), tt: null, ttVer: -1 };
+const CR_LABEL = { block: 'Block', docs: 'Docs', ok: 'OK' };
+st.riskAll = tt.riskAll = store.get('wh-risk') === 'all'; // one setting for the board and the TikTok list, kept on this phone
+const crReady = new Promise((done) => {
+  const go = () => { CR.kit = window.RISK || null; done(); };
+  if (window.RISK) { go(); return; }
+  $('crkit').addEventListener('load', go, { once: true });
+  $('crkit').addEventListener('error', go, { once: true }); // no radar code: the cards show no badge, the Worker still filters
+});
+function crMemo(a, kind) {
+  let m = CR.memo.get(a);
+  if (!m) {
+    const x = kind === 'tt' ? CR.kit.fromTikTok(a) : kind === 'ln' ? CR.kit.fromFacts(a.facts || {}) : CR.kit.fromAd(a);
+    m = { x, key: CR.kit.keyOf(x), blocks: null, v: null, ver: -1 };
+    CR.memo.set(a, m);
+  }
+  return m;
+}
+function crBlocked(a, kind) {
+  if (!CR.kit) return false;
+  const m = crMemo(a, kind);
+  if (!m.blocks) m.blocks = CR.kit.blocks(m.x);
+  return CR.kit.blockedBy(m.blocks, CR.checks.get(m.key));
+}
+function crVerdict(a, kind) {
+  if (!CR.kit) return null;
+  const m = crMemo(a, kind);
+  if (!m.v || m.ver !== CR.ver) { m.v = CR.kit.verdict(m.x, CR.checks.get(m.key)); m.ver = CR.ver; }
+  return m.v;
+}
+// Where a reason comes from: the words it matched, Jev's answer, the category, the price, your check.
+function crFrom(r) {
+  const bits = [];
+  if (r.hit) bits.push(`name: “${r.hit}”`);
+  if (r.adhit) bits.push(`ad: “${r.adhit}”`);
+  if (r.p != null) bits.push(`Jev ${r.p}%`);
+  else if ((r.from || []).includes('jev')) bits.push('Jev: yes'); // the TikTok tab and a launch card keep Jev's yes, not its percentage
+  if (r.cat) bits.push(`category ${r.cat}`);
+  if (r.eur != null) bits.push(`about €${r.eur}`);
+  if ((r.from || []).includes('you')) bits.push('your check');
+  return bits.length ? `<small>${esc(bits.join(' · '))}</small>` : '';
+}
+const crItems = (v) => v.reasons.concat(v.returns.map((r) => Object.assign({}, r, { level: 'ret' })));
+const crList = (v) => `<ul class="crr">${crItems(v).map((r) => `<li class="${esc(r.level)}">${esc(r.text)}${crFrom(r)}</li>`).join('') || `<li class="ok">No restriction found in its name${v.jev ? ' or in Jev\'s answers' : ''}</li>`}</ul>`;
+/** The radar on a card. kind: 'ad' (EU and outside the EU), 'tt' (TikTok), 'ln' (a launch card). inbox: the Inbox card. */
+function crLine(a, inbox, kind = 'ad') {
+  const v = crVerdict(a, kind);
+  if (!v) return '';
+  const m = crMemo(a, kind);
+  CR.lines.set(m.key + '|' + kind, a);
+  CR.who.set(m.key, kind === 'tt' || (kind === 'ln' && m.x.source === 'tiktok') ? { tiktok: m.x.id } : { id: m.x.id });
+  const live = v.reasons.filter((r) => r.level === 'block' || r.level === 'docs');
+  const said = [v.mine ? 'your call' : '', live.slice(0, 3).map((r) => r.short).join(' · ') + (live.length > 3 ? ` +${live.length - 3}` : '')].filter(Boolean).join(' · ') || 'no flags';
+  const ret = v.returns.length ? `<span class="crret" title="${esc(v.returns.map((r) => r.text).join('. '))}">↩ ${esc(v.returns.map((r) => r.short).join(' · '))}</span>` : '';
+  const attrs = `class="crl ${esc(v.level)}${inbox ? ' crin' : ''}" data-crkey="${esc(m.key)}" data-crkind="${esc(kind)}"`;
+  if (inbox) { // one line on the card you decide on; the reasons in full on ✓ and in Browse
+    const tip = crItems(v).map((r) => r.text).join('. ') || 'No restriction found';
+    return `<div ${attrs} title="${esc(tip)}"><div class="crb"><b>${esc(CR_LABEL[v.level])}</b><span>Risk radar · ${esc(said)}</span></div>${ret}</div>`;
+  }
+  const open = CR.open.has(m.key);
+  return `<div ${attrs}><button class="crb" data-cropen="1" aria-expanded="${open}" title="Risk radar: the reasons and your checks"><b>${esc(CR_LABEL[v.level])}</b><span>${esc(said)}</span></button>${ret}${open ? crPanel(v) : ''}</div>`;
+}
+function crPanel(v) {
+  const c = v.check || {};
+  const docs = v.reasons.some((r) => r.level === 'docs' || r.level === 'done');
+  const opt = (val, t) => `<option value="${val}"${(c.level || '') === val ? ' selected' : ''}>${esc(t)}</option>`;
+  const link = (u, t) => (safe(u) ? `<a href="${safe(u)}" target="_blank" rel="noopener noreferrer">${esc(t)} ↗</a>` : '');
+  return `<div class="crp">${crList(v)}
+    <p class="crpay${v.pay ? ' block' : ''}">${v.pay ? `Shopify Payments prohibits it: <b>${esc(v.pay)}</b>` : 'Shopify Payments: no prohibited group found'}</p>
+    <div class="crrow"><b>Trademark</b>${link(v.tm.url, `TMview “${v.tm.q}”`)}${link(v.tm.shopUrl, `Shop name “${v.tm.shop}”`)}
+      <span class="crseg" role="group" aria-label="Your trademark check"><button data-crset="tm" data-crval="clear" aria-pressed="${c.tm === 'clear'}">Clear</button><button data-crset="tm" data-crval="conflict" aria-pressed="${c.tm === 'conflict'}">Conflict</button></span></div>
+    <div class="crrow"><span><b>Ask the supplier:</b> ${esc(v.ask.map((x) => x[0]).join(' · '))}</span><button class="crbtn" data-crcopy="1">Copy request (EN + 中文)</button></div>
+    ${docs ? `<label class="crcheck"><input type="checkbox" data-crset="docs"${c.docs ? ' checked' : ''}><span>I have these documents</span></label>` : ''}
+    <label class="crrow crcall"><b>Your call</b><span class="selw"><select class="chip" data-crset="level" aria-label="Your call">${opt('', `The radar's: ${CR_LABEL[v.radar]}`)}${opt('ok', 'OK')}${opt('docs', 'Docs')}${opt('block', 'Block')}</select></span></label>
+    <p class="crinfo">${esc(v.gpsr)}</p><p class="crinfo">${esc(v.customs)}</p>${v.jev ? '' : '<p class="crinfo">Jev has not read this product yet: the radar read its name only.</p>'}</div>`;
+}
+// Above the cards: how many it hides (and a tap to show them), or on ✓ how your approved products score.
+function crBar() {
+  let html = '';
+  if (st.scope !== 'tiktok' && st.view === 'made' && CR.levels) {
+    const l = CR.levels;
+    const n = l.block + l.docs + l.ok;
+    if (n) html = `<span>Risk radar on the ${esc(n)} you approved: <b class="block">${esc(l.block)} Block</b> · <b class="docs">${esc(l.docs)} Docs</b> · <b class="ok">${esc(l.ok)} OK</b></span>`;
+  } else if (st.scope !== 'tiktok' && (st.view === 'inbox' || st.view === 'all')) {
+    if (st.riskAll) html = '<span>Products the risk radar blocks are shown, with their badge</span><button class="crbtn" data-crshow="0">Hide them</button>';
+    else if (CR.hidden) html = `<span>${esc(CR.hidden)} ${CR.hidden === 1 ? 'product the risk radar blocks is' : 'products the risk radar blocks are'} hidden</span><button class="crbtn" data-crshow="1">Show</button>`;
+  }
+  $('crbar').innerHTML = html;
+  $('crbar').hidden = !html;
+}
+function crOn(j) {
+  const r = j && j.risk;
+  if (!r) return;
+  let changed = false;
+  for (const [k, c] of Object.entries(r.checks || {})) if (JSON.stringify(CR.checks.get(k)) !== JSON.stringify(c)) { CR.checks.set(k, c); changed = true; }
+  if (changed) CR.ver++;
+  CR.hidden = Number(r.hidden) || 0;
+  CR.levels = r.levels || null;
+  crBar();
+}
+function crShow(on) {
+  st.riskAll = tt.riskAll = on;
+  store.set('wh-risk', on ? 'all' : 'hide');
+  crBar();
+  if (st.scope === 'tiktok') { if (TT) ttRender(); } else load();
+}
+// The TikTok list is filtered here (all its rows are on the phone): ttList asks this for every row.
+function crBlockedTT(a) {
+  if (!CR.kit) return false;
+  if (CR.tt !== TT || CR.ttVer !== CR.ver) crCountTT();
+  return crBlocked(a, 'tt');
+}
+function crCountTT() {
+  if (!CR.kit) return;
+  CR.tt = TT;
+  CR.ttVer = CR.ver;
+  const n = (TT || []).filter((x) => !x.d && crBlocked(x, 'tt')).length;
+  $('crttn').textContent = n ? fmt(n) : '';
+}
+function crRefresh(key) {
+  for (const el of document.querySelectorAll('.crl[data-crkey]')) {
+    if (el.dataset.crkey !== key) continue;
+    const a = CR.lines.get(key + '|' + el.dataset.crkind);
+    if (a) el.outerHTML = crLine(a, el.classList.contains('crin'), el.dataset.crkind);
+  }
+}
+function crKeyBlocked(key) {
+  for (const kind of ['ad', 'tt', 'ln']) {
+    const a = CR.lines.get(key + '|' + kind);
+    if (a) return crBlocked(a, kind);
+  }
+  return false;
+}
+// Your check, shown at once and saved after the ones before it. Blocked or not any more: the lists change.
+function crSave(key, patch) {
+  const who = CR.who.get(key);
+  if (!who || !CR.kit) return Promise.resolve();
+  const before = CR.checks.get(key) || null;
+  const was = crKeyBlocked(key);
+  const next = CR.kit.cleanCheck(Object.assign({}, before || {}, patch));
+  if (next) CR.checks.set(key, next); else CR.checks.delete(key);
+  CR.ver++;
+  crRefresh(key);
+  const send = async () => {
+    const res = await fetch('/api/risk', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({}, who, patch)) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+    return j;
+  };
+  const p = CR.chain.then(send);
+  CR.chain = p.then(() => {}, () => {});
+  return p.then((j) => {
+    if (j.check) CR.checks.set(key, j.check); else CR.checks.delete(key);
+    CR.ver++;
+    crRefresh(key);
+    const now = crKeyBlocked(key);
+    if (now === was) { toast('Saved', ''); return; }
+    toast(now ? 'Blocked: it leaves the Inbox and Browse' : 'Not blocked any more', '');
+    if (st.scope === 'tiktok') { if (TT) ttRender(); } else if (!st.riskAll && (st.view === 'inbox' || st.view === 'all')) load();
+  }, (e) => {
+    if (before) CR.checks.set(key, before); else CR.checks.delete(key);
+    CR.ver++;
+    crRefresh(key);
+    toast('Could not save the check: ' + e.message, '');
+  });
+}
+async function crCopy(line) {
+  const kind = line.dataset.crkind;
+  const a = CR.lines.get(line.dataset.crkey + '|' + kind);
+  const v = a && crVerdict(a, kind);
+  if (!v) return;
+  const text = CR.kit.supplierRequest(v, crMemo(a, kind).x.title);
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Request copied: paste it in the 1688 chat', '');
+  } catch (e) {
+    const box = line.querySelector('.crp');
+    let ta = box && box.querySelector('.crtext');
+    if (box && !ta) {
+      ta = document.createElement('textarea');
+      ta.className = 'crtext';
+      ta.readOnly = true;
+      ta.setAttribute('aria-label', 'Request for the supplier');
+      box.append(ta);
+    }
+    if (ta) { ta.value = text; ta.focus(); ta.select(); }
+    toast('Copy the request below', '');
+  }
+}
+function crClick(e) {
+  const line = e.target.closest && e.target.closest('.crl');
+  if (!line) return;
+  if (!e.target.closest('a')) e.stopPropagation(); // a tap on the radar never opens the ad behind it
+  const b = e.target.closest('button');
+  if (!b || !line.contains(b)) return;
+  const key = line.dataset.crkey;
+  if (b.dataset.cropen) { if (!CR.open.delete(key)) CR.open.add(key); crRefresh(key); }
+  else if (b.dataset.crcopy) crCopy(line);
+  else if (b.dataset.crset === 'tm') crSave(key, { tm: (CR.checks.get(key) || {}).tm === b.dataset.crval ? '' : b.dataset.crval });
+}
+function crChange(e) {
+  const el = e.target;
+  const line = el.closest && el.closest('.crl');
+  if (!line || !el.dataset || !el.dataset.crset) return;
+  if (el.dataset.crset === 'docs') crSave(line.dataset.crkey, { docs: el.checked });
+  else if (el.dataset.crset === 'level') crSave(line.dataset.crkey, { level: el.value });
+}
+for (const id of ['grid', 'ttgrid', 'lnbox']) { $(id).addEventListener('click', crClick, true); $(id).addEventListener('change', crChange); }
+$('crbar').addEventListener('click', (e) => { const b = e.target.closest('[data-crshow]'); if (b) crShow(b.dataset.crshow === '1'); });
+// The TikTok chip toggles tt.riskAll (its own handler, which runs first): the board follows, and it is kept.
+for (const b of document.querySelectorAll('[data-tf="riskAll"]')) b.addEventListener('click', () => { st.riskAll = tt.riskAll; store.set('wh-risk', tt.riskAll ? 'all' : 'hide'); });
+for (const b of document.querySelectorAll('[data-view], [data-scope], #lnseg')) b.addEventListener('click', () => crBar());
+// The rules arrive after the first cards: badges on what is shown, then your checks from D1.
+function crRepaint() {
+  if (st.scope === 'tiktok') { if (TT) { crCountTT(); ttRender(); } return; }
+  if (st.view === 'launch') { if (LN.list && window.LAUNCH && !$('lnbox').contains(document.activeElement)) lnRender(); return; }
+  if (st.view !== 'learned' && ADS.length) render();
+  crBar();
+}
+crReady.then(async () => {
+  if (!CR.kit) return;
+  crRepaint();
+  try {
+    const res = await fetch('/api/risk', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    if (!res.ok) return;
+    const j = await res.json();
+    let n = 0;
+    for (const [k, c] of Object.entries(j.checks || {})) if (JSON.stringify(CR.checks.get(k)) !== JSON.stringify(c)) { CR.checks.set(k, c); n++; }
+    if (n) { CR.ver++; crRepaint(); }
+  } catch (e) {
+    // the badges work without your checks
+  }
+});
 </script>
 </body>
 </html>

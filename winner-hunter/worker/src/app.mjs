@@ -20,6 +20,7 @@ import { LAUNCH_JS, launchList, launchPost } from './launch.mjs';
 import { SOURCING_JS, sourcingGet, sourcingPost } from './sourcing.mjs';
 import { GOOGLE_SQL, TIKTOK_SHOPS_SQL, GOOGLE_CSV_COLS, googleRow, crossLink, googleProof, googleFacts, googleMarketsOf, googleAlert } from './google.mjs';
 import { ECON_JS, econContext, econAd, econBoard, econSorts, econGet, econPost, decisionsGet, decisionsPost, decisionLogged, tiktokLogged } from './econ.mjs';
+import { RISK_JS, riskChecks, riskHide, riskOut, riskList, riskPost } from './risk.mjs';
 
 const COOKIE = '__Host-wh';
 const MAX_AGE = 90 * 864e2; // seconds
@@ -1159,7 +1160,9 @@ async function login(req, env, now) {
 async function ads(url, env, now, viewer) {
   // The products and the run states at the same time: the board waits for one round trip to D1, not five in a row.
   // With the unit economics' settings and inputs (econ.mjs): every card gets its margin and verdict, and Browse can sort by them.
-  const [list, states, ec] = await Promise.all([board(env, now), statesJson(env.DB, ['last_run', 'world_run', 'token_expires_at', 'world_check', 'google_run']), econContext(env.DB, now, { pageKey: productKey })]);
+  const [list, states, ec, checks] = await Promise.all([board(env, now), statesJson(env.DB, ['last_run', 'world_run', 'token_expires_at', 'world_check', 'google_run']),
+    econContext(env.DB, now, { pageKey: productKey }), riskChecks(env)]);
+  riskHide(list, url.searchParams, checks, toAd); // ?risk=hide: the risk radar's Block products leave Inbox and Browse (risk.mjs)
   const q = viewOf(url.searchParams, econBoard(list, ec, url.searchParams.get('sort')));
   const scope = ['world', 'google'].includes(url.searchParams.get('scope')) ? url.searchParams.get('scope') : 'eu';
   const counts = countsOf(list, now, scope);
@@ -1179,6 +1182,7 @@ async function ads(url, env, now, viewer) {
     world_run: worldRun,
     google_run: states.google_run,
     alert: scope === 'world' ? worldAlert(worldRun, now, token, states.world_check) : scope === 'google' ? googleAlert(states.google_run, now) : boardAlert(run, token, now),
+    risk: riskOut(list, q.rows),
     viewer,
   });
 }
@@ -1374,7 +1378,9 @@ async function learned(env, now) {
 }
 
 async function csv(url, env, now) {
-  const q = viewOf(url.searchParams, await board(env, now), { csv: true });
+  const [list, checks] = await Promise.all([board(env, now), riskChecks(env)]);
+  riskHide(list, url.searchParams, checks); // the CSV is what you look at: with ?risk=hide, no Block products either
+  const q = viewOf(url.searchParams, list, { csv: true });
   const results = q.rows;
   const day = new Date(now).toISOString().slice(0, 10);
   return text(toCsv(results.map(toAd)), 200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="winners-${q.view}-${day}.csv"` });
@@ -1528,6 +1534,18 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       // The products in memory and only what was decided (hidden): no stars or feedback read for the panel.
       const lean = async () => products(await snapshot(env.DB, now), (await env.DB.prepare('SELECT ad_id, status, at FROM hidden').all()).results, [], now);
       return json(await momentumApi(env, scope, { board: lean, toAd }));
+    }
+    // ---- Compliance and risk radar (risk.mjs): Block / Docs / OK per product, and your trademark and documents checks. A
+    // block of its own, like the Launch view. /risk.js: the radar's rules, which the board runs as well.
+    if (path === '/api/risk' || path === '/risk.js') {
+      if (!ok) return json({ error: 'Log in first' }, 401);
+      if (path === '/risk.js') return method === 'GET' ? text(RISK_JS, 200, { 'Content-Type': 'text/javascript; charset=utf-8' }) : json({ error: 'Method not allowed' }, 405);
+      if (method === 'GET') return json(await riskList(env));
+      if (method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+      const { j, err } = await readJson(req, url);
+      if (err) return err;
+      const out = await riskPost(env, j, now, { rows: () => snapshot(env.DB, now) });
+      return json(out.body, out.status);
     }
     return text('Not found', 404);
   } catch (e) {

@@ -369,3 +369,20 @@ SELECT day, ads, shop_ads, best_seller_rank, rivals, price FROM momentum_history
 WHERE product_key = 'world|store.com/products/handle' ORDER BY day;
 -- eu|<page id>|<title in lower case>   tiktok|<id>
 ```
+
+## 🛡 Risk radar: Block, Docs or OK
+
+Every product gets a badge (`worker/src/risk.mjs`; the rules and their sources: [docs/risk-radar.md](docs/risk-radar.md)):
+**Block** (a law, Shopify Payments or customs stops it: supplements, cosmetics, medical claims and devices, pet medicine,
+weapons, CBD and vapes, famous brands...), **Docs** (it sells with papers first: CE, a battery and UN38.3, toys, food contact,
+claims, blades) or **OK**, with return risks beside it (↩ Sizes, Fragile, Bulky, Over €150). It reads the name in English,
+Dutch and German, the product link and Jev's answers; never the ad's words for a block.
+
+- Block products are hidden in the Inbox and Browse (EU, Outside EU, Google) and on the TikTok tab. The line above the cards says how many; **Show** brings
+  them back with their badge (kept on that phone). ✓ Approved keeps them all and says how your approvals score.
+- A tap on a badge (Browse, ✓, TikTok, a launch card): the reasons, Shopify Payments, TMview for the brand and the shop name,
+  the documents to ask the supplier for (**Copy request**, English and Chinese), GPSR and customs, and your checks:
+  trademark **Clear / Conflict**, **I have these documents**, **Your call** (OK, Docs or Block, wins over the radar's). They
+  are kept in D1 (`state` rows `risk:…`, no migration).
+- Tested on the 36 approvals of [the review](../docs/learnings/approved-products-review.md) (P1-P36): exactly its 9 restricted
+  ones are Block; its 12 that need a size get ↩ Sizes, no block.
