@@ -4633,7 +4633,7 @@ function crLine(a, inbox, kind = 'ad') {
   const m = crMemo(a, kind);
   CR.lines.set(m.key + '|' + kind, a);
   CR.who.set(m.key, kind === 'tt' || (kind === 'ln' && m.x.source === 'tiktok') ? { tiktok: m.x.id } : { id: m.x.id });
-  const live = v.reasons.filter((r) => r.level === 'block' || r.level === 'docs');
+  const live = v.reasons.filter((r) => r.level === 'block' || r.level === 'docs' || r.level === 'info'); // info: a note (Digital), never a block
   const said = [v.mine ? 'your call' : '', live.slice(0, 3).map((r) => r.short).join(' · ') + (live.length > 3 ? ` +${live.length - 3}` : '')].filter(Boolean).join(' · ') || 'no flags';
   const ret = v.returns.length ? `<span class="crret" title="${esc(v.returns.map((r) => r.text).join('. '))}">↩ ${esc(v.returns.map((r) => r.short).join(' · '))}</span>` : '';
   const attrs = `class="crl ${esc(v.level)}${inbox ? ' crin' : ''}" data-crkey="${esc(m.key)}" data-crkind="${esc(kind)}"`;
