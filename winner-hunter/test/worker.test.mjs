@@ -220,7 +220,7 @@ test('/api/ads?view=made: every product marked ✓ Made ad, the last one first, 
   ], 'the last one first; once per product; out of the rules too; rejected not');
   assert.strictEqual(j.counts.made, 3);
   assert.ok(!(await (await s.get('/api/ads?view=all&limit=100')).json()).ads.some((a) => a.id === '9003'), 'not in Browse');
-  assert.ok((await (await s.get('/api/ads?view=all&hidden=1')).json()).ads.some((a) => a.id === '9003'), 'in Made ad & rejected');
+  assert.ok((await (await s.get('/api/ads?view=all&hidden=1')).json()).ads.some((a) => a.id === '9003'), 'in Approved & rejected');
   assert.strictEqual((await (await s.get('/api/ads?view=all&limit=100')).json()).ads.find((a) => a.id === '9005').made_at, '', 'no date before you make it');
   const csv = await s.get('/export.csv?view=made');
   assert.match(csv.headers.get('content-disposition'), /winners-made-/);
