@@ -43,14 +43,16 @@ export function searchesOf(row, markets = MARKETS) {
   return out;
 }
 
-export const libraryUrl = ({ cc, q, pageId }) => {
+// exact: the words as one phrase. A shop's domain needs it: "aussie-flair.com" in any order finds every ad with "flair"
+// (tested 2026-11-01), as a phrase only the shop's own ads.
+export const libraryUrl = ({ cc, q, pageId, exact = false }) => {
   const p = new URLSearchParams({ active_status: 'active', ad_type: 'all', country: cc, media_type: 'all' });
   if (pageId) {
     p.set('search_type', 'page');
     p.set('view_all_page_id', pageId);
   } else {
-    p.set('q', q);
-    p.set('search_type', 'keyword_unordered');
+    p.set('q', exact ? `"${q}"` : q);
+    p.set('search_type', exact ? 'keyword_exact_phrase' : 'keyword_unordered');
   }
   return `https://www.facebook.com/ads/library/?${p}`;
 };

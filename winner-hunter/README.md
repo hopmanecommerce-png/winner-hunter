@@ -63,7 +63,8 @@ Add these 4 secrets in GitHub: **Settings → Secrets and variables → Actions 
 | `CF_API_TOKEN` | Cloudflare API token. Make it at dash.cloudflare.com → My Profile → API Tokens → Create Token → Custom token, with **Account → D1 → Edit** and **Account → Workers Scripts → Edit**. |
 | `CF_ACCOUNT_ID` | Your Cloudflare account ID (Cloudflare dashboard → Workers & Pages, right side). |
 | `BOARD_PIN` | The PIN for the board. Use 6+ digits. |
-| `CF_D1_TOKEN` | Optional, better: a second Cloudflare token with only **Account → D1 → Edit**. The hunts (World Hunter, Winner Hunter, Jev check, Ad prefetch) then use it instead of `CF_API_TOKEN`, so the jobs that open Facebook and shops hold no token that can change the board. |
+| `CF_D1_TOKEN` | Optional, better: a second Cloudflare token with only **Account → D1 → Edit**. The hunts (World Hunter, Winner Hunter, Jev check, Ad prefetch, Lasso stores) then use it instead of `CF_API_TOKEN`, so the jobs that open Facebook and shops hold no token that can change the board. |
+| `URLSCAN_API_KEY` | Optional, only for **Lasso stores**: a free urlscan.io account's API key (more searches a day). |
 
 Then, in **Actions**:
 
@@ -118,6 +119,7 @@ Other countries: add a repository variable `HUNT_COUNTRIES` (default `NL,BE,DE,F
 ```
 run.mjs          nightly run (batches, cursor, time budget)
 bestsellers.mjs  store signals for the board's products: best-seller rank + Trustpilot (after the hunt; lib/bestsellers.mjs, lib/trust.mjs)
+lasso.mjs        optional discovery source: stores with Lasso's hosted checkout (lib/lasso.mjs; see "Lasso stores" below)
 migrate.mjs      creates the D1 tables (safe to run every time)
 import.mjs       one-time import of the old winners
 keywords.txt     the search words (keywords-optin.txt: only with KEYWORDS_OPTIN=1)
@@ -128,6 +130,35 @@ test/            npm test (node --test); test/board.e2e.test.mjs opens the board
 ```
 
 Test locally: `cd winner-hunter && npm test` (Node 22+).
+
+## Lasso stores (optional, off)
+
+Lasso (lassocommerce.com) is a hosted checkout with upsells and order bumps, paid through Whop, Stripe and others. A
+Shopify store that pays $149+ a month and 1% of its sales for it usually runs paid traffic on a product that sells, so
+those stores are a place to find products. The research, the fingerprints and the stores found on 2026-11-01 are in
+`docs/research/lasso-stores.md`.
+
+- **What it does** (`lasso.mjs`, workflow **Lasso stores**): urlscan.io's free search finds the pages that load Lasso's
+  script (`checkout.<store>/shopify-scripts/lasso-script-v4.min.js`) and Lasso's checkout pages. Each store is then
+  checked live: the script on its page and Lasso's checkout app on `checkout.<store>/checkout` = **high**, one of the two
+  = **medium**, the script left but its checkout gone = **low** (it left Lasso). Per store: country, currency, language,
+  product count, the day it joined Lasso (from its Lasso store id) and its 5 best sellers.
+- **Off by default.** Run it by hand: Actions → Lasso stores → Run workflow. Weekly (Mondays): add a repository variable
+  `LASSO_STORES` = `on`.
+- **Where the list goes:** the run's artifact **lasso-stores** (CSV + JSON, 14 days) and, with the D1 secrets, the D1
+  table `lasso_stores` (the stores saved before are checked again every run; a store that left gets confidence ''). This
+  repository is public: any signed-in GitHub user can download an artifact, so the run's summary only has counts.
+- **Into the Inbox:** run it with **ads** = `on` (or a repository variable `LASSO_ADS` = `on`): for every store selling
+  outside the EU it searches the public Ad Library for the store's domain (as one phrase) in its market and saves the
+  store's own active ads in `world_ads` with the keyword `lasso: <store>`. The next World Hunter run turns them into
+  products in the 🌍 Inbox under its usual rules (Shopify, an ad 7+ days old, no supplements, …). EU and UK stores have
+  no market there: start Winner Hunter by hand with their domains as keywords.
+- **Optional secret `URLSCAN_API_KEY`:** a free urlscan.io account's key (1,000 searches a day). Without it urlscan only
+  searches the last 30 days, 100 results a search (the run asks per 2-day window, so that is enough for now).
+- **More stores at once:** urlscan only sees the stores someone scanned in the last 30 days (about 140 on 2026-11-01).
+  StoreLeads counts about 1,300 stores with Lasso. A reverse-CNAME list (WhoisFreaks, free credits after sign-up) gives
+  candidate checkout hostnames; check them all locally:
+  `LASSO_EXTRA_FILE=whoisfreaks.csv node winner-hunter/lasso.mjs` (with the D1 secrets to save them).
 
 ## Outside the EU
 
