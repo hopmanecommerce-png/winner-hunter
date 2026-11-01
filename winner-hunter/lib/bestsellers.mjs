@@ -56,6 +56,7 @@ export async function storeTop(store, { n = TOP_N, doFetch = globalThis.fetch, t
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ query: QUERY, variables: { n } }),
     }, timeout);
+    if (res.status === 429) return { error: 'HTTP 429', limited: true }; // says nothing about this store
     const j = await res.json().catch(() => null);
     const nodes = j && j.data && j.data.products && j.data.products.nodes;
     if (!Array.isArray(nodes)) return { error: j && j.errors ? 'api error' : 'HTTP ' + res.status };

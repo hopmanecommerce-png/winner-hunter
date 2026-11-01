@@ -11,6 +11,7 @@ on:
     paths:
       - 'winner-hunter/worker/**'
       - 'winner-hunter/bestsellers.mjs'
+      - 'winner-hunter/world.mjs'
       - 'winner-hunter/lib/**'
       - '.github/workflows/preview-board.yml'
   workflow_dispatch:
@@ -25,7 +26,7 @@ concurrency:
 jobs:
   preview:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 55
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
@@ -49,9 +50,22 @@ jobs:
         working-directory: winner-hunter
         run: npm install --no-save --no-package-lock playwright-core@1.56.1
 
+      # A short hunt outside the EU, so the test link has products there before the first daily run. Only the world_*
+      # tables and state keys world_run / world_cursor change; the live board does not read them until this is merged.
+      - name: Hunt outside the EU
+        continue-on-error: true
+        env:
+          META_TOKEN: ${{ secrets.META_TOKEN }}
+          WORLD_MINUTES: '22'
+          WORLD_PAGES: '20'
+          WORLD_SEARCH_SHARE: '0.2' # mostly the shops and products of what earlier runs found: a test link needs products
+        run: node winner-hunter/world.mjs
+
       # Fill the store best-seller ranks now, so the test link shows them before the next nightly run.
       - name: Store best sellers
         continue-on-error: true
+        env:
+          BS_MINUTES: '10'
         run: node winner-hunter/bestsellers.mjs
 
       - name: Worker packages

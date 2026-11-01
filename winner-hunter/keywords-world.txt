@@ -1,0 +1,95 @@
+# The hunt outside the EU (world.mjs): one product idea per line, searched in order in every market, each in its own
+# language: en for AU, NZ, US, CA, AE, SG, JE, MY and IL; de and fr for CH; de for LI; no for NO; en and zh for HK; zh for MO and
+# TW (Traditional Chinese); ja for JP; ko for KR. No Hebrew or Malay yet. No supplements, human food, drink or gymwear here.
+# Pets
+en: dog harness | de: hundegeschirr | fr: harnais chien | no: hundesele | ja: 犬 ハーネス | ko: 강아지 하네스 | zh: 狗胸背帶
+en: dog bed | de: hundebett | fr: lit pour chien | no: hundeseng | ja: 犬 ベッド | ko: 강아지 침대 | zh: 狗床
+en: cat litter | de: katzenstreu | fr: litière chat | no: kattesand | ja: 猫砂 | ko: 고양이 모래 | zh: 貓砂
+en: cat toy | de: katzenspielzeug | fr: jouet chat | no: katteleke | ja: 猫 おもちゃ | ko: 고양이 장난감 | zh: 貓玩具
+en: pet hair remover | de: tierhaarentferner | fr: anti poils animaux | no: dyrehårfjerner | ja: ペット 抜け毛 取り | ko: 반려동물 털 제거기 | zh: 寵物除毛
+en: dog car seat | de: hunde autositz | fr: siège auto chien | no: hundebilsete | ja: 犬 車 シート | ko: 강아지 카시트 | zh: 狗汽車座椅
+en: pet grooming | de: hundepflege | fr: toilettage chien | no: hundepleie | ja: ペット グルーミング | ko: 반려동물 그루밍 | zh: 寵物美容
+en: dog walking | de: hundeleine | fr: laisse chien | no: hundebånd | ja: 犬 リード | ko: 강아지 리드줄 | zh: 狗牽繩
+# Sleep & comfort
+en: sleep pillow | de: schlafkissen | fr: oreiller sommeil | no: sovepute | ja: 安眠枕 | ko: 수면 베개 | zh: 睡眠枕
+en: weighted blanket | de: gewichtsdecke | fr: couverture lestée | no: vektdyne | ja: 加重ブランケット | ko: 무중력 이불 | zh: 重力毯
+en: cooling sheets | de: kühlende bettwäsche | fr: draps rafraîchissants | no: kjølende sengetøy | ja: 接触冷感 シーツ | ko: 냉감 침구 | zh: 涼感床單
+en: mattress topper | de: matratzenauflage | fr: surmatelas | no: overmadrass | ja: マットレストッパー | ko: 매트리스 토퍼 | zh: 床墊墊
+en: sleep mask | de: schlafmaske | fr: masque de sommeil | no: sovemaske | ja: アイマスク 睡眠 | ko: 수면 안대 | zh: 睡眠眼罩
+en: knee pillow | de: kniekissen | fr: coussin genoux | no: knepute | ja: 膝枕 クッション | ko: 무릎 베개 | zh: 膝蓋枕
+en: neck pillow | de: nackenkissen | fr: oreiller cervical | no: nakkepute | ja: ネックピロー | ko: 목 베개 | zh: 頸枕
+en: blackout blind | de: verdunkelungsrollo | fr: store occultant | no: mørkleggingsgardin | ja: 遮光カーテン | ko: 암막 커튼 | zh: 遮光窗簾
+# Posture & relief
+en: posture corrector | de: haltungskorrektur | fr: correcteur de posture | no: holdningskorrigerer | ja: 姿勢矯正 | ko: 자세 교정기 | zh: 姿勢矯正帶
+en: back stretcher | de: rückenstrecker | fr: étireur de dos | no: ryggstrekker | ja: 背中 ストレッチ | ko: 허리 스트레칭 기구 | zh: 背部伸展器
+en: foot massager | de: fußmassagegerät | fr: masseur de pieds | no: fotmassasje | ja: フットマッサージャー | ko: 발 마사지기 | zh: 足部按摩器
+en: neck massager | de: nackenmassagegerät | fr: masseur cervical | no: nakkemassasje | ja: ネックマッサージャー | ko: 목 마사지기 | zh: 頸部按摩器
+en: heated vest | de: heizweste | fr: gilet chauffant | no: varmevest | ja: 電熱ベスト | ko: 열선 조끼 | zh: 發熱背心
+en: orthopedic shoes | de: orthopädische schuhe | fr: chaussures orthopédiques | no: ortopediske sko | ja: 矯正靴 | ko: 교정 신발 | zh: 矯正鞋
+en: seat cushion | de: sitzkissen | fr: coussin d'assise | no: sittepute | ja: 座布団 クッション | ko: 방석 쿠션 | zh: 坐墊
+# Beauty tools
+en: hair removal | de: haarentfernung | fr: épilation | no: hårfjerning | ja: 脱毛器 | ko: 제모기 | zh: 脫毛儀
+en: hair straightener | de: glätteisen | fr: lisseur cheveux | no: rettetang | ja: ヘアアイロン ストレート | ko: 고데기 | zh: 離子夾
+en: hair curler | de: lockenstab | fr: boucleur cheveux | no: krølltang | ja: カールアイロン | ko: 봉고데기 | zh: 電棒捲
+en: red light therapy | de: rotlichttherapie | fr: luminothérapie led | no: rødlysterapi | ja: 赤色光 美容 | ko: 레드라이트 테라피 | zh: 紅光美容
+en: teeth whitening | de: zahnaufhellung | fr: blanchiment dentaire | no: tannbleking | ja: 歯 ホワイトニング | ko: 치아 미백 | zh: 牙齒美白
+en: nail kit | de: nagelset | fr: kit ongles | no: neglesett | ja: ネイルキット | ko: 네일 키트 | zh: 美甲套裝
+en: makeup organizer | de: make-up organizer | fr: organisateur maquillage | no: sminkeorganisering | ja: メイクボックス | ko: 화장품 정리함 | zh: 化妝品收納
+en: shower head | de: duschkopf | fr: pommeau de douche | no: dusjhode | ja: シャワーヘッド | ko: 샤워기 헤드 | zh: 蓮蓬頭
+# Home
+en: storage organizer | de: aufbewahrung | fr: rangement maison | no: oppbevaring | ja: 収納ケース | ko: 수납 정리함 | zh: 收納盒
+en: cordless vacuum | de: akkusauger | fr: aspirateur sans fil | no: trådløs støvsuger | ja: コードレス掃除機 | ko: 무선 청소기 | zh: 無線吸塵器
+en: cleaning brush | de: reinigungsbürste | fr: brosse de nettoyage | no: rengjøringsbørste | ja: 掃除ブラシ | ko: 청소 브러시 | zh: 清潔刷
+en: sunset lamp | de: sonnenuntergang lampe | fr: lampe coucher de soleil | no: solnedgangslampe | ja: サンセットランプ | ko: 선셋 조명 | zh: 夕陽燈
+en: wall lights | de: wandleuchte | fr: applique murale | no: vegglampe | ja: 壁掛けライト | ko: 벽등 | zh: 壁燈
+en: sofa cover | de: sofabezug | fr: housse de canapé | no: sofatrekk | ja: ソファカバー | ko: 소파 커버 | zh: 沙發套
+en: window cleaner | de: fensterreiniger | fr: nettoyeur vitres | no: vindusvasker | ja: 窓掃除 | ko: 창문 청소기 | zh: 窗戶清潔器
+en: door draft stopper | de: zugluftstopper | fr: boudin de porte | no: trekkstopper | ja: 隙間風 ストッパー | ko: 문풍지 | zh: 門縫擋風條
+en: air purifier | de: luftreiniger | fr: purificateur d'air | no: luftrenser | ja: 空気清浄機 | ko: 공기청정기 | zh: 空氣清淨機
+en: heater | de: heizlüfter | fr: radiateur | no: varmeovn | ja: 電気ヒーター | ko: 전기 히터 | zh: 電暖器
+# Kitchen
+en: kitchen gadget | de: küchenhelfer | fr: accessoire cuisine | no: kjøkkenredskap | ja: キッチン便利グッズ | ko: 주방 용품 | zh: 廚房小物
+en: knife set | de: messerset | fr: couteaux cuisine | no: knivsett | ja: 包丁セット | ko: 칼 세트 | zh: 刀具組
+en: cookware | de: kochgeschirr | fr: batterie de cuisine | no: kokekar | ja: フライパン セット | ko: 냄비 세트 | zh: 鍋具組
+en: lunch box | de: lunchbox | fr: boîte à lunch | no: matboks | ja: お弁当箱 | ko: 도시락통 | zh: 便當盒
+en: water bottle | de: trinkflasche | fr: gourde | no: drikkeflaske | ja: 水筒 | ko: 물병 | zh: 水壺
+en: coffee machine accessories | de: kaffeemaschine zubehör | fr: accessoires machine à café | no: kaffemaskin tilbehør | ja: コーヒーマシン アクセサリー | ko: 커피머신 액세서리 | zh: 咖啡機配件
+# Baby & kids
+en: baby monitor | de: babyphone | fr: babyphone | no: babycall | ja: ベビーモニター | ko: 베이비 모니터 | zh: 嬰兒監視器
+en: baby sleep | de: baby schlafsack | fr: gigoteuse bébé | no: babysovepose | ja: スリーパー 赤ちゃん | ko: 아기 수면조끼 | zh: 嬰兒睡袋
+en: stroller accessories | de: kinderwagen zubehör | fr: accessoires poussette | no: barnevogn tilbehør | ja: ベビーカー アクセサリー | ko: 유모차 액세서리 | zh: 嬰兒車配件
+en: kids learning toy | de: lernspielzeug | fr: jouet éducatif | no: læringsleker | ja: 知育玩具 | ko: 교육 완구 | zh: 益智玩具
+en: kids bike | de: laufrad | fr: draisienne | no: sparkesykkel barn | ja: 子供 自転車 | ko: 어린이 자전거 | zh: 兒童滑步車
+en: personalized gift | de: personalisiertes geschenk | fr: cadeau personnalisé | no: personlig gave | ja: 名入れ ギフト | ko: 맞춤 선물 | zh: 客製化禮物
+# Car & travel
+en: car accessories | de: autozubehör | fr: accessoires voiture | no: bilutstyr | ja: カー用品 | ko: 자동차 용품 | zh: 汽車配件
+en: car organizer | de: auto organizer | fr: organisateur voiture | no: bilorganiserer | ja: 車 収納 | ko: 차량용 정리함 | zh: 汽車收納
+en: car seat cover | de: autositzbezug | fr: housse siège auto | no: setetrekk bil | ja: シートカバー 車 | ko: 자동차 시트 커버 | zh: 汽車椅套
+en: phone holder | de: handyhalterung | fr: support téléphone | no: mobilholder | ja: スマホホルダー | ko: 휴대폰 거치대 | zh: 手機支架
+en: dash cam | de: dashcam | fr: caméra embarquée | no: dashbordkamera | ja: ドライブレコーダー | ko: 블랙박스 | zh: 行車記錄器
+en: travel bag | de: reisetasche | fr: sac de voyage | no: reiseveske | ja: 旅行バッグ | ko: 여행 가방 | zh: 旅行袋
+en: caravan accessories | de: wohnwagen zubehör | fr: accessoires caravane | no: campingvogn utstyr | ja: キャンピングカー 用品 | ko: 캠핑카 용품 | zh: 露營車配件
+en: camping gear | de: campingzubehör | fr: matériel camping | no: campingutstyr | ja: キャンプ用品 | ko: 캠핑 용품 | zh: 露營用品
+# Garden & outdoor
+en: garden tool | de: gartenwerkzeug | fr: outil de jardin | no: hageredskap | ja: ガーデニング 道具 | ko: 정원 도구 | zh: 園藝工具
+en: solar lights | de: solarleuchten | fr: lampes solaires | no: solcellelys | ja: ソーラーライト | ko: 태양광 조명 | zh: 太陽能燈
+en: garden hose | de: gartenschlauch | fr: tuyau d'arrosage | no: hageslange | ja: ガーデンホース | ko: 정원 호스 | zh: 園藝水管
+en: pool accessories | de: pool zubehör | fr: accessoires piscine | no: basseng tilbehør | ja: プール 用品 | ko: 수영장 용품 | zh: 泳池配件
+en: fishing gear | de: angelzubehör | fr: matériel pêche | no: fiskeutstyr | ja: 釣り具 | ko: 낚시 용품 | zh: 釣具
+en: bird feeder | de: vogelhaus | fr: mangeoire oiseaux | no: fuglemater | ja: バードフィーダー | ko: 새 모이통 | zh: 鳥類餵食器
+# Gadgets & tools
+en: power tool | de: elektrowerkzeug | fr: outil électrique | no: elektroverktøy | ja: 電動工具 | ko: 전동 공구 | zh: 電動工具
+en: tool set | de: werkzeugset | fr: coffret outils | no: verktøysett | ja: 工具セット | ko: 공구 세트 | zh: 工具組
+en: portable charger | de: powerbank | fr: batterie externe | no: mobillader | ja: モバイルバッテリー | ko: 보조배터리 | zh: 行動電源
+en: smart watch | de: smartwatch | fr: montre connectée | no: smartklokke | ja: スマートウォッチ | ko: 스마트워치 | zh: 智慧手錶
+en: wireless earbuds | de: kabellose kopfhörer | fr: écouteurs sans fil | no: trådløse øretelefoner | ja: ワイヤレスイヤホン | ko: 무선 이어폰 | zh: 無線耳機
+en: mini projector | de: mini beamer | fr: mini projecteur | no: miniprojektor | ja: 小型プロジェクター | ko: 미니 빔프로젝터 | zh: 迷你投影機
+# Wear & gifts
+en: necklace gift | de: halskette geschenk | fr: collier cadeau | no: halskjede gave | ja: ネックレス ギフト | ko: 목걸이 선물 | zh: 項鍊禮物
+en: bracelet | de: armband | fr: bracelet | no: armbånd | ja: ブレスレット | ko: 팔찌 | zh: 手鍊
+en: sunglasses | de: sonnenbrille | fr: lunettes de soleil | no: solbriller | ja: サングラス | ko: 선글라스 | zh: 太陽眼鏡
+en: barefoot shoes | de: barfußschuhe | fr: chaussures barefoot | no: barfotsko | ja: ベアフットシューズ | ko: 맨발 신발 | zh: 赤足鞋
+en: slippers | de: hausschuhe | fr: pantoufles | no: tøfler | ja: ルームシューズ | ko: 실내화 | zh: 室內拖鞋
+en: wallet | de: geldbörse | fr: portefeuille | no: lommebok | ja: 財布 | ko: 지갑 | zh: 皮夾
+en: hat | de: mütze | fr: bonnet | no: lue | ja: ニット帽 | ko: 비니 | zh: 毛帽
+en: rain jacket | de: regenjacke | fr: veste de pluie | no: regnjakke | ja: レインジャケット | ko: 우비 자켓 | zh: 雨衣外套

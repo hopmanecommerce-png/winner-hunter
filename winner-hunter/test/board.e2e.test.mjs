@@ -61,7 +61,7 @@ function fakeViewer() {
 
 async function launch() {
   try {
-    return await chromium.launch();
+    return await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
   } catch (e) {
     return chromium.launch({ executablePath: '/opt/pw-browsers/chromium' }).catch(() => null);
   }
@@ -91,6 +91,7 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     assert.ok(sw <= cw, `${where}: page is ${sw}px wide in a ${cw}px screen`);
   };
   try {
+    await page.addInitScript(() => localStorage.setItem('wh-scope', 'eu')); // this test is about the EU tabs
     await page.goto(base + '/');
     await noSideScroll('PIN screen');
     await shot('1-pin');
@@ -102,7 +103,7 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     await page.fill('input[name=pin]', '482913');
     await Promise.all([page.waitForURL(base + '/'), page.click('button[type=submit]')]);
     await page.waitForSelector('.card');
-    assert.strictEqual(await page.locator('[data-view]').count(), 5, 'Inbox, Browse, ★, ✓ Made ad and 🧠 (no Top 20)');
+    assert.strictEqual(await page.locator('[data-view]').count(), 4, 'Inbox, Browse, ✓ Made ad and 🧠');
     assert.strictEqual(await page.getAttribute('[data-view=inbox]', 'aria-pressed'), 'true', 'Inbox is the start view');
     assert.strictEqual(await page.locator('.card').count(), 1, 'one product at a time');
     assert.strictEqual(await page.locator('.card.open').count(), 1, 'with its details open');
@@ -204,10 +205,6 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     await page.click('#undo');
     await page.waitForFunction((x) => { const c = document.querySelector(`.card[data-id="${x}"]`); return !!c && !c.classList.contains('gone'); }, id);
     await page.waitForFunction(() => document.querySelector('#nmade').textContent === '', null, { timeout: 3000 });
-    // ★ star
-    await page.locator('.card').nth(2).locator('[data-act=star]').click();
-    await page.waitForFunction(() => document.querySelectorAll('.star[aria-pressed="true"]').length === 1);
-    assert.strictEqual(await page.textContent('#nstar'), '1', 'the ★ count follows');
     // All, search and filters (always in view); the nasty title stays text
     await page.click('[data-f=r2500]');
     await page.waitForFunction(() => document.querySelector('[data-f=r2500]').getAttribute('aria-pressed') === 'true');
@@ -221,9 +218,6 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     assert.match(await page.textContent('.card .t'), /<img src=x onerror=alert\(1\)>/);
     assert.strictEqual(await page.locator('.card .t img').count(), 0, 'no HTML from the data');
     assert.ok((await page.getAttribute('#csv', 'href')).startsWith('/export.csv?view=all&q=onerror'));
-    await page.click('[data-view=starred]');
-    await page.waitForFunction(() => document.querySelectorAll('.card').length === 1);
-    assert.ok(await page.locator('#radar').isHidden(), 'no radar in ★');
     // one market: tap Belgium on the radar, the big number becomes the reach a day there; tap again for all
     await page.click('[data-view=all]');
     await page.fill('#q', '');
@@ -293,20 +287,8 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     await page.waitForFunction(() => document.querySelector('#why [data-r=price]').getAttribute('aria-pressed') === 'true');
     await page.waitForTimeout(200);
     assert.strictEqual(env.db.prepare("SELECT reasons FROM feedback WHERE ad_id = ? AND action = 'rejected'").get(second).reasons, '["price"]');
-    const third = await page.locator('.card').getAttribute('data-id');
-    const stars0 = Number(await page.textContent('#nstar')) || 0;
-    await page.keyboard.press('k');
-    await page.waitForFunction((x) => document.querySelector('.card').dataset.id !== x, third);
-    await page.waitForTimeout(150);
-    assert.strictEqual(env.db.prepare('SELECT status FROM hidden WHERE ad_id = ?').get(second).status, 'rejected');
-    assert.ok(env.db.prepare('SELECT 1 FROM stars WHERE ad_id = ?').get(third), 'Keep = ★');
-    assert.strictEqual(Number(await page.textContent('#nstar')), stars0 + 1);
-    assert.strictEqual(await left(), n0 - 3);
-    await page.click('#why [data-w=undo]');
-    await page.waitForFunction((x) => document.querySelector('.card') && document.querySelector('.card').dataset.id === x, third);
-    assert.ok(!env.db.prepare('SELECT 1 FROM stars WHERE ad_id = ?').get(third), 'Undo Keep takes the star off');
-    assert.strictEqual(await left(), n0 - 2);
     // swipe right = made ad
+    const third = await page.locator('.card').getAttribute('data-id');
     const box0 = await page.locator('.card .bd').boundingBox();
     await page.mouse.move(box0.x + 60, box0.y + 20);
     await page.mouse.down();
@@ -359,14 +341,14 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     await noSideScroll('Made ad');
     await shot('9a-made');
     // small phones, 4-digit counts: the five views never push the page sideways
-    const bigCounts = () => page.evaluate(() => { for (const [id, n] of [['nin', '1234'], ['nall', '4321'], ['nstar', '123'], ['nmade', '456']]) document.getElementById(id).textContent = n; });
+    const bigCounts = () => page.evaluate(() => { for (const [id, n] of [['nin', '1234'], ['nall', '4321'], ['nmade', '456']]) document.getElementById(id).textContent = n; });
     for (const w of [360, 320]) {
       await page.setViewportSize({ width: w, height: 740 });
       await bigCounts();
       await noSideScroll(`✓ at ${w}px with 4-digit counts`);
     }
-    await page.click('[data-view=all]');
-    await page.waitForFunction(() => document.querySelector('[data-view=all]').getAttribute('aria-pressed') === 'true' && document.querySelectorAll('.card').length > 0);
+    await page.click('[data-view=all]'); // every product is decided by now: Browse is empty here
+    await page.waitForFunction(() => document.querySelector('[data-view=all]').getAttribute('aria-pressed') === 'true' && !document.querySelector('#empty').hidden);
     await bigCounts();
     await noSideScroll('Browse at 320px with 4-digit counts');
     await page.setViewportSize({ width: 360, height: 740 });
@@ -396,23 +378,13 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     await page.waitForFunction((x) => document.querySelector('.card') && document.querySelector('.card').dataset.id === x, rmId);
     assert.strictEqual(await page.textContent('#ileft'), '1 left');
     assert.ok(await page.locator('#why').isHidden(), 'no Why? strip for the removed decision');
-    // keep it, then unstar it in ★: back in the Inbox too
-    await page.keyboard.press('k');
-    await page.waitForSelector('#zero:not([hidden])');
-    await page.click('[data-view=starred]');
-    await page.waitForSelector(`.card[data-id="${rmId}"]`);
-    await page.locator(`.card[data-id="${rmId}"] [data-act=star]`).click();
-    await page.waitForFunction((x) => !document.querySelector(`.card[data-id="${x}"]`) || document.querySelector(`.card[data-id="${x}"] .star`).getAttribute('aria-pressed') === 'false', rmId);
-    await page.click('[data-view=inbox]');
-    await page.waitForFunction((x) => document.querySelector('.card') && document.querySelector('.card').dataset.id === x, rmId);
-    assert.strictEqual(await page.textContent('#ileft'), '1 left', 'unstarred: back in the Inbox without a reload');
     // tablets: the five views, the search and the sort menu do not cover each other
     for (const w of [768, 820, 1024, 1280]) {
       await page.setViewportSize({ width: w, height: 1000 });
       await page.click('[data-view=all]');
       await page.waitForFunction(() => document.querySelector('[data-view=all]').getAttribute('aria-pressed') === 'true' && document.querySelectorAll('.card').length > 0);
       await bigCounts();
-      for (const v of ['inbox', 'all', 'starred', 'made', 'learned']) {
+      for (const v of ['inbox', 'all', 'made', 'learned']) {
         const hit = await page.evaluate((x) => { const r = document.querySelector(`[data-view=${x}]`).getBoundingClientRect(); const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!(e && e.closest(`[data-view=${x}]`)); }, v);
         assert.ok(hit, `${w}px: the ${v} view can be tapped`);
       }

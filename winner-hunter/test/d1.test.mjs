@@ -102,7 +102,7 @@ test('migration: split into statements, safe to apply twice', () => {
   assert.ok(st.length >= 8 && st.every((s) => /^CREATE (TABLE|INDEX) IF NOT EXISTS/.test(s)));
   const db = memoryDb();
   for (const s of st) db.exec(s);
-  assert.deepStrictEqual(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all().map((r) => r.name), ['ad_views', 'bestseller', 'feedback', 'hidden', 'runs', 'sqlite_sequence', 'stars', 'state', 'store_trust', 'winners'], 'all migrations, ad viewer cache, stars, feedback and store signals included');
+  assert.deepStrictEqual(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all().map((r) => r.name), ['ad_views', 'bestseller', 'feedback', 'hidden', 'runs', 'sqlite_sequence', 'stars', 'state', 'store_trust', 'winners', 'world_ads', 'world_items', 'world_pages', 'world_products', 'world_stores'], 'all migrations, ad viewer cache, stars, feedback and store signals included');
 });
 
 test('migrate(): all files over the REST client, twice; the ADD COLUMN already there is skipped, other errors throw', async () => {
@@ -114,7 +114,7 @@ test('migrate(): all files over the REST client, twice; the ADD COLUMN already t
   const first = await migrate(c, texts);
   const calls = rest.calls.length;
   const second = await migrate(c, texts);
-  assert.strictEqual(second, first - 1, 'second time: the ALTER TABLE is skipped');
+  assert.strictEqual(second, first - 2, 'second time: the two ALTER TABLEs are skipped');
   assert.strictEqual(rest.calls.length, calls * 2, 'a duplicate column is not retried');
   assert.ok(rest.db.prepare('PRAGMA table_info(runs)').all().some((r) => r.name === 'status'));
   await assert.rejects(migrate(c, ['CREATE TABLE nope (;']), /Cloudflare D1/);

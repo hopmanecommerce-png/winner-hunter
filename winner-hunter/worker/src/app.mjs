@@ -4,11 +4,13 @@
  *   GET  /api/ads     ads of a view, counts, last run, alert banner   POST /api/hide  seen / rejected / none, starred / unstarred
  *   GET  /export.csv  the current view as CSV           GET  /logout
  *   GET  /api/ad/:id  the ad itself (text, video/images, CTA) for the in-board viewer (adview.mjs)
- *   GET  /api/markets EU reach a day per country over the board's products (Market Radar)
+ *   GET  /api/markets EU reach a day per country over the board's products (Market Radar); ?scope=world: facts per market outside the EU
+ *   ?scope=world on /api/ads and /export.csv: the products outside the EU (world.mjs), judged by proof signals, not reach
  * All SQL is parameterized; sort orders come from a fixed list.
  */
 
 import { adView } from './adview.mjs';
+import { MARKET_RULES } from './market-rules.mjs';
 
 const COOKIE = '__Host-wh';
 const MAX_AGE = 90 * 864e2; // seconds
@@ -68,7 +70,10 @@ const SNAP_SQL = `SELECT w.ad_id, ${KEY} AS gk, w.product_title, w.price, w.comp
 // and w.tp (the store's Trustpilot score).
 const BS_SQL = 'SELECT product_key, rank, ok, history FROM bestseller';
 const TRUST_SQL = 'SELECT store, status, score, reviews, profile FROM store_trust';
-const VERSION_SQL = `SELECT (SELECT MAX(rowid) FROM winners) AS r, (SELECT updated_at FROM state WHERE key = 'last_run') AS u`;
+// Outside the EU (world.mjs): products from the public Ad Library, with proof signals instead of reach. Read with the
+// winners; they take part in ★, ✓, notes and decisions like any product, but stay off the EU tabs.
+const WORLD_SQL = `SELECT w.* FROM world_products w`;
+const VERSION_SQL = `SELECT (SELECT MAX(rowid) FROM winners) AS r, (SELECT updated_at FROM state WHERE key = 'last_run') AS u, (SELECT updated_at FROM state WHERE key = 'world_run') AS wu`;
 const SNAP_MS = 15 * 60000; // read again after this long anyway
 const SNAPS = new WeakMap(); // per D1 binding
 let LAST = null; // on Cloudflare (one database): shared by the requests this isolate serves
@@ -76,12 +81,13 @@ let LAST = null; // on Cloudflare (one database): shared by the requests this is
 /** All winners rows, read again only when a run saved something (or after 15 minutes). */
 export async function snapshot(DB, now = Date.now()) {
   const v = await DB.prepare(VERSION_SQL).first();
-  const ver = `${v && v.r}|${v && v.u}`;
+  const ver = `${v && v.r}|${v && v.u}|${v && v.wu}`;
   const shared = typeof navigator !== 'undefined' && navigator.userAgent === 'Cloudflare-Workers';
   let s = SNAPS.get(DB) || (shared ? LAST : null);
   if (!s || s.ver !== ver || now - s.at > SNAP_MS || now < s.at) {
     const optional = (sql) => DB.prepare(sql).all().then((r) => r.results || [], () => []); // no table yet: the board still works
-    const [{ results }, bs, tp] = await Promise.all([DB.prepare(SNAP_SQL).all(), optional(BS_SQL), optional(TRUST_SQL)]);
+    const [{ results: eu }, bs, tp, world] = await Promise.all([DB.prepare(SNAP_SQL).all(), optional(BS_SQL), optional(TRUST_SQL), optional(WORLD_SQL)]);
+    const results = eu.concat(world.map(worldRow));
     const best = new Map(bs.map((b) => [b.product_key, b]));
     const trust = new Map(tp.map((t) => [t.store, t]));
     for (const w of results) {
@@ -159,6 +165,42 @@ export function trustOf(t) {
   return { status: t.status, score: n(t.score), reviews: n(t.reviews), profile: t.profile || '' };
 }
 
+// ---------------------------------------------------------------------------
+// Outside the EU: no reach figure exists there, so a product shows which proof signals it has. Each threshold is a
+// plain fact on the card. Checked against the EU board, where reach is known: products with more ad copies, more
+// shop ads, a store best-seller rank or more Trustpilot reviews get more reach a day (research/2026-10-31-*, product
+// research repo). Age could not be checked there (the EU board only holds ads up to 42 days).
+// ---------------------------------------------------------------------------
+export const WORLD_MARKETS = ['CH', 'NO', 'AU', 'NZ', 'AE', 'US', 'CA', 'SG', 'JE', 'HK', 'MO', 'JP', 'KR', 'MY', 'TW', 'IL', 'LI']; // same as lib/world.mjs MARKETS
+export const PROOF = { days: 30, ads: 5, markets: 2, shop: 20, reviews: 100 };
+const jsonOf = (s, or) => { try { return JSON.parse(s || '') ?? or; } catch (e) { return or; } };
+
+/** A world_products row in the shape of a winners row (reach_eu empty, ad_age_days the age of its oldest running ad). */
+export function worldRow(w) {
+  return { ...w, gk: 'world|' + w.product_key, ad_age_days: w.days, reach_eu: null, scaled_count: w.ads, active_ads: w.shop_ads, data: '{}',
+    world: { markets: jsonOf(w.markets, {}), creatives: num(w.creatives), new14: num(w.new14), in_eu: w.in_eu == null ? null : Number(w.in_eu), eu_rpd: w.eu_rpd == null ? null : Number(w.eu_rpd), shop_eu_rpd: w.shop_eu_rpd == null ? null : Number(w.shop_eu_rpd),
+      likes: w.likes == null ? null : Number(w.likes), page_id: w.page_id || '', active: Number(w.active) !== 0, store_products: w.store_products == null ? null : Number(w.store_products) } };
+}
+
+/** The proof signals of one product: [{ k, ok, text }]; ok null: not known (yet). n: how many it has. */
+export function proofOf(r) {
+  const m = Object.keys(r.world.markets);
+  const age = num(r.age_now ?? r.ad_age_days);
+  const rank = bsRank(r);
+  const known = r.bs && Number(r.bs.ok);
+  const tp = r.tp && (r.tp.status === 'page' || r.tp.status === 'widget') ? num(r.tp.reviews) : null;
+  const tpKnown = !!r.tp && ['page', 'widget', 'nopage'].includes(r.tp.status); // badge and none: only the store was read, not Trustpilot
+  const items = [
+    { k: 'days', ok: age >= PROOF.days, text: `Oldest ad running ${age} days (${PROOF.days}+)` },
+    { k: 'ads', ok: num(r.scaled_count) >= PROOF.ads, text: `${num(r.scaled_count)} ads for this product (${PROOF.ads}+)` },
+    { k: 'markets', ok: m.length >= PROOF.markets, text: `In ${m.length} of ${WORLD_MARKETS.length} markets (${PROOF.markets}+)` },
+    { k: 'shop', ok: r.active_ads == null ? null : num(r.active_ads) >= PROOF.shop, text: r.active_ads == null ? 'Shop\'s active ads not counted yet' : `Shop runs ${num(r.active_ads)} active ads (${PROOF.shop}+)` },
+    { k: 'best', ok: known ? rank != null : null, text: !known ? 'Store best-seller list not read yet' : rank != null ? `#${rank} best seller in its store` : 'Not in its store\'s top 50' },
+    { k: 'trust', ok: !tpKnown ? null : (tp ?? 0) >= PROOF.reviews, text: !tpKnown ? 'Trustpilot not checked yet' : `${tp ?? 0} Trustpilot reviews (${PROOF.reviews}+)` },
+  ];
+  return { n: items.filter((i) => i.ok).length, of: items.length, items };
+}
+
 const bsRank = (r) => (r.bs && Number(r.bs.ok) && r.bs.rank != null ? Number(r.bs.rank) : null);
 /** The inbox puts products that sell first: × 1.5 in the store's top 10, × 1.2 in its top 50. */
 export const sellsBoost = (r) => {
@@ -181,7 +223,7 @@ function countriesOf(w) {
 /**
  * The rules at `now`, one product per advertiser + title, with its status. v: the board (each product's best
  * passing ad: most reach a day). k: every product once, its best ad (passing first): the ★ and ✓ Made ad lists keep
- * a product after it ages out of the rules. ids: the ads of each product (gk), for /api/hide. hat: when it was
+ * a product after it ages out of the rules. w: the products outside the EU that still run. ids: the ads of each product (gk), for /api/hide. hat: when it was
  * marked seen (made ad) or rejected.
  */
 export function products(rows, hidden = [], stars = [], now = Date.now()) {
@@ -190,10 +232,13 @@ export function products(rows, hidden = [], stars = [], now = Date.now()) {
   const groups = new Map();
   for (const w of rows) {
     const seen = Date.parse(w.last_seen);
-    const age = Number.isFinite(seen) ? num(w.ad_age_days) + Math.max(Math.trunc((now - seen) / 864e5), 0) : null;
+    // A product outside the EU: its age was worked out at the scan, and its ad may have been last seen days before that.
+    const age = w.world ? num(w.ad_age_days) : Number.isFinite(seen) ? num(w.ad_age_days) + Math.max(Math.trunc((now - seen) / 864e5), 0) : null;
     const rpd = num(w.reach_eu) / Math.max(num(w.ad_age_days), 1);
-    const pass = num(w.active_ads) >= MIN_ACTIVE_ADS && w.ad_age_days != null && age != null && age >= MIN_AGE_DAYS && age <= MAX_AGE_DAYS && rpd >= MIN_REACH_PER_DAY ? 1 : 0;
-    const r = Object.assign({}, w, { rpd, age_now: age, pass, mk: countriesOf(w) });
+    // A product from outside the EU has no reach: it is judged by its proof signals and never reaches the EU tabs.
+    const pass = !w.world && num(w.active_ads) >= MIN_ACTIVE_ADS && w.ad_age_days != null && age != null && age >= MIN_AGE_DAYS && age <= MAX_AGE_DAYS && rpd >= MIN_REACH_PER_DAY ? 1 : 0;
+    const r = Object.assign({}, w, { rpd, age_now: age, pass: w.world ? w.world.active : pass, mk: countriesOf(w) });
+    if (w.world) r.proof = proofOf(r);
     let g = groups.get(w.gk);
     if (!g) groups.set(w.gk, (g = { hid: 0, hat: '', star: 0, best: null, any: null, ids: [] }));
     g.ids.push(w.ad_id);
@@ -205,11 +250,13 @@ export function products(rows, hidden = [], stars = [], now = Date.now()) {
   }
   const v = [];
   const k = [];
+  const w = [];
   for (const g of groups.values()) {
     if (g.best) v.push(Object.assign(g.best, { hid: g.hid, hat: g.hat, star: g.star }));
     k.push(g.any === g.best ? g.any : Object.assign(g.any, { hid: g.hid, hat: g.hat, star: g.star }));
+    if (g.any.world && g.any.world.active) w.push(g.any);
   }
-  return { v, k, groups };
+  return { v, k, w, groups };
 }
 
 /** The board from D1: winners (cached), seen / rejected and stars (fresh). */
@@ -282,9 +329,43 @@ const SORTS = {
   best: (a, b) => (bsRank(a) ?? 999) - (bsRank(b) ?? 999) || better(a, b),
 };
 
+// Outside the EU: the most proof first; every other order is one plain fact.
+const stronger = (a, b) => b.proof.n - a.proof.n || num(b.scaled_count) - num(a.scaled_count) || num(b.age_now) - num(a.age_now) || cmp(a.ad_id, b.ad_id);
+const WORLD_SORTS = {
+  proof: stronger,
+  days: (a, b) => num(b.age_now) - num(a.age_now) || stronger(a, b),
+  ads: (a, b) => num(b.scaled_count) - num(a.scaled_count) || stronger(a, b),
+  markets: (a, b) => Object.keys(b.world.markets).length - Object.keys(a.world.markets).length || stronger(a, b),
+  shop: (a, b) => num(b.active_ads) - num(a.active_ads) || stronger(a, b),
+  fresh: (a, b) => num(b.world.new14) - num(a.world.new14) || stronger(a, b),
+  best: (a, b) => (bsRank(a) ?? 999) - (bsRank(b) ?? 999) || stronger(a, b),
+  reviews: (a, b) => num(b.tp && b.tp.reviews) - num(a.tp && a.tp.reviews) || stronger(a, b),
+  eu: (a, b) => num(b.world.eu_rpd ?? b.world.shop_eu_rpd) - num(a.world.eu_rpd ?? a.world.shop_eu_rpd) || stronger(a, b),
+  new: (a, b) => cmp(b.first_seen ?? '', a.first_seen ?? '') || stronger(a, b),
+};
+
+/** The products outside the EU: filters, one market (?cc=AU), sort and page. */
+function worldView(p, list, csv) {
+  const view = p.get('view') === 'inbox' ? 'inbox' : 'all';
+  const hidden = view === 'all' && p.get('hidden') === '1';
+  let out = list.w.filter((r) => (view === 'inbox' ? inInbox(r) && !blockedBy(r, list.taste) : hidden ? r.hid > 0 : r.hid === 0));
+  const cc = String(p.get('cc') || '').toUpperCase();
+  if (WORLD_MARKETS.includes(cc)) out = out.filter((r) => r.world.markets[cc]);
+  if (p.get('noteu') === '1') out = out.filter((r) => r.world.in_eu === 0);
+  if (p.get('p4') === '1') out = out.filter((r) => r.proof.n >= 4);
+  if (p.get('fresh') === '1') out = out.filter((r) => r.world.new14 > 0);
+  const q = String(p.get('q') || '').trim().slice(0, 80).toLowerCase();
+  if (q) out = out.filter((r) => [r.product_title, r.advertiser, r.store_url, r.keyword].some((x) => String(x ?? '').toLowerCase().includes(q)));
+  out.sort(Object.hasOwn(WORLD_SORTS, p.get('sort') || '') ? WORLD_SORTS[p.get('sort')] : stronger);
+  const limit = csv ? 5000 : Math.min(Math.max(parseInt(p.get('limit'), 10) || (view === 'inbox' ? 20 : 40), 1), 100);
+  const offset = offsetOf(p, csv);
+  return { view, total: out.length, offset, rows: out.slice(offset, offset + limit) };
+}
+
 /** One view of the board: filters, one market (?cc=FR: best first by the reach a day there), sort and page. */
 export function viewOf(p, list, { csv = false } = {}) {
   const view = ['starred', 'made', 'inbox'].includes(p.get('view')) ? p.get('view') : 'all';
+  if (p.get('scope') === 'world' && (view === 'all' || view === 'inbox')) return worldView(p, list, csv);
   let out;
   let sort = SORTS.rpd;
   let limit = 100;
@@ -327,18 +408,23 @@ export function viewOf(p, list, { csv = false } = {}) {
 
 const offsetOf = (p, csv) => (csv ? 0 : Math.min(Math.max(parseInt(p.get('offset'), 10) || 0, 0), 100000));
 
-const inInbox = (r) => r.hid === 0 && !r.star;
+const inInbox = (r) => r.hid === 0; // the ★ is gone from the board (2026-10-31): an old star no longer keeps a product out
 const blockedBy = (r, taste) => !!(taste && taste.blocked.size && taste.blocked.has(storeOf(r.store_url)));
 const NEW_MS = 864e5; // found in the last day: new
 
-export const countsOf = (list, now = Date.now()) => ({
-  all: list.v.filter((r) => r.hid === 0).length,
-  inbox: list.v.filter((r) => inInbox(r) && !blockedBy(r, list.taste)).length,
-  fresh: list.v.filter((r) => inInbox(r) && !blockedBy(r, list.taste) && now - Date.parse(r.first_seen) < NEW_MS).length,
-  starred: list.k.filter((r) => r.star).length,
-  made: list.k.filter((r) => r.hid === 1).length,
-  hidden: list.v.filter((r) => r.hid > 0).length,
-});
+export const countsOf = (list, now = Date.now(), scope = 'eu') => {
+  const on = scope === 'world' ? list.w : list.v;
+  return {
+    all: on.filter((r) => r.hid === 0).length,
+    inbox: on.filter((r) => inInbox(r) && !blockedBy(r, list.taste)).length,
+    fresh: on.filter((r) => inInbox(r) && !blockedBy(r, list.taste) && now - Date.parse(r.first_seen) < NEW_MS).length,
+    starred: list.k.filter((r) => r.star).length,
+    made: list.k.filter((r) => r.hid === 1).length,
+    hidden: on.filter((r) => r.hid > 0).length,
+    world: list.w.filter((r) => r.hid === 0).length,
+    eu: list.v.filter((r) => r.hid === 0).length,
+  };
+};
 
 /** The board's ads (not hidden) whose ad view is missing or older than ?2, best first: prefetch.mjs opens these ahead. */
 export const PREFETCH_SQL = `${BASE} SELECT v.ad_id FROM v LEFT JOIN ad_views a ON a.ad_id = v.ad_id
@@ -368,6 +454,32 @@ export function marketsOf(rows) {
     .map((x) => ({ ...x, rpd: Math.round(x.rpd), share: total ? Math.round((x.rpd / total) * 1000) / 10 : 0, top: x.top && { ...x.top, rpd: Math.round(x.top.rpd) } }))
     .sort((a, b) => b.rpd - a.rpd || a.cc.localeCompare(b.cc));
   return { markets, total_rpd: Math.round(total), products: rows.length };
+}
+
+/**
+ * The Market Radar outside the EU: every market, also an empty one, with facts instead of reach: products, shops,
+ * products with 4+ proof signals, ads started in the last 14 days, the age of its oldest ad, and the rules for selling there.
+ */
+export function worldMarketsOf(rows) {
+  const m = new Map(WORLD_MARKETS.map((cc) => [cc, { cc, products: 0, shops: new Set(), strong: 0, new14: 0, days: 0, top: null }]));
+  for (const r of rows) {
+    for (const [cc, x] of Object.entries(r.world.markets)) {
+      const k = m.get(cc);
+      if (!k) continue;
+      k.products++;
+      k.shops.add(storeOf(r.store_url));
+      if (r.proof.n >= 4) k.strong++;
+      k.new14 += num(x.new14);
+      k.days = Math.max(k.days, num(x.days));
+      if (!k.top || stronger(r, k.top) < 0) k.top = r;
+    }
+  }
+  const total = [...m.values()].reduce((a, x) => a + x.products, 0);
+  const markets = [...m.values()].map((x) => ({ cc: x.cc, products: x.products, shops: x.shops.size, strong: x.strong, new14: x.new14, days: x.days,
+    share: total ? Math.round((x.products / total) * 1000) / 10 : 0, top: x.top && { id: x.top.ad_id, title: String(x.top.product_title || '').slice(0, 120), n: x.top.proof.n },
+    rules: MARKET_RULES.markets[x.cc] || null }))
+    .sort((a, b) => b.products - a.products || WORLD_MARKETS.indexOf(a.cc) - WORLD_MARKETS.indexOf(b.cc));
+  return { scope: 'world', markets, products: rows.length, proof: PROOF, rules_as_of: MARKET_RULES.as_of, rules_note: MARKET_RULES.note };
 }
 
 // ---------------------------------------------------------------------------
@@ -488,6 +600,17 @@ export function boardAlert(run, token, now = Date.now()) {
   return null;
 }
 
+/** A problem with the hunt outside the EU, for its tab: { level, text } or null. */
+export function worldAlert(run, now = Date.now()) {
+  if (!run) return null;
+  const at = Date.parse(run.finished_at || run.started_at || '');
+  if (run.health === 'failed') return { level: 'red', text: run.alert || 'Laatste scan buiten de EU mislukt / Last scan outside the EU failed' };
+  const moved = Date.parse(run.updated_at || run.started_at || '');
+  if (run.status === 'running' && Number.isFinite(moved) && now - moved > 3 * 3600e3) return { level: 'red', text: 'Scan buiten de EU staat stil / The scan outside the EU has stopped moving' };
+  if (Number.isFinite(at) && now - at > 72 * 3600e3) return { level: 'red', text: 'Geen scan buiten de EU in 72 uur / No scan outside the EU in 72 hours' };
+  if (run.health === 'warning') return { level: 'yellow', text: run.alert || 'Laatste scan had waarschuwingen / Last scan had warnings' };
+  return null;
+}
 const httpsOr = (u) => (typeof u === 'string' && /^https:\/\//i.test(u) ? u : '');
 
 /** One ad as the board gets it: facts, no score (every ad on the board passed the rules). */
@@ -512,7 +635,7 @@ export function toAd(r) {
     age: r.age_now ?? r.ad_age_days,
     ads: r.active_ads,
     scaled: r.scaled_count,
-    products: Number.isFinite(Number(d.store_products)) && d.store_products !== null ? Number(d.store_products) : null,
+    products: r.world ? r.world.store_products : Number.isFinite(Number(d.store_products)) && d.store_products !== null ? Number(d.store_products) : null,
     myshopify: shop && /\.myshopify\.com$/i.test(String(shop.text || '')) ? String(shop.text).slice(0, 100) : '',
     adv: r.advertiser || '',
     kw: r.keyword || '',
@@ -535,6 +658,17 @@ export function toAd(r) {
     fit: r.fit == null ? null : r.fit,
     best: bestOf(r.bs),
     trust: trustOf(r.tp),
+    world: r.world ? {
+      proof: r.proof || null,
+      markets: Object.entries(r.world.markets).map(([cc, x]) => [cc, num(x.ads), num(x.days), num(x.new14)]).sort((a, b) => b[1] - a[1] || b[2] - a[2]),
+      creatives: r.world.creatives,
+      new14: r.world.new14,
+      in_eu: r.world.in_eu,
+      eu_rpd: r.world.eu_rpd,
+      shop_eu_rpd: r.world.shop_eu_rpd,
+      likes: r.world.likes,
+      page_id: r.world.page_id,
+    } : null,
   };
 }
 
@@ -553,6 +687,12 @@ const CSV_COLS = [
   ['store_url', (a) => a.store], ['product_url', (a) => a.product], ['ad_library_url', (a) => a.ad], ['image_url', (a) => a.img],
   ['keyword', (a) => a.kw], ['first_seen', (a) => a.first_seen], ['last_seen', (a) => a.last_seen], ['status', (a) => a.hidden || (a.star ? 'starred' : '')],
   ['made_at', (a) => a.made_at],
+  ['proof_signals', (a) => (a.world && a.world.proof ? a.world.proof.n : null)],
+  ['markets_outside_eu', (a) => (a.world ? a.world.markets.map(([c, n, d]) => `${c} ${n} ads ${d}d`).join(' / ') : null)],
+  ['new_ads_14d', (a) => (a.world ? a.world.new14 : null)],
+  ['in_eu', (a) => (a.world && a.world.in_eu != null ? a.world.in_eu : null)],
+  ['eu_reach_per_day_product', (a) => (a.world ? a.world.eu_rpd : null)],
+  ['eu_reach_per_day_shop_best_ad', (a) => (a.world ? a.world.shop_eu_rpd : null)],
 ];
 export const toCsv = (ads) => [CSV_COLS.map((c) => c[0]).join(','), ...ads.map((a) => CSV_COLS.map(([, f]) => csvCell(f(a))).join(','))].join('\r\n') + '\r\n';
 
@@ -595,8 +735,10 @@ async function login(req, env, now) {
 async function ads(url, env, now, viewer) {
   const list = await board(env, now);
   const q = viewOf(url.searchParams, list);
-  const counts = countsOf(list, now);
+  const scope = url.searchParams.get('scope') === 'world' ? 'world' : 'eu';
+  const counts = countsOf(list, now, scope);
   const run = await stateJson(env.DB, 'last_run');
+  const worldRun = await stateJson(env.DB, 'world_run');
   // While a run hunts, the board also shows what the run before it found.
   const prev = run && run.status === 'running'
     ? await env.DB.prepare('SELECT started_at, finished_at, ads_checked, winners FROM runs WHERE finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 1').first()
@@ -609,7 +751,8 @@ async function ads(url, env, now, viewer) {
     counts,
     last_run: run,
     prev_run: prev || null,
-    alert: boardAlert(run, await stateJson(env.DB, 'token_expires_at'), now),
+    world_run: worldRun,
+    alert: scope === 'world' ? worldAlert(worldRun, now) : boardAlert(run, await stateJson(env.DB, 'token_expires_at'), now),
     viewer,
   });
 }
@@ -814,7 +957,9 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
     if (path === '/api/ads' || path === '/api/hide' || path === '/api/markets' || path === '/export.csv' || path === '/api/feedback' || path === '/api/learned' || path === '/api/note') {
       if (!ok) return path === '/export.csv' ? text('Log in first.', 401) : json({ error: 'Log in first' }, 401);
       if (path === '/api/markets' && method === 'GET') {
-        return json(marketsOf((await board(env, now)).v.filter((r) => r.hid === 0)));
+        const b = await board(env, now);
+        if (url.searchParams.get('scope') === 'world') return json(worldMarketsOf(b.w.filter((r) => r.hid === 0)));
+        return json(marketsOf(b.v.filter((r) => r.hid === 0)));
       }
       if (path === '/api/ads' && method === 'GET') return await ads(url, env, now, !!(launch && env.BROWSER && String(env.META_TOKEN || '').trim()));
       if (path === '/api/hide' && method === 'POST') return await hide(req, url, env, now);
