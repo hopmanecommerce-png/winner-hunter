@@ -24,7 +24,7 @@ export const TODO_SQL = `SELECT p.product_key, p.product_title AS title, p.image
   p.markets, p.ads, p.days, p.new14, p.creatives, COALESCE(i.product_type, '') AS type
 FROM world_products p LEFT JOIN world_items i ON i.product_key = p.product_key LEFT JOIN world_checks c ON c.product_key = p.product_key
 WHERE p.active = 1 AND (c.product_key IS NULL OR COALESCE(c.version, 1) < ${VERSION}
-  OR (COALESCE(c.ad_text, 0) = 0 AND EXISTS (SELECT 1 FROM world_ads a WHERE a.product_key = p.product_key AND COALESCE(a.body, '') != '')))
+  OR (COALESCE(c.ad_text, 0) = 0 AND p.product_key IN (SELECT product_key FROM world_ads WHERE product_key != '' AND COALESCE(body, '') != '')))
 ORDER BY p.first_seen LIMIT ${MAX_PER_RUN}`;
 const LEFT_SQL = `SELECT COUNT(*) AS n FROM world_products p LEFT JOIN world_checks c ON c.product_key = p.product_key WHERE p.active = 1 AND (c.product_key IS NULL OR COALESCE(c.version, 1) < ${VERSION})`;
 const ADS_OF_SQL = `SELECT a.product_key, a.title, COALESCE(a.body, '') AS body, a.image_url, a.copies, a.last_seen FROM world_ads a WHERE a.product_key IN (SELECT value FROM json_each(?1)) ORDER BY a.copies DESC, a.last_seen DESC`;

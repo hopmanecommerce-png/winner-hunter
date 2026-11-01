@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { d1Client, migrate } from '../lib/d1.mjs';
 import { checkProduct, photoAsset, productPage, categoryOf, sizeOf, JevError } from '../lib/jev.mjs';
 import { questions, TAXONOMY, CATEGORIES, SEP, TRAITS, AD_TRAITS, VERSION } from '../worker/src/jev-questions.mjs';
-import { checkAll, adsOf, SAVE_SQL } from '../world-check.mjs';
+import { checkAll, adsOf, SAVE_SQL, TODO_SQL } from '../world-check.mjs';
 import { jevFlags, jevMatches, jevSummary, worldAlert, worldRow, toCsv } from '../worker/src/app.mjs';
 import { d1Rest, memoryDb } from './helpers/sqlite-d1.mjs';
 
@@ -191,6 +191,19 @@ test('checkAll: EU products get answers too, once per product, after the ones ou
   assert.deepStrictEqual(keys, ['eu|7|lamp', 'eu|7|pod', 's.test/products/world']);
   assert.strictEqual(JSON.parse(a.asks()[0].init.body).state.product.name, 'P s.test/products/world', 'outside the EU first');
   assert.strictEqual((await checkAll({ db: client, key: 'k', doFetch: api().doFetch, pause, log: () => {}, now })).checked, 0, 'once');
+});
+
+test('the queries stay cheap: D1 counts every row read, and a scan per product took the board down on 1 Nov 2026', async () => {
+  const { mem } = await db();
+  const plan = (sql) => mem.prepare('EXPLAIN QUERY PLAN ' + sql).all().map((r) => r.detail).join(' | ');
+  assert.doesNotMatch(plan(TODO_SQL), /CORRELATED/, 'no subquery per product');
+  assert.match(plan("UPDATE world_ads INDEXED BY world_ads_store_title SET product_key = 'x', guessed = 1 WHERE store = 'a' AND title = 'b' AND product_key = ''"), /USING INDEX world_ads_store_title/);
+  assert.match(fs.readFileSync(new URL('../world.mjs', import.meta.url), 'utf8'), /UPDATE world_ads INDEXED BY world_ads_store_title SET/, 'the hunt names the index: with an empty key the planner can pick the other one');
+  // Measured, not assumed: with 2,000 ads and 500 products the query reads each table about once.
+  const addAd = mem.prepare("INSERT INTO world_ads (ad_id, cc, title, body, product_key) VALUES (?, 'AU', 't', ?, ?)");
+  for (let i = 0; i < 500; i++) addProduct(mem, 's.test/products/p' + i);
+  for (let i = 0; i < 2000; i++) addAd.run(String(i), i % 50 ? '' : 'words', 's.test/products/p' + (i % 500));
+  assert.strictEqual(mem.prepare(TODO_SQL).all().length, 500);
 });
 
 test('adsOf: unique words, the ad with the most copies first, and the markets', () => {
