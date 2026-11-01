@@ -570,6 +570,14 @@
     .meta:not(.m4) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .meta:not(.m4) .m { padding: 0 6px; }
   }
+  /* The TikTok tab has its own list: the hunt's controls and cards step aside. */
+  body:not(.tt) #ttbox { display: none; }
+  .tt .wrap > .tools, .tt .wrap > .rail, .tt #runbox, .tt #grid, .tt #ibox, .tt #dock, .tt #pnote, .tt #learn, .tt #zero, .tt #empty, .tt #loadmore, .tt #csv { display: none !important; }
+  .ttnote { font-size: 12px; color: var(--muted); margin: 8px 0 0; line-height: 1.45; }
+  .ttads { font-size: 12px; color: var(--muted); line-height: 1.4; }
+  .ttads a { color: var(--ink); font-weight: 600; text-decoration: none; }
+  .ttads a:hover { text-decoration: underline; }
+  #ttgrid .t a { color: inherit; text-decoration: none; }
 </style>
 </head>
 <body>
@@ -583,7 +591,7 @@
     </div>
   </header>
   <div class="status" id="runbox"><i class="dot"></i><span class="run" id="run">Loading…</span></div>
-  <div class="scope" role="group" aria-label="Which markets"><button data-scope="world" aria-pressed="true">Outside EU <small id="nworld"></small></button><button data-scope="eu" aria-pressed="false">EU <small id="neu"></small></button></div>
+  <div class="scope" role="group" aria-label="Which products"><button data-scope="world" aria-pressed="true">Outside EU <small id="nworld"></small></button><button data-scope="eu" aria-pressed="false">EU <small id="neu"></small></button><button data-scope="tiktok" aria-pressed="false">TikTok <small id="ntt"></small></button></div>
 
   <div class="tools">
   <section class="radar min" id="radar" aria-label="Market Radar" hidden>
@@ -657,6 +665,36 @@
   <div class="zero" id="zero" hidden></div>
   <div class="empty" id="empty" hidden></div>
   <div class="loadmore" id="loadmore"><button id="moreBtn" hidden>Show more</button></div>
+
+  <section id="ttbox" aria-label="TikTok products">
+    <div class="rail">
+      <div class="bar2">
+        <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg>
+          <input id="ttq" type="search" placeholder="Search TikTok products…" aria-label="Search TikTok products" maxlength="80" enterkeyhint="search"></label>
+      </div>
+      <div class="find">
+        <div class="chips" role="group" aria-label="TikTok filters">
+          <span class="selw"><select id="ttsort" class="chip" aria-label="Sort">
+            <option value="sold">Units sold</option>
+            <option value="plays">Video plays</option>
+            <option value="creators">Creators</option>
+            <option value="rating">Rating</option>
+            <option value="high">Highest price</option>
+            <option value="low">Lowest price</option>
+          </select></span>
+          <button class="chip" data-tf="clean" aria-pressed="true" title="Jev flagged no blocker">No blocker</button>
+          <button class="chip" data-tf="p25" aria-pressed="false" title="The lowest price is $25 or more">$25+</button>
+          <button class="chip" data-tf="gap" aria-pressed="false" title="The shop's Meta page runs US ads, none in Australia or New Zealand">US ads, not AU/NZ</button>
+          <button class="chip" data-tf="done" aria-pressed="false" title="Products you approved or rejected">Approved &amp; rejected</button>
+        </div>
+      </div>
+      <div class="count" id="ttcount" aria-live="polite"></div>
+    </div>
+    <p class="ttnote" id="ttnote"></p>
+    <div class="grid" id="ttgrid" aria-busy="true"></div>
+    <div class="empty" id="ttempty" hidden></div>
+    <div class="loadmore" id="ttload"><button id="ttmore" hidden>Show more</button></div>
+  </section>
 </div>
 <div class="toast" id="toast" role="status" hidden><span id="toastMsg"></span><button id="undo">Undo</button></div>
 
@@ -698,8 +736,9 @@ const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) 
 const WSORTED = { eu: 'by EU reach a day', proof: 'most proof first', days: 'by oldest ad', ads: 'by ads for the product', markets: 'by number of markets', shop: 'by shop ads', fresh: 'by new ads in 14 days', best: 'by store best-seller rank', reviews: 'by Trustpilot reviews', new: 'newest first' , jevp: 'by Jev product score', jeva: 'by Jev ad score' };
 const WSORT_LABEL = { proof: 'Most proof', days: 'Oldest ad', ads: 'Most ads for product', markets: 'Most markets', shop: 'Most shop ads', fresh: 'New ads 14d', best: 'Store best seller', reviews: 'Trustpilot reviews', eu: 'EU reach / day', new: 'Newest' , jevp: 'Jev product score', jeva: 'Jev ad score' };
 const ESORT_LABEL = { rpd: 'Reach / day', new: 'Newest', scaled: 'Most ad copies', ads: 'Most shop ads', reach: 'Total reach', best: 'Store best seller' , jevp: 'Jev product score', jeva: 'Jev ad score' };
-const scope0 = store.get('wh-scope') === 'eu' ? 'eu' : 'world'; // the markets outside the EU come first
-const st = { scope: scope0, view: scope0 === 'world' ? 'all' : 'inbox', q: '', sort: 'rpd', wsort: 'proof', jev: '', r2500: false, r10k: false, p4: false, noteu: false, fresh: false, hidden: false, cc: '', offset: 0 };
+const saved = store.get('wh-scope');
+const scope0 = saved === 'eu' || saved === 'tiktok' ? saved : 'world'; // the markets outside the EU come first
+const st = { scope: scope0, view: scope0 === 'eu' ? 'inbox' : 'all', q: '', sort: 'rpd', wsort: 'proof', jev: '', r2500: false, r10k: false, p4: false, noteu: false, fresh: false, hidden: false, cc: '', offset: 0 };
 let ADS = [];
 let total = 0;
 let loading = false;
@@ -1136,6 +1175,7 @@ function worldRadar(m) {
   $('rall').textContent = showAll ? 'Top only' : `All ${m.markets.length} markets and selling rules`;
 }
 async function loadMarkets() {
+  if (st.scope === 'tiktok') return;
   const asked = st.scope;
   try {
     const res = await fetch('/api/markets' + (asked === 'world' ? '?scope=world' : ''), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
@@ -1549,6 +1589,7 @@ function setMade(n, bump) {
 
 let seq = 0;
 async function load(append) {
+  if (st.scope === 'tiktok') return;
   if (st.view === 'learned') { seq++; loadLearned(); return; }
   const my = ++seq;
   const madeSeq = MADE_SEQ;
@@ -1681,6 +1722,130 @@ $('grid').addEventListener('error', (e) => {
   ph.prepend(d);
 }, true);
 
+// ---- TikTok tab: real US TikTok Shop sold counts. All rows arrive once, so filters and sorting cost no D1 reads.
+const TT_SORT = {
+  sold: ['by units sold', (a, b) => b.sold - a.sold],
+  plays: ['by video plays', (a, b) => (b.plays || 0) - (a.plays || 0)],
+  creators: ['by creators', (a, b) => (b.creators || 0) - (a.creators || 0)],
+  rating: ['by rating', (a, b) => (b.rating || 0) - (a.rating || 0)],
+  high: ['by highest price', (a, b) => (b.p || 0) - (a.p || 0)],
+  low: ['by lowest price', (a, b) => (a.p ?? 1e9) - (b.p ?? 1e9)],
+};
+const TT_PAGE = 60;
+const TT_BLOCK = { electric: 'Battery or electric', skin: 'Cosmetics', medical: 'Medical claim', brand: 'Brand or copy risk', sizing: 'Sizing returns', fragile: 'Fragile', bulky: 'Big or heavy', restricted: 'Hard to ship', kids: 'For children', foodcontact: 'Touches food', hardsource: 'Hard to source' };
+const tt = { q: '', sort: 'sold', clean: true, p25: false, gap: false, done: false, shown: TT_PAGE };
+let TT = null;
+const ttList = () => {
+  const q = tt.q.toLowerCase();
+  return TT.filter((a) => (tt.done ? a.d : !a.d)
+    && (!tt.clean || !a.blockers)
+    && (!tt.p25 || a.p >= 25)
+    && (!tt.gap || (a.ms === 'matched' && a.us > 0 && !a.au && !a.nz))
+    && (!q || `${a.title} ${a.shop || ''} ${a.cat || ''}`.toLowerCase().includes(q))).sort(TT_SORT[tt.sort][1]);
+};
+const ttTitle = (t) => String(t || '').replace(/^\s*【[^】]*】\s*/, ''); // shops open their titles with 【Black Friday】
+const ttBig = (n) => (n >= 1e8 ? Math.round(n / 1e6) + 'M' : fmt(n)); // 3 digits fit a phone's column, 264.9M does not
+function ttCard(a) {
+  const url = safe(a.url);
+  const tags = String(a.blockers || '').split(/\s+/).filter(Boolean).map((b) => `<span class="tag">${esc(TT_BLOCK[b] || b)}</span>`).join('')
+    + (a.d === 'approved' ? '<span class="tag made">✓ Approved</span>' : a.d ? '<span class="tag">Rejected</span>' : '');
+  const photo = safe(a.img)
+    ? `<img src="${safe(a.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
+    : `<div class="dom">${esc(a.shop)}</div>`;
+  const price = a.p == null ? '' : `<div class="price"><span>${esc(money(a.p, 'USD'))}${a.pm > a.p ? '–' + esc(money(a.pm, 'USD')) : ''}</span></div>`;
+  const counts = `Meta ads: US ${esc(fmt(a.us || 0))} · AU ${esc(fmt(a.au || 0))} · NZ ${esc(fmt(a.nz || 0))}`;
+  const ads = a.ms !== 'matched' ? 'No Meta page found'
+    : (safe(a.mu) ? `<a href="${safe(a.mu)}" target="_blank" rel="noopener noreferrer">${counts}</a>` : counts) + (a.mn ? ' · match unsure' : '');
+  const acts = a.d === 'approved' ? '<button class="un" data-td="">Remove from ✓</button>'
+    : a.d ? '<button class="un" data-td="">Unhide</button>'
+    : `<button class="ok" data-td="approved">${ICON.check}Approved</button><button class="no" data-td="rejected">${ICON.x}Reject</button>`;
+  return `<article class="card" data-id="${esc(a.id)}">
+    <div class="ph">${photo}
+      <div class="badges">${tags}</div>
+      <div class="hero" title="Lifetime units sold on TikTok Shop US"><b>${esc(fmt(a.sold))}</b><span>sold US</span></div>
+      <a class="view" href="${url}" target="_blank" rel="noopener noreferrer" aria-label="Open on TikTok">${ICON.play}</a>
+    </div>
+    <div class="bd">
+      <h2 class="t"><a href="${url}" target="_blank" rel="noopener noreferrer">${esc(ttTitle(a.title))}</a></h2>
+      ${price}
+      <div class="meta">
+        <div class="m" title="${esc(fmt(a.reviews))} reviews"><b>${a.rating == null ? '–' : '★' + esc(a.rating)}</b><span>rating</span></div>
+        <div class="m" title="Creators with videos on this product, of the videos in the answer"><b>${esc(fmt(a.creators))}</b><span>creators</span></div>
+        <div class="m" title="Plays on those videos"><b>${esc(ttBig(a.plays))}</b><span>plays</span></div>
+      </div>
+      <div class="who ln"><span class="shop">${esc(a.shop)}</span><a href="${url}" target="_blank" rel="noopener noreferrer">TikTok ↗</a><a class="src" href="${esc(src1688(a.title))}" target="_blank" rel="noopener noreferrer" title="Search 1688">1688 ↗</a></div>
+      <div class="ttads">${ads}</div>
+    </div>
+    <div class="acts">${acts}</div>
+  </article>`;
+}
+function ttRender() {
+  for (const b of document.querySelectorAll('[data-tf]')) b.setAttribute('aria-pressed', String(!!tt[b.dataset.tf]));
+  const list = ttList();
+  $('ttgrid').innerHTML = list.slice(0, tt.shown).map(ttCard).join('');
+  $('ttgrid').setAttribute('aria-busy', 'false');
+  $('ttcount').textContent = `${list.length.toLocaleString('en-US')} of ${TT.length.toLocaleString('en-US')} · ${TT_SORT[tt.sort][0]}`;
+  const at = TT.reduce((m, a) => (a.at > m ? a.at : m), '');
+  $('ttnote').textContent = at ? `Sold counts are lifetime US totals, read ${new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}. Meta ads are counted per shop, matched by name: other shops can sell the same item.` : '';
+  $('ttempty').hidden = list.length > 0;
+  $('ttempty').innerHTML = `${EMPTY_ICON}<div>${TT.length ? 'No products match.' : 'No TikTok products loaded yet.'}</div>`;
+  $('ttmore').hidden = tt.shown >= list.length;
+}
+function ttMore() {
+  if (st.scope !== 'tiktok' || $('ttmore').hidden) return;
+  const list = ttList();
+  $('ttgrid').insertAdjacentHTML('beforeend', list.slice(tt.shown, tt.shown + TT_PAGE).map(ttCard).join(''));
+  tt.shown += TT_PAGE;
+  $('ttmore').hidden = tt.shown >= list.length;
+}
+async function ttLoad() {
+  if (TT) { ttRender(); return; }
+  $('ttgrid').innerHTML = SKELETON;
+  try {
+    const res = await fetch('/api/tiktok', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    if (res.status === 401) { location.reload(); return; }
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+    TT = j.products;
+    $('ntt').textContent = TT.length ? fmt(TT.length) : '';
+    ttRender();
+  } catch (e) {
+    $('ttgrid').innerHTML = '';
+    $('ttempty').hidden = false;
+    $('ttempty').textContent = 'Could not load the TikTok products: ' + e.message;
+  }
+}
+$('ttgrid').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-td]');
+  const a = b && TT.find((x) => x.id === b.closest('.card').dataset.id);
+  if (!a) return;
+  const back = a.d;
+  a.d = b.dataset.td || null;
+  ttRender();
+  toast(a.d === 'approved' ? 'Approved' : a.d ? 'Rejected' : 'Taken back', '');
+  try {
+    const res = await fetch('/api/tiktok', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: a.id, decision: a.d || '' }) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+  } catch (err) {
+    a.d = back;
+    ttRender();
+    toast('Could not save that. Try again.', '');
+  }
+});
+$('ttgrid').addEventListener('error', (e) => {
+  if (e.target.tagName !== 'IMG') return;
+  const d = document.createElement('div');
+  d.className = 'dom';
+  d.textContent = e.target.closest('.card').querySelector('.shop').textContent;
+  e.target.replaceWith(d);
+}, true);
+let ttTimer = 0;
+$('ttq').addEventListener('input', (e) => { clearTimeout(ttTimer); ttTimer = setTimeout(() => { tt.q = e.target.value.trim(); tt.shown = TT_PAGE; if (TT) ttRender(); }, 150); });
+$('ttsort').addEventListener('change', (e) => { tt.sort = e.target.value; tt.shown = TT_PAGE; if (TT) ttRender(); });
+for (const b of document.querySelectorAll('[data-tf]')) b.addEventListener('click', () => { tt[b.dataset.tf] = !tt[b.dataset.tf]; tt.shown = TT_PAGE; if (TT) ttRender(); });
+$('ttmore').addEventListener('click', ttMore);
+if ('IntersectionObserver' in window) new IntersectionObserver((es) => { if (es.some((x) => x.isIntersecting)) ttMore(); }, { rootMargin: '900px 0px' }).observe($('ttload'));
+
 function goView(v) {
   if (st.view === v) return;
   st.view = v;
@@ -1716,7 +1881,10 @@ function goScope(s) {
   st.scope = s;
   store.set('wh-scope', s);
   st.cc = '';
-  st.view = s === 'world' ? 'all' : 'inbox';
+  st.view = s === 'eu' ? 'inbox' : 'all';
+  seq++; // an answer still on its way belongs to the tab you left
+  document.body.classList.toggle('tt', s === 'tiktok');
+  document.body.classList.remove('inbox');
   ADS = [];
   MARKETS = null;
   JEV = null;
@@ -1725,9 +1893,8 @@ function goScope(s) {
   shownTop = '';
   for (const b of document.querySelectorAll('[data-scope]')) b.setAttribute('aria-pressed', String(b.dataset.scope === s));
   sortOptions();
-  radar();
-  load();
-  loadMarkets();
+  if (s === 'tiktok') ttLoad();
+  else { radar(); load(); loadMarkets(); }
   window.scrollTo({ top: 0 });
 }
 for (const b of document.querySelectorAll('[data-scope]')) {
@@ -1740,8 +1907,7 @@ $('moreBtn').addEventListener('click', more);
 // Endless scroll: the next page loads before you reach the end.
 if ('IntersectionObserver' in window) new IntersectionObserver((es) => { if (es.some((x) => x.isIntersecting)) more(); }, { rootMargin: '900px 0px' }).observe($('loadmore'));
 // Desktop: cards lean toward the pointer (CSS variables through the CSSOM: the CSP blocks style attributes).
-load();
-loadMarkets();
+if (st.scope === 'tiktok') { document.body.classList.add('tt'); ttLoad(); } else { load(); loadMarkets(); }
 </script>
 </body>
 </html>
