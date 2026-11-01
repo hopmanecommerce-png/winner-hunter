@@ -42,9 +42,9 @@ function usagePct(res) {
 }
 
 const num = (k) => `json_extract(value, '$.${k}')`;
-export const ADS_SQL = `INSERT INTO world_ads (ad_id, cc, page_id, page_name, likes, collation_id, copies, start_at, link, caption, title, image_url, keyword, store, product_key, first_seen, last_seen)
-SELECT ${['ad_id', 'cc', 'page_id', 'page_name', 'likes', 'collation_id', 'copies', 'start_at', 'link', 'caption', 'title', 'image_url', 'keyword', 'store', 'product_key'].map(num).join(', ')}, ?2, ?2 FROM json_each(?1) WHERE true
-ON CONFLICT(ad_id, cc) DO UPDATE SET page_name = excluded.page_name, likes = excluded.likes, copies = excluded.copies, link = excluded.link, title = excluded.title,
+export const ADS_SQL = `INSERT INTO world_ads (ad_id, cc, page_id, page_name, likes, collation_id, copies, start_at, link, caption, title, body, image_url, keyword, store, product_key, first_seen, last_seen)
+SELECT ${['ad_id', 'cc', 'page_id', 'page_name', 'likes', 'collation_id', 'copies', 'start_at', 'link', 'caption', 'title', 'body', 'image_url', 'keyword', 'store', 'product_key'].map(num).join(', ')}, ?2, ?2 FROM json_each(?1) WHERE true
+ON CONFLICT(ad_id, cc) DO UPDATE SET page_name = excluded.page_name, likes = excluded.likes, copies = excluded.copies, link = excluded.link, title = excluded.title, body = CASE WHEN excluded.body != '' THEN excluded.body ELSE world_ads.body END,
   image_url = CASE WHEN excluded.image_url != '' THEN excluded.image_url ELSE world_ads.image_url END, store = excluded.store,
   product_key = CASE WHEN excluded.product_key != '' THEN excluded.product_key ELSE world_ads.product_key END, keyword = CASE WHEN excluded.keyword != '' THEN excluded.keyword ELSE world_ads.keyword END, last_seen = excluded.last_seen`;
 export const STORES_SQL = `INSERT INTO world_stores (store, shopify, host, currency, products, myshopify, checked_at)

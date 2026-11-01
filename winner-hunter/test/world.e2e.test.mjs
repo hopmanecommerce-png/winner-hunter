@@ -32,8 +32,10 @@ async function worldEnv() {
   env.db.prepare("INSERT INTO bestseller (product_key, store, rank, ok, checked_at, history) VALUES ('strong.test/products/pod', 'strong.test', 2, 1, 'x', '[]')").run();
   env.db.prepare("INSERT INTO store_trust (store, status, score, reviews, profile) VALUES ('strong.test', 'page', 4.6, 900, 'strong.test')").run();
   const check = env.db.prepare("INSERT INTO world_checks (product_key, model, input, people, animals, gymwear, physical, category, category_conf, tokens, checked_at) VALUES (?, 'jev-1.14.0', ?, ?, ?, ?, ?, ?, 0.9, 2400, 'x')");
-  check.run('strong.test/products/pod', 'photo', 0.01, 0.01, 0.01, 0.98, 'home');
-  check.run('flag.test/products/food', 'photo', 0.03, 0.97, 0.01, 0.98, 'pet');
+  check.run('strong.test/products/pod', 'photo', 0.01, 0.01, 0.01, 0.98, 'Home');
+  check.run('flag.test/products/food', 'photo', 0.03, 0.97, 0.01, 0.98, 'Pets');
+  env.db.prepare("UPDATE world_checks SET version = 2, main = 'Home', sub = 'Storage and organizing', product_score = 3.2, ad_score = 2.1, answers = ? WHERE product_key = 'strong.test/products/pod'").run(JSON.stringify({ p: { people: 0.01, animals: 0.01, gymwear: 0.01, physical: 0.98, electric: 0.9, problem: 0.8, ad_clear: 0.7 }, choices: { audience: { c: 'Home owners', conf: 0.9 } }, scores: { product_score: 3.2, ad_score: 2.1 } }));
+  env.db.prepare("UPDATE world_checks SET version = 2, main = 'Pets', sub = 'Food and treats', product_score = 1.5, answers = ? WHERE product_key = 'flag.test/products/food'").run(JSON.stringify({ p: { people: 0.03, animals: 0.97, gymwear: 0.01, physical: 0.98 }, choices: {}, scores: { product_score: 1.5 } }));
   env.db.prepare("INSERT INTO state (key, value, updated_at) VALUES ('world_run', ?, ?)").run(JSON.stringify({ status: 'done', health: 'ok', finished_at: new Date(NOW - 3600e3).toISOString(), ads: 4210, new_products: 96, blocked: 0 }), new Date(NOW).toISOString());
   return env;
 }
@@ -122,17 +124,29 @@ for (const [name, viewport] of [['phone', { width: 390, height: 844 }], ['deskto
       // Jev's answers: only data, on the card and in a filter. The product it has not seen has none.
       const food = page.locator('.card', { hasText: 'Grain free dog food' });
       assert.match(await food.locator('.tag.jev').innerText(), /pets take 97%/i);
-      assert.match(await food.locator('.jevl').innerText(), /Jev: pet/);
+      assert.match(await food.locator('.jevl').first().innerText(), /Pets › Food and treats/);
       assert.strictEqual(await page.locator('.card', { hasText: 'Pillow Pod' }).locator('.tag.jev').count(), 0);
       assert.strictEqual(await page.locator('.card', { hasText: 'onerror' }).locator('.jevl').count(), 0);
-      await page.selectOption('#jev', 'animals');
+      await page.selectOption('#jev', 'yes:animals');
       await page.waitForFunction(() => document.querySelectorAll('.card').length === 1);
       await page.selectOption('#jev', 'none');
       await page.waitForFunction(() => document.querySelectorAll('.card').length === 1 && /onerror/.test(document.querySelector('.card').textContent));
-      await page.selectOption('#jev', 'cat:home');
+      await page.selectOption('#jev', 'main:Home');
       await page.waitForFunction(() => document.querySelectorAll('.card').length === 1 && /Pillow Pod/.test(document.querySelector('.card').textContent));
       await page.selectOption('#jev', '');
       await page.waitForFunction(() => document.querySelectorAll('.card').length === 3);
+      // The breakdown: counts sorted by count, a tap filters, a second tap undoes it; the sub-categories open under their main.
+      await page.evaluate(() => { document.getElementById('jevb').open = true; });
+      assert.match(await page.locator('#jevbN').innerText(), /2 of 3 products checked/);
+      await page.click('#jevbody [data-jev="main:Home"]');
+      await page.waitForFunction(() => document.querySelectorAll('.card').length === 1);
+      assert.ok(await page.locator('#jevbody [data-jev="sub:Home > Storage and organizing"]').isVisible());
+      await page.click('#jevbody [data-jev="yes:electric"]');
+      await page.waitForFunction(() => /Pillow Pod/.test(document.querySelector('.card').textContent) && document.querySelectorAll('.card').length === 1);
+      assert.match(await page.locator('.card .jevl.block').first().innerText(), /Battery or electric/);
+      await page.click('#jevbody [data-jev="yes:electric"]');
+      await page.waitForFunction(() => document.querySelectorAll('.card').length === 3);
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'no sideways scroll with the breakdown open');
       // No in-between: a tap on the card or on ▶ opens the Ad Library, the card does not expand. Shop, its ads and 1688 sit on the shop line.
       const pod = page.locator('.card', { hasText: 'Pillow Pod' }).first();
       const lib = (await pod.locator('a.view').getAttribute('href'));
@@ -149,6 +163,7 @@ for (const [name, viewport] of [['phone', { width: 390, height: 844 }], ['deskto
       assert.strictEqual(page.context().pages().length, before, 'beside the buttons: no Ad Library');
       assert.ok(await pod.locator('.who a.shop').isVisible() && await pod.locator('.who a.src', { hasText: '1688 ↗' }).isVisible());
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'no sideways scroll with the shop line');
+      assert.ok(await page.locator('.card').evaluateAll((cs) => cs.every((c) => c.scrollWidth <= c.clientWidth + 1)), 'nothing runs off a card');
       assert.ok(await page.locator('.acts button').evaluateAll((bs) => bs.every((b) => b.scrollWidth <= b.clientWidth + 1 && b.getBoundingClientRect().right <= b.closest('.card').getBoundingClientRect().right)), 'Approved and Reject fit on the card');
       // Reject: gone here, saved in the same tables as the EU decisions.
       await page.locator('.card', { hasText: 'Grain free dog food' }).locator('[data-act="rejected"]').click();

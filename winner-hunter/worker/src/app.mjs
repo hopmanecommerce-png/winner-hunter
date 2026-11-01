@@ -10,6 +10,7 @@
  */
 
 import { adView } from './adview.mjs';
+import { TRAITS, AD_TRAITS, CHOICES, AD_CHOICES, SEP, YES_AT } from './jev-questions.mjs';
 import { MARKET_RULES } from './market-rules.mjs';
 
 const COOKIE = '__Host-wh';
@@ -74,7 +75,7 @@ const TRUST_SQL = 'SELECT store, status, score, reviews, profile FROM store_trus
 // Outside the EU (world.mjs): products from the public Ad Library, with proof signals instead of reach. Read with the
 // winners; they take part in ★, ✓, notes and decisions like any product, but stay off the EU tabs.
 const WORLD_SQL = `SELECT w.* FROM world_products w`;
-const CHECK_SQL = 'SELECT product_key, people, animals, gymwear, physical, category, category_conf, input, checked_at FROM world_checks';
+const CHECK_SQL = 'SELECT product_key, people, animals, gymwear, physical, category, category_conf, input, checked_at, main, sub, main_conf, sub_conf, product_score, ad_score, answers, used FROM world_checks';
 const VERSION_SQL = `SELECT (SELECT MAX(rowid) FROM winners) AS r, (SELECT updated_at FROM state WHERE key = 'last_run') AS u, (SELECT updated_at FROM state WHERE key = 'world_run') AS wu, (SELECT updated_at FROM state WHERE key = 'world_check') AS jc`;
 const SNAP_MS = 15 * 60000; // read again after this long anyway
 const SNAPS = new WeakMap(); // per D1 binding
@@ -183,23 +184,81 @@ export function worldRow(w, check) {
   return { ...w, gk: 'world|' + w.product_key, ad_age_days: w.days, reach_eu: null, scaled_count: w.ads, active_ads: w.shop_ads, data: '{}',
     world: { markets: jsonOf(w.markets, {}), creatives: num(w.creatives), new14: num(w.new14), in_eu: w.in_eu == null ? null : Number(w.in_eu), eu_rpd: w.eu_rpd == null ? null : Number(w.eu_rpd), shop_eu_rpd: w.shop_eu_rpd == null ? null : Number(w.shop_eu_rpd),
       likes: w.likes == null ? null : Number(w.likes), page_id: w.page_id || '', active: Number(w.active) !== 0, store_products: w.store_products == null ? null : Number(w.store_products),
-      check: check ? { people: num(check.people), animals: num(check.animals), gymwear: num(check.gymwear), physical: num(check.physical), category: check.category || '', category_conf: check.category_conf == null ? null : Number(check.category_conf), input: check.input || '', at: check.checked_at || '' } : null } };
+      check: check ? checkOf(check) : null } };
 }
 
-/** What Jev says about a product: the questions it answered yes to (0.5 or more). */
+/** A world_checks row for the board. An answer from the first, smaller question set has only the four rules and a category. */
+function checkOf(c) {
+  const a = jsonOf(c.answers, {});
+  const p = { people: num(c.people), animals: num(c.animals), gymwear: num(c.gymwear), physical: num(c.physical), ...(a.p || {}) };
+  return { ...p, p, main: c.main || c.category || '', sub: c.sub || '', main_conf: c.main_conf == null ? null : Number(c.main_conf), sub_conf: c.sub_conf == null ? null : Number(c.sub_conf),
+    product_score: c.product_score == null ? null : Number(c.product_score), ad_score: c.ad_score == null ? null : Number(c.ad_score),
+    choices: Object.fromEntries(Object.entries(a.choices || {}).map(([k, x]) => [k, x && x.c])), used: c.used || '', input: c.input || '', at: c.checked_at || '' };
+}
+
+/** What Jev says about a product against the board's rules: the questions it answered yes to (0.5 or more). */
 export function jevFlags(c) {
   if (!c) return [];
-  return [['people', c.people >= 0.5], ['animals', c.animals >= 0.5], ['gymwear', c.gymwear >= 0.5], ['digital', c.physical < 0.5]].filter((x) => x[1]).map((x) => x[0]);
+  const face = c.p ? c.p.face : c.face;
+  return [['people', c.people >= YES_AT], ['animals', c.animals >= YES_AT], ['gymwear', c.gymwear >= YES_AT], ['digital', c.physical < YES_AT], ['face', face >= YES_AT]].filter((x) => x[1]).map((x) => x[0]);
 }
 const jevUnsure = (c) => !!c && [c.people, c.animals, c.gymwear, c.physical].some((v) => v > 0.15 && v < 0.85);
-/** The board's Jev filter: clean, unsure, not checked, one of jevFlags, or cat:<category>. */
+const yesTo = (c, k) => !!c && !!c.p && c.p[k] >= YES_AT;
+const BLOCKERS = TRAITS.filter((t) => t.group === 'blockers').map((t) => t.k);
+/** The board's Jev filter: clean, noblock, unsure, none, one of jevFlags, main:, sub:, yes:<trait>, choice:<k>:<v>, pmin: or amin:. */
 export function jevMatches(want, c) {
   if (want === 'none') return !c;
   if (!c) return false;
   if (want === 'clean') return !jevFlags(c).length;
   if (want === 'unsure') return jevUnsure(c);
-  if (want.startsWith('cat:')) return c.category === want.slice(4);
+  if (want === 'noblock') return !BLOCKERS.some((k) => yesTo(c, k));
+  const [kind, ...rest] = want.split(':');
+  const v = rest.join(':');
+  if (kind === 'main') return c.main === v;
+  if (kind === 'sub') return `${c.main}${SEP}${c.sub}` === v;
+  if (kind === 'yes') return yesTo(c, v);
+  if (kind === 'choice') return c.choices[rest[0]] === rest.slice(1).join(':');
+  if (kind === 'pmin') return c.product_score != null && c.product_score >= Number(v);
+  if (kind === 'amin') return c.ad_score != null && c.ad_score >= Number(v);
   return jevFlags(c).includes(want);
+}
+
+/** For the board's breakdown and filter: how many undecided products have each answer. Sorted by count, nothing is picked. */
+export function jevSummary(rows) {
+  const count = (items) => [...items.entries()].map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
+  const mains = new Map();
+  const subs = new Map();
+  const choices = new Map();
+  let checked = 0;
+  let pStrong = 0;
+  let aStrong = 0;
+  let noBlock = 0;
+  const yes = new Map();
+  for (const r of rows) {
+    const c = r.world.check;
+    if (!c) continue;
+    checked++;
+    mains.set(c.main, (mains.get(c.main) || 0) + 1);
+    if (c.sub) {
+      if (!subs.has(c.main)) subs.set(c.main, new Map());
+      subs.get(c.main).set(c.sub, (subs.get(c.main).get(c.sub) || 0) + 1);
+    }
+    for (const [k, v] of Object.entries(c.p)) if (v >= YES_AT) yes.set(k, (yes.get(k) || 0) + 1);
+    for (const [k, v] of Object.entries(c.choices)) {
+      if (!choices.has(k)) choices.set(k, new Map());
+      choices.get(k).set(v, (choices.get(k).get(v) || 0) + 1);
+    }
+    if (c.product_score >= 3) pStrong++;
+    if (c.ad_score >= 3) aStrong++;
+    if (c.p && !BLOCKERS.some((k) => c.p[k] >= YES_AT)) noBlock++;
+  }
+  const group = (g, list = TRAITS) => list.filter((t) => t.group === g).map((t) => ({ k: t.k, label: t.label, n: yes.get(t.k) || 0 })).sort((a, b) => b.n - a.n);
+  const allChoices = { ...CHOICES, ...AD_CHOICES };
+  return { total: rows.length, checked, noBlock, pStrong, aStrong,
+    mains: count(mains).map((m) => ({ ...m, subs: count(subs.get(m.name) || new Map()) })),
+    blockers: group('blockers'), product: group('product'), ad: group('ad', AD_TRAITS),
+    rules: group('rules').filter((t) => t.k !== 'physical'),
+    choices: Object.entries(allChoices).map(([k, c]) => ({ k, label: c.label, items: count(choices.get(k) || new Map()) })) };
 }
 
 /** The proof signals of one product: [{ k, ok, text }]; ok null: not known (yet). n: how many it has. */
@@ -360,6 +419,8 @@ const WORLD_SORTS = {
   fresh: (a, b) => num(b.world.new14) - num(a.world.new14) || stronger(a, b),
   best: (a, b) => (bsRank(a) ?? 999) - (bsRank(b) ?? 999) || stronger(a, b),
   reviews: (a, b) => num(b.tp && b.tp.reviews) - num(a.tp && a.tp.reviews) || stronger(a, b),
+  jevp: (a, b) => num(b.world.check && b.world.check.product_score) - num(a.world.check && a.world.check.product_score) || stronger(a, b),
+  jeva: (a, b) => num(b.world.check && b.world.check.ad_score) - num(a.world.check && a.world.check.ad_score) || stronger(a, b),
   eu: (a, b) => num(b.world.eu_rpd ?? b.world.shop_eu_rpd) - num(a.world.eu_rpd ?? a.world.shop_eu_rpd) || stronger(a, b),
   new: (a, b) => cmp(b.first_seen ?? '', a.first_seen ?? '') || stronger(a, b),
 };
@@ -734,12 +795,13 @@ const CSV_COLS = [
   ['in_eu', (a) => (a.world && a.world.in_eu != null ? a.world.in_eu : null)],
   ['eu_reach_per_day_product', (a) => (a.world ? a.world.eu_rpd : null)],
   ['eu_reach_per_day_shop_best_ad', (a) => (a.world ? a.world.shop_eu_rpd : null)],
-  ['jev_category', (a) => (a.world && a.world.check ? a.world.check.category : null)],
-  ['jev_people_eat_or_take', (a) => (a.world && a.world.check ? a.world.check.people : null)],
-  ['jev_animals_eat_or_take', (a) => (a.world && a.world.check ? a.world.check.animals : null)],
-  ['jev_gymwear', (a) => (a.world && a.world.check ? a.world.check.gymwear : null)],
-  ['jev_physical_product', (a) => (a.world && a.world.check ? a.world.check.physical : null)],
-  ['jev_input', (a) => (a.world && a.world.check ? a.world.check.input : null)],
+  ['jev_main', (a) => (a.world && a.world.check ? a.world.check.main : null)],
+  ['jev_sub', (a) => (a.world && a.world.check ? a.world.check.sub : null)],
+  ['jev_product_score', (a) => (a.world && a.world.check ? a.world.check.product_score : null)],
+  ['jev_ad_score', (a) => (a.world && a.world.check ? a.world.check.ad_score : null)],
+  ...Object.keys({ ...CHOICES, ...AD_CHOICES }).map((k) => [`jev_${k}`, (a) => (a.world && a.world.check ? a.world.check.choices[k] ?? null : null)]),
+  ...[...TRAITS, ...AD_TRAITS].map((t) => [`jev_${t.k}`, (a) => (a.world && a.world.check ? a.world.check.p[t.k] ?? null : null)]),
+  ['jev_used', (a) => (a.world && a.world.check ? a.world.check.used : null)],
 ];
 export const toCsv = (ads) => [CSV_COLS.map((c) => c[0]).join(','), ...ads.map((a) => CSV_COLS.map(([, f]) => csvCell(f(a))).join(','))].join('\r\n') + '\r\n';
 
@@ -1006,7 +1068,10 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       if (!ok) return path === '/export.csv' ? text('Log in first.', 401) : json({ error: 'Log in first' }, 401);
       if (path === '/api/markets' && method === 'GET') {
         const b = await board(env, now);
-        if (url.searchParams.get('scope') === 'world') return json(worldMarketsOf(b.w.filter((r) => r.hid === 0)));
+        if (url.searchParams.get('scope') === 'world') {
+          const open = b.w.filter((r) => r.hid === 0);
+          return json({ ...worldMarketsOf(open), jev: jevSummary(open) });
+        }
         return json(marketsOf(b.v.filter((r) => r.hid === 0)));
       }
       if (path === '/api/ads' && method === 'GET') return await ads(url, env, now, !!(launch && env.BROWSER && String(env.META_TOKEN || '').trim()));

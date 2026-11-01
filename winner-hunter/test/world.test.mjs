@@ -532,7 +532,7 @@ test('CSV outside the EU has the proof; cells cannot run as formulas', async () 
   put(mem, P('e.test/products/x', '500', { product_title: '=HYPERLINK("x")', days: 90, markets: JSON.stringify({ AU: { ads: 2, days: 90, new14: 0 }, NZ: { ads: 1, days: 9, new14: 1 } }) }));
   const t = await (await authed(env, '/export.csv?scope=world&view=all')).text();
   const [head, line] = t.trim().split('\r\n');
-  assert.ok(head.endsWith('proof_signals,markets_outside_eu,new_ads_14d,in_eu,eu_reach_per_day_product,eu_reach_per_day_shop_best_ad,jev_category,jev_people_eat_or_take,jev_animals_eat_or_take,jev_gymwear,jev_physical_product,jev_input'));
+  assert.ok(head.includes('proof_signals,markets_outside_eu,new_ads_14d,in_eu,eu_reach_per_day_product,eu_reach_per_day_shop_best_ad,jev_main,jev_sub,jev_product_score,jev_ad_score'));
   assert.ok(line.includes('AU 2 ads 90d / NZ 1 ads 9d'));
   assert.ok(line.includes(`"'=HYPERLINK`));
 });
