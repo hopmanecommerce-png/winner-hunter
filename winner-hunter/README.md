@@ -103,7 +103,7 @@ out, one country and keyword at a time (`keywords-world.txt`, each market in its
 gets the first ~30 ads of a search: depth comes from many searches. The board reads D1 table `world_products`.
 
 **There is no reach outside the EU and UK.** A product shows six proof signals instead, each a plain fact on its card:
-oldest ad 30+ days, 5+ ads for the product, 2+ markets, shop with 20+ active ads in that market, in its store's top 50,
+oldest ad 30+ days, 5+ ads for the product, 2+ markets, shop with 75+ active ads in that market, in its store's top 50,
 100+ Trustpilot reviews. Rules to be listed: a Shopify store, an ad running 7+ days, not a supplement, food or drink, or
 gymwear, not shipping protection or a gift card (words in `lib/world.mjs`). Words miss some: Reject handles those.
 

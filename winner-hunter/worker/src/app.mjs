@@ -172,7 +172,7 @@ export function trustOf(t) {
 // research repo). Age could not be checked there (the EU board only holds ads up to 42 days).
 // ---------------------------------------------------------------------------
 export const WORLD_MARKETS = ['CH', 'NO', 'AU', 'NZ', 'AE', 'US', 'CA', 'SG', 'JE', 'HK', 'MO', 'JP', 'KR', 'MY', 'TW', 'IL', 'LI']; // same as lib/world.mjs MARKETS
-export const PROOF = { days: 30, ads: 5, markets: 2, shop: 20, reviews: 100 };
+export const PROOF = { days: 30, ads: 5, markets: 2, shop: 75, reviews: 100 };
 const jsonOf = (s, or) => { try { return JSON.parse(s || '') ?? or; } catch (e) { return or; } };
 
 /** A world_products row in the shape of a winners row (reach_eu empty, ad_age_days the age of its oldest running ad). */
