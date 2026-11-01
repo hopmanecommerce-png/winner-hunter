@@ -578,6 +578,7 @@
   .ttads a { color: var(--ink); font-weight: 600; text-decoration: none; }
   .ttads a:hover { text-decoration: underline; }
   #ttgrid .t a { color: inherit; text-decoration: none; }
+  #ttcat { max-width: 136px; }
 </style>
 </head>
 <body>
@@ -1770,7 +1771,7 @@ function ttCard(a) {
     <div class="ph">${photo}
       <div class="badges">${tags}</div>
       <div class="hero" title="TikTok's own lifetime count"><b>${esc(fmt(a.sold))}</b><span>${sold}</span></div>
-      <a class="view" href="${url}" target="_blank" rel="noopener noreferrer" aria-label="Open on TikTok">${ICON.play}</a>
+      <a class="view" href="${videos}" target="_blank" rel="noopener noreferrer" aria-label="Watch videos on TikTok">${ICON.play}</a>
     </div>
     <div class="bd">
       <h2 class="t"><a href="${url}" target="_blank" rel="noopener noreferrer">${esc(ttTitle(a.title))}</a></h2>
