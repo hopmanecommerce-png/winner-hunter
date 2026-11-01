@@ -166,6 +166,17 @@ My CJ → Authorization → API), or `cd winner-hunter/worker && npx wrangler se
 The CJ token is kept in D1 (`state` row `cj_token`) sealed with a key made from `CJ_API_KEY`: the hunts can read D1, and
 a token there is no use to them.
 
+## 🧭 Pipeline (from approved to launched)
+
+**🧭** (next to 🚀) lists every approved product on eight stages: Approved → Request ready → Link found → Supplier confirmed
+→ Sample ordered → Sample approved → Test ads → Launched (scale or kill), each with what to do next, who does it, the days
+in its stage and your note. Filter by stage, target market or "stuck"; move with the buttons (or drag on a desktop),
+forward and back. Per product: a **sourcing request** with every field ready to copy (agent form, Kungfubuy or free text;
+English or Chinese; the photo as a JPG under 3 MB; the documents the risk radar asks for), the **1688 links** you paste (cleaned, offer id, price and MOQ; they are
+🔎 Sourcing's candidates, and **Choose** puts the cost on the launch card), and **target markets outside the EU** with
+currency, shipping, plug, tax, customs and restrictions per country. Nothing to set. How it works and how to add a country
+or an agent template: [docs/pipeline/README.md](../docs/pipeline/README.md).
+
 ## Set up (once)
 
 Add these 4 secrets in GitHub: **Settings → Secrets and variables → Actions → New repository secret**.
