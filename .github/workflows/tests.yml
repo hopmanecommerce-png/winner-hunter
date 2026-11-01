@@ -22,8 +22,9 @@ jobs:
         with:
           node-version: '22'
 
-      # Playwright drives the runner's own Google Chrome: no browser download. The Anthropic SDK (the Problem Database's
-      # optional Claude step, problem-hunter.yml) is only exercised against a fake fetch: no key, no network.
+      # Playwright drives the runner's own Google Chrome: no browser download. Anthropic's SDK for the tests of the AI read
+      # and of the Problem Database's Claude step (a fake API: nothing is sent), the same version as ai-check.yml and
+      # problem-hunter.yml. One install: a second --no-save install removes the first.
       - name: Install Playwright
         working-directory: winner-hunter
         env:
