@@ -15,7 +15,9 @@ After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, o
 ## What you see on the board
 
 - Only ads that pass **all four hard rules** (no points, no score): **Shopify store**, advertiser has **75+ active ads**,
-  ad live **7 to 42 days**, **500+ EU reach per day**. Anything else is never saved and never shown.
+  ad live **7 to 42 days**, **500+ EU reach per day**. Anything else is never saved and never shown. Not on the EU board
+  either: supplements, food and drink, cosmetics, perfume, products with a medical claim and pet medicine (they need EU
+  paperwork; words in `lib/world.mjs` screenEU, so some slip through: Reject handles those).
 - **Inbox** (start screen): every product you have not decided on, one at a time, best first. **✗ Reject**, **★ Keep**
   or **✓ Approved** (buttons, swipe left/right, or keys R / D). Each one leaves the inbox; **Undo** brings it back.
   When none are left: **🎉 Inbox zero**. "New today" = found in the last 24 hours.
@@ -86,18 +88,23 @@ World Hunter → Enable workflow (any commit also resets the 60 days).
 - After every batch the ads that pass the four rules are saved in D1, and the place in the list is saved too.
   So a stop never loses more than one batch.
 - It stops after `minutes` (default 300), or when Meta says "hourly limit" on every token (then the next run goes on).
-- Meta, D1 or a shop not answering is a warning (yellow), not a crash.
+- Meta, D1 or a shop not answering is a warning (yellow), not a crash. A shop that does not answer (busy, down, a bot
+  wall) is unknown, not "not Shopify": its ads are not saved yet and that batch is searched again next run (once).
+- A winner already on the board that is found again and now fails a rule (fewer active ads, too little reach) gets its
+  new facts, so the board drops it. Only rows already saved change: an ad that fails is still never added.
 - The run ends **red** (after saving everything it found) when: 0 ads were checked, winners were found but a batch
-  could not be saved in D1, a Meta token is invalid/expired or expires within 7 days, or Meta blocked every token
-  before the first batch finished. Turn on GitHub notifications for failed workflow runs (GitHub app → Settings →
-  Notifications → Actions) to get a push on your phone.
+  could not be saved in D1, a Meta token is invalid/expired or expires within 7 days, Meta blocked every token
+  before the first batch finished, or not one advertiser's ads could be counted (Meta errors). Turn on GitHub
+  notifications for failed workflow runs (GitHub app → Settings → Notifications → Actions) to get a push on your phone.
 - The EU tab shows a red banner for a recent failed run, a hanging run or a Meta token expiring within 7 days,
   and a yellow one for a recent run with warnings.
 - The Outside EU tab shows a red banner for a failed scan, no scan in 24 hours or the same Meta token problem. The
   World Hunter run also ends red when the token is invalid or expires within 7 days.
 - The summary of each run is on its page in Actions, and on the board ("Last run …").
 
-Change the keywords: edit `keywords.txt` (one per line, `#` = comment).
+Change the keywords: edit `keywords.txt` (one per line, `#` = comment). Clothing, beauty, pain and sale-angle keywords
+are in `keywords-optin.txt`: searched only when `KEYWORDS_OPTIN=1` is set for the run, or type one in the workflow's
+keywords box.
 Other countries: add a repository variable `HUNT_COUNTRIES` (default `NL,BE,DE,FR,AT,ES,IT,IE,DK,SE,PL`).
 
 ## Files
@@ -107,7 +114,7 @@ run.mjs          nightly run (batches, cursor, time budget)
 bestsellers.mjs  store signals for the board's products: best-seller rank + Trustpilot (after the hunt; lib/bestsellers.mjs, lib/trust.mjs)
 migrate.mjs      creates the D1 tables (safe to run every time)
 import.mjs       one-time import of the old winners
-keywords.txt     the search words
+keywords.txt     the search words (keywords-optin.txt: only with KEYWORDS_OPTIN=1)
 lib/             score.mjs (the four rules) · meta.mjs (Ad Library search) · d1.mjs (database) · storephoto.mjs · record.mjs
 worker/          the board: src/app.mjs (API + PIN) · src/board.html (page) · wrangler.toml · migrations/
 test/            npm test (node --test); test/board.e2e.test.mjs opens the board in Chromium at iPhone size;

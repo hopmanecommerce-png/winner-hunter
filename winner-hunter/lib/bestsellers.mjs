@@ -5,7 +5,8 @@
  * answer nothing: their products get no rank (unknown, not "not selling").
  *
  *   productKey('https://www.store.com/nl/products/lamp?x=1') → 'store.com/products/lamp'   ('' when not a product page)
- *   await storeTop('store.com')     → { top: [{ id, handle }, …] } best first (TOP_N), or { error }
+ *   await storeTop('store.com')     → { top: [{ id, handle }, …] } best first (TOP_N), or { error } (retry: true when the
+ *                                     store did not answer: 429, 5xx, timeout; that says nothing about its list)
  *   await productId(url)            → '123' (Shopify product id from <product page>.js) or null
  *   rankOf(top, { id, handle })     → 1… or null (not in the top)
  *   addDay(history, day, rank)      → the history with today's rank (one per day, last HISTORY_DAYS)
@@ -48,7 +49,7 @@ async function timed(doFetch, url, init, timeout) {
   }
 }
 
-/** The store's best sellers, best first: { top: [{ id, handle }] } or { error } (never throws). */
+/** The store's best sellers, best first: { top: [{ id, handle }] } or { error, retry? } (never throws). */
 export async function storeTop(store, { n = TOP_N, doFetch = globalThis.fetch, timeout = 15000 } = {}) {
   try {
     const res = await timed(doFetch, `https://${store}/api/${API_VERSION}/graphql.json`, {
@@ -56,13 +57,14 @@ export async function storeTop(store, { n = TOP_N, doFetch = globalThis.fetch, t
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ query: QUERY, variables: { n } }),
     }, timeout);
-    if (res.status === 429) return { error: 'HTTP 429', limited: true }; // says nothing about this store
+    // Too many requests or the store is down for a moment: says nothing about this store, asked again later.
+    if (res.status === 429 || res.status >= 500) return { error: 'HTTP ' + res.status, retry: true };
     const j = await res.json().catch(() => null);
     const nodes = j && j.data && j.data.products && j.data.products.nodes;
     if (!Array.isArray(nodes)) return { error: j && j.errors ? 'api error' : 'HTTP ' + res.status };
     return { top: nodes.map((p) => ({ id: idOf(p.id), handle: String(p.handle || '').toLowerCase() })) };
   } catch (e) {
-    return { error: e.name === 'AbortError' ? 'timeout' : 'network' };
+    return e.name === 'AbortError' ? { error: 'timeout', retry: true } : { error: 'network' };
   }
 }
 

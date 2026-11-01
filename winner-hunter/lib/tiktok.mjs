@@ -20,9 +20,14 @@ const count = (n) => n == null || (Number.isFinite(n) && n >= 0);
 /** Throws on the first row the board can't show safely. Returns the rows. */
 export function validateRows(rows) {
   if (!Array.isArray(rows) || !rows.length) throw new Error('No rows to import');
+  const ids = new Set();
   rows.forEach((r, i) => {
     const bad = (why) => { throw new Error(`Row ${i} (${r && r.id}): ${why}`); };
-    if (!r || !/^\d{1,25}$/.test(String(r.id))) bad('bad id');
+    // A string: TikTok's ids are longer than a JavaScript number holds exactly, so a number id is already rounded
+    // and two products would become one.
+    if (!r || typeof r.id !== 'string' || !/^\d{1,25}$/.test(r.id)) bad('bad id (must be a string of digits, in quotes)');
+    if (ids.has(r.id)) bad('duplicate id');
+    ids.add(r.id);
     if (typeof r.title !== 'string' || !r.title.trim()) bad('no title');
     if (!/^https:\/\/www\.tiktok\.com\//.test(r.url)) bad('url is not a TikTok page');
     if (r.image_url != null && !https(r.image_url)) bad('image_url is not https');

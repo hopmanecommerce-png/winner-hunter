@@ -1,20 +1,28 @@
 // run.mjs: batches, keyword cursor, time budget, Meta block, D1 failures — with a fake Meta search, a fake D1
 // and a fake clock; plus one run end to end (real hunt on a fake Meta API, real D1 client on SQLite).
-import test from 'node:test';
+import test, { afterEach } from 'node:test';
 import assert from 'node:assert';
-import { run } from '../run.mjs';
+import { run, RECHECK_SQL, recheckFacts, keywordsOf } from '../run.mjs';
+import { saveTokenCheck } from '../world.mjs';
 import { hunt, checkTokens } from '../lib/meta.mjs';
-import { d1Client } from '../lib/d1.mjs';
+import { d1Client, STRICT } from '../lib/d1.mjs';
+import { slimRecord } from '../lib/record.mjs';
 import { d1Rest } from './helpers/sqlite-d1.mjs';
-import { NOW, fakeFetch, json } from './helpers/fake-meta.mjs';
+import { NOW, fakeFetch, json, violations } from './helpers/fake-meta.mjs';
 
 const KW = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
 const MIN = 60000;
+afterEach(() => assert.deepStrictEqual(violations.splice(0), []));
 
 function fakeDb({ cursor = null, failAll = false, failSave = () => false } = {}) {
   const st = new Map(cursor == null ? [] : [['keyword_cursor', JSON.stringify({ next: cursor })]]);
   const db = {
-    upserts: [], runs: [], st,
+    upserts: [], runs: [], queries: [], st,
+    async query(sql, params) {
+      if (failAll) throw new Error('Cloudflare D1: down');
+      db.queries.push({ sql, params });
+      return [];
+    },
     async getState(k) {
       if (failAll) throw new Error('Cloudflare D1: down');
       return st.has(k) ? st.get(k) : null;
@@ -41,7 +49,8 @@ function fakeDb({ cursor = null, failAll = false, failSave = () => false } = {})
 }
 
 // A fake search: every batch takes `minutes` of the fake clock and finds one ad per keyword.
-function fakeSearch(clock, { minutes = 30, block = () => false, fail = () => false, ads = 100 } = {}) {
+// unsure(queries): possible winners whose store did not answer. extra(queries): more stats (skipped searches and counts…).
+function fakeSearch(clock, { minutes = 30, block = () => false, fail = () => false, ads = 100, unsure = () => 0, extra = () => ({}) } = {}) {
   const asked = [];
   const search = async (o) => {
     asked.push({ queries: o.queries, tokenStart: o.tokenStart, cache: o.cache });
@@ -49,9 +58,10 @@ function fakeSearch(clock, { minutes = 30, block = () => false, fail = () => fal
     const err = fail(o.queries);
     if (err) throw err;
     const blocked = block(o.queries);
+    const u = unsure(o.queries);
     return {
       results: o.queries.map((q) => ({ id: 'ad-' + q, score: 100, verdict: 'winner', active_ads: q === 'b' ? 40 : 120, product_title: 'P ' + q, store_url: 'https://shop-' + q + '.test/', product_url: 'https://shop-' + q + '.test/', reach_eu: 20000, ad_age_days: 10, image_url: q === 'a' ? 'https://cdn.shopify.com/s/files/1/a.jpg' : '' })),
-      stats: { ads, usagePeak: 40, token: 1, blocked, stoppedEarly: false },
+      stats: { ads, usagePeak: 40, token: 1, blocked, stoppedEarly: false, unsure: u, storesUnknown: u ? 1 : 0, ...extra(o.queries) },
     };
   };
   return { search, asked };
@@ -93,7 +103,9 @@ test('batches of 2 from the cursor; cursor saved after every batch; wraps around
   assert.strictEqual(db.runs.at(-1).status, 'ok');
   assert.strictEqual(JSON.parse(db.st.get('last_run')).health, 'ok');
   assert.ok(!logs.some((l) => l.startsWith('::error::') || l.startsWith('::warning::')), logs.join('\n'));
-  assert.deepStrictEqual(JSON.parse(db.st.get('token_expires_at')).tokens, [{ n: 1, valid: true, expires_at: 'never' }, { n: 2, valid: true, expires_at: 'never' }]);
+  const at = new Date(Date.UTC(2026, 9, 17, 1, 17)).toISOString();
+  assert.deepStrictEqual(JSON.parse(db.st.get('token_expires_at')).tokens, [{ n: 1, secret: 'META_TOKEN', valid: true, expires_at: 'never', checked_at: at }, { n: 2, secret: 'META_TOKEN_2', valid: true, expires_at: 'never', checked_at: at }]);
+  assert.deepStrictEqual(db.queries, [], 'nothing to re-check');
 });
 
 test('product photo kept; a missing one becomes a store photo; none found stays empty', async () => {
@@ -274,4 +286,121 @@ test('end to end: a token that expires in 2 days (debug_token) makes the run red
   assert.ok(db.prepare('SELECT COUNT(*) AS n FROM winners').get().n > 0, 'winners saved');
   assert.strictEqual(db.prepare('SELECT status FROM runs').get().status, 'failed');
   assert.strictEqual(JSON.parse(db.prepare("SELECT value FROM state WHERE key = 'token_expires_at'").get().value).at, new Date(exp * 1000).toISOString());
+});
+
+test('a batch whose stores did not answer is searched again next run, once; then the hunt moves on', async () => {
+  const a = setup({ cursor: 0, minutes: 10, unsure: (q) => (q.includes('c') ? 2 : 0) });
+  const out = await run(cfg(), a.deps);
+  assert.deepStrictEqual(a.s.asked.map((x) => x.queries), [['a', 'b'], ['c', 'd'], ['e', 'f'], ['g']], 'the batches after it still run (and are saved)');
+  assert.strictEqual(a.db.upserts.length, 4);
+  assert.deepStrictEqual(JSON.parse(a.db.st.get('keyword_cursor')), { next: 2, held: 1 }, 'the next run starts again at c');
+  assert.strictEqual(out.cursor, 2);
+  assert.ok(a.logs.some((l) => /^::warning::Batch "c, d": 1 store\(s\) did not answer \(2 possible winner\(s\)\): searched again next run$/.test(l)), a.logs.join('\n'));
+  assert.ok(a.logs.some((l) => /^Batch 2 · c, d · .* · next #2\/7 · 1 stores did not answer$/.test(l)), a.logs.join('\n'));
+  assert.strictEqual(out.health, 'warning');
+
+  // Next run: c, d again. Its store still does not answer: not held a second time.
+  const b = setup({ db: a.db, minutes: 10, unsure: (q) => (q.includes('c') ? 2 : 0) });
+  await run(cfg(), b.deps);
+  assert.deepStrictEqual(b.s.asked[0].queries, ['c', 'd']);
+  assert.ok(b.logs.some((l) => /^::warning::Batch "c, d": 2 possible winner\(s\) at stores that still did not answer: moving on$/.test(l)), b.logs.join('\n'));
+  assert.deepStrictEqual(JSON.parse(b.db.st.get('keyword_cursor')), { next: 2 }, 'a full pass, and the hold is gone');
+
+  // A stop for time or a Meta block holds the cursor as before; typed-in keywords never touch it.
+  const c = setup({ cursor: 0, minutes: 10, unsure: () => 1 });
+  await run(cfg({ override: ['x', 'y', 'z'] }), c.deps);
+  assert.deepStrictEqual(JSON.parse(c.db.st.get('keyword_cursor')), { next: 0 });
+});
+
+test('failed Meta searches and counts make the run yellow; no count at all makes it red', async () => {
+  const a = setup({ cursor: 0, minutes: 10, extra: (q) => (q.includes('c') ? { searchFails: 1, countFails: 2, skipped: 3, counted: 1 } : { counted: 1 }) });
+  const out = await run(cfg(), a.deps);
+  assert.strictEqual(out.health, 'warning');
+  assert.ok(a.logs.some((l) => l === '::warning::Batch "c, d": 1 Meta search(es) and 2 competitor count(s) failed (skipped)'), a.logs.join('\n'));
+  assert.ok(a.logs.some((l) => /^Batch 2 · c, d · .* · 3 skipped \(Meta errors\)$/.test(l)), a.logs.join('\n'));
+  assert.deepStrictEqual([out.searchFails, out.countFails, out.counted], [1, 2, 4]);
+
+  const b = setup({ cursor: 0, minutes: 10, extra: () => ({ countFails: 1, skipped: 1, counted: 0 }) });
+  const red = await run(cfg(), b.deps);
+  assert.strictEqual(red.health, 'failed', 'a green run with 0 winners would hide it');
+  assert.ok(b.logs.some((l) => /^::error::Run mislukt: geen enkele concurrent geteld \(4 Meta-fouten\) \/ Run failed: no competitor could be counted \(4 Meta errors\)$/.test(l)), b.logs.join('\n'));
+
+  const c = setup({ cursor: 0, minutes: 10, extra: () => ({ counted: 0 }) });
+  assert.strictEqual((await run(cfg(), c.deps)).health, 'ok', 'nothing to count (all known from the cache) is fine');
+});
+
+test('the token banner: the EU run and the world run each update their own tokens, never wipe the other\'s', async () => {
+  const start = Date.UTC(2026, 9, 17, 1, 17);
+  const day = 864e5;
+  const iso = (ms) => new Date(ms).toISOString();
+  const eu = setup({ cursor: 0, minutes: 10, tokenCheck: async () => [{ n: 1, valid: true, expiresAt: start + 60 * day }, { n: 2, valid: true, expiresAt: start + 3.5 * day }] });
+  await run(cfg(), eu.deps);
+  const state = () => JSON.parse(eu.db.st.get('token_expires_at'));
+  assert.strictEqual(state().at, iso(start + 3.5 * day), 'META_TOKEN_2 expires first');
+  // The world run (four times a day) checks only META_TOKEN.
+  assert.strictEqual(await saveTokenCheck(eu.db, 'tok', { check: async () => [{ n: 1, valid: true, expiresAt: start + 90 * day }], now: () => start + 3600e3 }), '');
+  assert.strictEqual(state().at, iso(start + 3.5 * day), 'the EU run\'s answer for META_TOKEN_2 is still there: the banner stays');
+  assert.deepStrictEqual(state().tokens.map((k) => [k.secret, k.expires_at]), [['META_TOKEN', iso(start + 90 * day)], ['META_TOKEN_2', iso(start + 3.5 * day)]]);
+  // META_TOKEN_2 removed: the next EU run drops it.
+  const one = setup({ db: eu.db, minutes: 10, tokenCheck: async () => [{ n: 1, valid: true, expiresAt: 0 }] });
+  await run(cfg({ tokens: ['t1'] }), one.deps);
+  assert.deepStrictEqual(state(), { at: null, valid: true, checked_at: iso(start), tokens: [{ n: 1, secret: 'META_TOKEN', valid: true, expires_at: 'never', checked_at: iso(start) }] });
+  // Without META_TOKEN_2 a third token keeps its own name.
+  const gap = setup({ cursor: 0, minutes: 10, tokenCheck: async () => [{ n: 1, valid: true, expiresAt: 0 }, { n: 2, valid: false, expiresAt: null }] });
+  await run(cfg({ tokens: ['t1', 't3'], secrets: ['META_TOKEN', 'META_TOKEN_3'] }), gap.deps);
+  assert.ok(gap.logs.some((l) => /^::error::Meta token META_TOKEN_3 is ongeldig/.test(l)), gap.logs.join('\n'));
+  assert.deepStrictEqual(JSON.parse(gap.db.st.get('token_expires_at')).tokens.map((k) => [k.n, k.secret, k.valid]), [[1, 'META_TOKEN', true], [3, 'META_TOKEN_3', false]]);
+});
+
+test('keywords: clothing, beauty, pain and sale angles are opt-in (KEYWORDS_OPTIN=1)', () => {
+  const plain = keywordsOf({});
+  const all = keywordsOf({ KEYWORDS_OPTIN: '1' });
+  for (const k of ['jurk', 'dress', 'sneakers', 'serum', 'crème', 'parfum', 'make-up', 'pijn', 'rückenschmerzen', 'pain relief', 'sale', '50% off', 'uitverkoop']) {
+    assert.ok(!plain.includes(k), `${k}: not by default`);
+    assert.ok(all.includes(k), `${k}: opt-in`);
+  }
+  for (const k of ['hond', 'kitchen', 'posture', 'massage', 'lamp', 'gadget']) assert.ok(plain.includes(k), k);
+  assert.deepStrictEqual(all.slice(0, plain.length), plain, 'after the usual keywords, so the cursor keeps its place');
+  assert.strictEqual(new Set(all).size, all.length, 'no keyword twice');
+  assert.deepStrictEqual(keywordsOf({ KEYWORDS_OPTIN: 'no' }), plain);
+  assert.deepStrictEqual(keywordsOf({ KEYWORDS_OPTIN: ' yes ' }), all);
+});
+
+test('end to end: a saved winner that fails its re-check is updated (the board drops it); a failing ad is never added', async () => {
+  const { db, doFetch: d1Fetch } = d1Rest();
+  const client = d1Client({ accountId: 'a', databaseId: 'd', token: 't' }, { doFetch: d1Fetch, retryMs: 0 });
+  let clock = Date.UTC(2026, 9, 14, 3);
+  const night = (meta) => run({ tokens: ['tok'], keywords: ['dress'], minutes: 60, countries: ['NL', 'BE'] }, {
+    db: client, search: (o, d) => hunt(Object.assign({}, o, { base: 'https://graph.test' }), Object.assign({}, d, { fetch: meta, now: NOW })), photo: async () => '', log: () => {},
+    now: () => clock, tokenCheck: async () => [] });
+  await night(fakeFetch([]));
+  const passing = () => db.prepare(`SELECT ad_id FROM winners WHERE ${STRICT}`).all().map((r) => r.ad_id);
+  assert.deepStrictEqual(passing(), ['1']);
+  // Two days later Anna Boutique runs 40 active ads: ad 1 fails the 75+ rule now.
+  clock += 2 * 864e5;
+  const sum = [];
+  const out = await run({ tokens: ['tok'], keywords: ['dress'], minutes: 60, countries: ['NL', 'BE'] }, {
+    db: client, search: (o, d) => hunt(Object.assign({}, o, { base: 'https://graph.test' }), Object.assign({}, d, { fetch: fakeFetch([], { counts: { 501: 40 } }), now: NOW })),
+    photo: async () => '', log: () => {}, summary: (m) => sum.push(m), now: () => clock, tokenCheck: async () => [] });
+  assert.deepStrictEqual(passing(), [], 'no longer a pass on the board');
+  const row = db.prepare("SELECT verdict, active_ads, ad_age_days, last_seen, first_seen, product_title, data FROM winners WHERE ad_id = '1'").get();
+  assert.deepStrictEqual([row.verdict, row.active_ads, row.ad_age_days, row.last_seen], ['skip', 40, 14, new Date(clock).toISOString()]);
+  assert.strictEqual(row.first_seen, new Date(clock - 2 * 864e5).toISOString(), 'when it was first found stays');
+  assert.strictEqual(row.product_title, 'Linen Summer Dress', 'the rest of the card stays as it was');
+  const data = JSON.parse(row.data);
+  assert.deepStrictEqual([data.verdict, data.active_ads, data.image_url], ['skip', 40, 'https://cdn.shopify.com/s/files/1/l.png?v=2&width=400']);
+  assert.strictEqual(data.checklist.find((c) => c.key === 'ads').state, 'bad');
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM winners').get().n, 1, 'Old Glory, Tiny Shop… fail too, but were never saved: still not');
+  assert.strictEqual(out.rechecked, 1);
+  assert.match(sum.at(-1), / · 1 saved winner\(s\) fail now \(updated\) · /);
+
+  // An older re-check never overwrites newer facts; one without a new age keeps last_seen (the board's ageing goes on).
+  const facts = recheckFacts(slimRecord({ id: '1', verdict: 'skip', score: 0, active_ads: 10, ad_age_days: 3, reach_eu: 5, checklist: [] }));
+  assert.deepStrictEqual((await client.query(RECHECK_SQL, [JSON.stringify([facts]), new Date(clock - 864e5).toISOString()])), []);
+  assert.strictEqual(db.prepare("SELECT active_ads FROM winners WHERE ad_id = '1'").get().active_ads, 40);
+  const noAge = recheckFacts(slimRecord({ id: '1', verdict: 'skip', score: 0, active_ads: null, ad_age_days: null, reach_eu: null, checklist: [] }));
+  assert.deepStrictEqual(Object.keys(noAge), ['id', 'verdict', 'score', 'checklist'], 'unknown facts are left out, not set to null');
+  assert.deepStrictEqual(await client.query(RECHECK_SQL, [JSON.stringify([noAge, { id: 'never-saved', verdict: 'skip', score: 0, checklist: [] }]), new Date(clock + 864e5).toISOString()]), [{ ad_id: '1' }]);
+  const after = db.prepare("SELECT active_ads, ad_age_days, last_seen FROM winners WHERE ad_id = '1'").get();
+  assert.deepStrictEqual([after.active_ads, after.ad_age_days, after.last_seen], [40, 14, new Date(clock).toISOString()]);
 });
