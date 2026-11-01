@@ -79,6 +79,11 @@ rejected. Per product: what it is (a plain name), niche, the ads' hook, the buye
   store · ↑3 in 8d". The Inbox puts sellers first (× 1.5 in the store's top 10 and top 2% of its products, × 1.2 in its top 50
   and top 10%; nothing while the store's size is unknown); Browse can sort
   by it. No line = the store gives no list (headless shop); "Not in its store's top 50" = checked, not selling much.
+- **📈 Momentum** (a row on every card, a block on the Inbox card, a panel above the products): is it **rising, steady or
+  falling**, with a sparkline of its last 14 days, how long its **ads survived**, how many **other stores sell the same
+  item** (by its words, the supplier's photo or a photo that looks the same) and whether that makes it **crowded**. The
+  Inbox ranks × the momentum factor (rising × up to 1.3, falling × down to 0.7, crowded × 0.75) and every sort menu has
+  **Momentum**; the weights are in the panel. Worked out once a day by `momentum.mjs` (see "Momentum" below).
 - **Trustpilot** (second row in the stats block): the store's TrustScore and number of reviews from its own Trustpilot
   page (trustpilot.com/review/<domain>), checked every 3 days for every store, also when the ad links to the home
   page. Trustpilot's website has a bot check: the runner's Chrome passes it once a run and its token opens the pages.
@@ -201,6 +206,7 @@ Other countries: add a repository variable `HUNT_COUNTRIES` (default `NL,BE,DE,F
 ```
 run.mjs          nightly run (batches, cursor, time budget)
 bestsellers.mjs  store signals for the board's products: best-seller rank + Trustpilot (after the hunt; lib/bestsellers.mjs, lib/trust.mjs)
+momentum.mjs     once a day: each product's numbers, trend, rivals and crowding (lib/momentum.mjs; the board: worker/src/momentum.mjs)
 migrate.mjs      creates the D1 tables (safe to run every time)
 import.mjs       one-time import of the old winners
 keywords.txt     the search words (keywords-optin.txt: only with KEYWORDS_OPTIN=1)
@@ -231,3 +237,56 @@ Facebook refuses more than 80% of the searches, the run ends red and the board's
 (429) more than half of the store requests after waiting, the run ends yellow: those stores and products are asked again
 next run. A run searches for at most 135 minutes (`minutes`), so the job's 180 still hold the board's table, Jev and the
 store signals.
+
+## Momentum (📈)
+
+Workflow **Momentum** (`momentum.yml`, `momentum.mjs`) runs once a day at 22:43 UTC, after the last hunt outside the EU,
+and by hand (Actions → Momentum → Run workflow; a second run on a day replaces that day). It reads the board's tables and
+only writes its own two.
+
+- **Tracked**: the products outside the EU that still run, the EU board's products, every TikTok product, and every
+  product you approved, starred or started a launch card for.
+- **Saved**: one row a day in D1 table `momentum_daily` with every tracked product's numbers that day: ads for the
+  product, the store's active ads, ads started in 14 days, markets, EU reach a day, best-seller rank, TikTok units sold
+  and creators, price, rivals. Kept 120 days.
+- **The score**, from −1 (falling) to +1 (rising), from the signals a product has (their weights shared out). Rising from
+  +0.15, falling from −0.15; "No trend yet" until there is one; "Stopped" when its ads were no longer found.
+
+  | Signal | Weight | |
+  |---|---|---|
+  | Ads | 0.35 | ads running for the product, now against about a week ago |
+  | EU reach | 0.35 | EU reach a day of its best ad (EU board) |
+  | Best-seller rank | 0.25 | its rank in its store's top 50 (from day 1: the store signals keep 15 days) |
+  | Sales speed | 0.5 | TikTok: units sold a day between two imports against its lifetime sales; with 3 imports also faster or slower |
+  | Google searches | 0.25 | the last 4 weeks against the 4 before (only with `SERPAPI_KEY`) |
+  | New ads | 0.15 | share of its ads started in the last 14 days: counts only next to a real trend |
+  | Creators | 0.15 | TikTok creators with videos on it |
+  | Store ads | 0.1 | the store's active ads |
+  | Markets | 0.1 | markets its ads run in (outside the EU) |
+
+  The Inbox ranks × (1 + 0.3 × score), so × 0.7 to × 1.3; the **Momentum** sort ranks by that factor alone. A product
+  without numbers yet ranks as before. The EU board's numbers only change when its hunt runs (by hand): its products say
+  "No new numbers since …" instead of a trend.
+- **Ads survived N days**: its longest-running ad, from Meta's start date to the last time the hunt saw it still running.
+  A hint, not proof (some advertisers leave ads switched on), so it is shown but not in the score.
+- **Rivals and crowding**: other stores selling the same or a very similar item, among every store the hunts found (also
+  TikTok shops): the same words in the title, the supplier's own photo id in the photo's file name (stores importing the
+  same AliExpress or 1688 listing keep it), or a photo that looks the same (a fingerprint made in the runner's Chrome, so
+  also across languages). 2+ other stores, or 2+ new ones in 14 days: getting crowded (× 0.9); 5+: crowded (× 0.75). Only
+  stores the board knows count (those the hunts found, and the TikTok tab's shops), so the real number is higher.
+- **Google Trends** (optional): add the GitHub secret `SERPAPI_KEY` (serpapi.com). The job then asks about shortlisted
+  products only (a launch card, then approved ✓, approved on the TikTok tab, starred), at most `TRENDS_MAX` a run
+  (repository variable, default 3: about 90 a month, inside SerpApi's free 100; more is Q5 in docs/learnings), each again after `TRENDS_DAYS` days
+  (default 14), in the product's biggest market. Without the key nothing is asked.
+
+**D1 budget.** The board reads all summaries in one query of a few rows (one per 400 KB, not one per product) together
+with its tables, so at most once per 15 minutes; the panel reads only the decisions. The job reads the board's tables
+once and about 45 daily rows, and writes fewer than 10 rows a day.
+
+**Ask D1** (the view `momentum_history` has one row per product and day; the keys are the launch cards' keys):
+
+```sql
+SELECT day, ads, shop_ads, best_seller_rank, rivals, price FROM momentum_history
+WHERE product_key = 'world|store.com/products/handle' ORDER BY day;
+-- eu|<page id>|<title in lower case>   tiktok|<id>
+```
