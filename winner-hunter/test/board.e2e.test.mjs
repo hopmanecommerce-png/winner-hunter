@@ -127,7 +127,10 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     assert.match(await page.locator('.card').first().locator('.meta').innerText(), /81[\s\S]*shop ads[\s\S]*41d[\s\S]*live[\s\S]*3[\s\S]*copies/i);
     assert.match(await page.locator('.card').first().locator('.hero').innerText(), /90K[\s\S]*reach \/ day/i);
     assert.match(await page.textContent('#run'), /Last run 6 h ago · 48K ads · 23 new winners/);
-    // Market Radar: every seed product reaches NL 70% / BE 30%
+    // Market Radar: one row at first (the products come first); Show opens it. Every seed product reaches NL 70% / BE 30%
+    await page.waitForSelector('#radar:not([hidden])');
+    assert.strictEqual(await page.textContent('#rtog'), 'Show');
+    await page.click('#rtog');
     await page.waitForSelector('#radar:not([hidden]) .mk');
     await page.waitForFunction(() => document.querySelector('#topShare').textContent === '70%', null, { timeout: 5000 }); // counts up
     assert.match(await page.textContent('#rtop'), /#1 market\s*Netherlands\s*70% of all reach/);

@@ -716,3 +716,34 @@ test('D1 reads: the winners are read once, again only after a run saved (or a ne
   assert.strictEqual(before, 27);
   assert.ok(env.DB.log.every((l) => !/OVER \(/.test(l.sql)), 'no window-function scans on the board');
 });
+
+// The D1 binding with a few ms per query, as a round trip to D1 takes: requests that come in together overlap.
+function slowly(DB, ms = 5) {
+  const wait = () => new Promise((ok) => setTimeout(ok, ms));
+  const wrap = (st) => ({ _run: () => st._run(), bind: (...a) => wrap(st.bind(...a)), all: async () => (await wait(), st.all()), first: async (c) => (await wait(), st.first(c)), run: async () => (await wait(), st.run()) });
+  return { db: DB.db, log: DB.log, prepare: (sql) => wrap(DB.prepare(sql)), batch: async (stmts) => (await wait(), DB.batch(stmts)) };
+}
+
+test('D1 reads: the board opens with /api/ads and /api/markets at once: one read of the tables, the run states in one query', async () => {
+  const env = await seededEnv();
+  env.DB = slowly(env.DB);
+  const s = await loggedIn(env);
+  const scans = () => env.DB.log.filter((l) => /FROM winners w$/.test(l.sql.trim())).length;
+  const [ads, markets] = await Promise.all([s.get('/api/ads?view=all&scope=world'), s.get('/api/markets?scope=world')]);
+  assert.deepStrictEqual([ads.status, markets.status], [200, 200]);
+  assert.strictEqual(scans(), 1, 'one read of the tables serves both');
+  assert.strictEqual(env.DB.log.filter((l) => /FROM state WHERE key IN/.test(l.sql)).length, 1, 'the run states in one query');
+  assert.strictEqual(env.DB.log.filter((l) => /FROM state WHERE key = \?/.test(l.sql)).length, 0, 'not one query per state');
+  const got = await ads.json();
+  assert.strictEqual(got.last_run.status, 'done');
+  assert.strictEqual(got.world_run, null);
+  assert.deepStrictEqual(got, await (await s.get('/api/ads?view=all&scope=world')).json(), 'the same answer as a request on its own');
+  // A failed read is not kept: the next request reads the tables again.
+  const env2 = await seededEnv();
+  const s2 = await loggedIn(env2);
+  const prepare = env2.DB.prepare;
+  let fail = true;
+  env2.DB.prepare = (sql) => (fail && /FROM winners w$/.test(sql.trim()) ? { all: async () => { fail = false; throw new Error('D1 hiccup'); } } : prepare(sql));
+  assert.strictEqual((await s2.get('/api/ads')).status, 500);
+  assert.strictEqual((await s2.get('/api/ads')).status, 200, 'read again after a failure');
+});

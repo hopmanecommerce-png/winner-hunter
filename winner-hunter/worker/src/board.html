@@ -549,6 +549,27 @@
   .who.ln .src { color: var(--muted); }
   .m span { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; }
   .proofl { font: 400 12px/1.4 var(--sans); }
+  /* Products first: the radar and Jev's breakdown start folded, one slim row each (side by side where they fit); on a
+     phone nothing sticks to the top while you scroll, and the six figures on a card get equal room (no "#…"). */
+  .tools { display: flex; flex-wrap: wrap; gap: 0 12px; align-items: flex-start; }
+  .tools > .radar, .tools > .jevb { flex: 1 1 100%; min-width: 0; box-sizing: border-box; }
+  .tools > .radar.min, .tools > .jevb:not([open]) { flex: 1 1 320px; }
+  .radar.min { padding: 6px 6px 6px 16px; margin-bottom: 12px; }
+  .radar.min .rh { flex-wrap: nowrap; margin: 0; min-height: 40px; }
+  .radar.min .rh .sub { order: 0; flex: 1 1 auto; flex-basis: auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .radar.min .rh button, .radar.min .rtitle { flex: none; white-space: nowrap; }
+  .jevb { margin-bottom: 12px; }
+  .jevb:not([open]) { padding-top: 0; padding-bottom: 0; }
+  .jevb:not([open]) summary { min-height: 52px; box-sizing: border-box; padding: 16px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  @media (max-width: 759px) {
+    .rail { position: static; padding-top: 4px; padding-bottom: 8px; gap: 8px; }
+    .status { margin-bottom: 8px; }
+    .scope { margin-bottom: 12px; }
+  }
+  @media (max-width: 520px) {
+    .meta:not(.m4) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .meta:not(.m4) .m { padding: 0 6px; }
+  }
 </style>
 </head>
 <body>
@@ -564,8 +585,9 @@
   <div class="status" id="runbox"><i class="dot"></i><span class="run" id="run">Loading…</span></div>
   <div class="scope" role="group" aria-label="Which markets"><button data-scope="world" aria-pressed="true">Outside EU <small id="nworld"></small></button><button data-scope="eu" aria-pressed="false">EU <small id="neu"></small></button></div>
 
-  <section class="radar" id="radar" aria-label="Market Radar" hidden>
-    <div class="rh"><h2 class="rtitle">Market Radar</h2><span class="sub" id="rsub"></span><button class="ghost" id="rtog" aria-expanded="true">Hide</button></div>
+  <div class="tools">
+  <section class="radar min" id="radar" aria-label="Market Radar" hidden>
+    <div class="rh"><h2 class="rtitle">Market Radar</h2><span class="sub" id="rsub"></span><button class="ghost" id="rtog" aria-expanded="false">Show</button></div>
     <div class="rbody">
       <button class="rtop" id="rtop" aria-label="Show the #1 market"></button>
       <div class="rviews">
@@ -578,6 +600,7 @@
   </section>
 
   <details class="jevb" id="jevb" hidden><summary><span>Jev breakdown</span> <small id="jevbN"></small></summary><div id="jevbody"></div></details>
+  </div>
 
   <div class="rail">
     <div class="bar2">
@@ -1039,7 +1062,7 @@ function radar() {
   const m = MARKETS;
   $('radar').hidden = st.view !== 'all' || !m || !m.markets.length;
   if ($('radar').hidden) return;
-  const min = store.get('wh-radar') === 'min';
+  const min = store.get('wh-radar') !== 'open'; // products first: one row until you open it (remembered)
   $('radar').classList.toggle('min', min);
   $('rtog').textContent = min ? 'Show' : 'Hide';
   $('rtog').setAttribute('aria-expanded', String(!min));
@@ -1141,7 +1164,7 @@ $('hexmap').addEventListener('keydown', (e) => { const g = e.target.closest('[da
 for (const b of document.querySelectorAll('.rtabs [data-rv]')) b.addEventListener('click', () => { store.set('wh-rv', b.dataset.rv); radar(); });
 $('rtop').addEventListener('click', () => MARKETS && pickMarket(MARKETS.markets[0].cc));
 $('rall').addEventListener('click', () => { showAll = !showAll; radar(); });
-$('rtog').addEventListener('click', () => { store.set('wh-radar', $('radar').classList.contains('min') ? '' : 'min'); radar(); });
+$('rtog').addEventListener('click', () => { store.set('wh-radar', $('radar').classList.contains('min') ? 'open' : 'min'); radar(); });
 $('ccChip').addEventListener('click', () => pickMarket(st.cc));
 
 const SKELETON = '<div class="skel" aria-hidden="true"><i class="p"></i><i class="l"></i><i class="l s"></i></div>'.repeat(8);

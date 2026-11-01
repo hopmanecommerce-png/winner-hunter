@@ -80,7 +80,15 @@ for (const [name, viewport] of [['phone', { width: 390, height: 844 }], ['deskto
       assert.strictEqual(await page.getAttribute('[data-scope="world"]', 'aria-pressed'), 'true', 'outside the EU comes first');
       assert.strictEqual(await page.getAttribute('[data-view="all"]', 'aria-pressed'), 'true');
       assert.strictEqual(await page.locator('[data-view="starred"], [data-act="star"], [data-tri="keep"]').count(), 0, 'the star is gone (Connor, 2026-10-31)');
+      // Products first: the radar and Jev's breakdown start as one slim row each, a product is on the first screen.
+      await page.waitForSelector('#radar:not([hidden])');
+      assert.strictEqual(await page.textContent('#rtog'), 'Show');
+      assert.ok(await page.locator('#rlist').isHidden(), 'the radar starts folded');
+      assert.ok(await page.locator('.card').first().evaluate((c) => c.getBoundingClientRect().top < innerHeight - 200), 'a product on the first screen');
+      assert.strictEqual(await page.locator('.card').first().locator('.meta b').evaluateAll((bs) => bs.filter((b) => b.scrollWidth > b.clientWidth).length), 0, 'no figure on the card is cut off');
+      await page.click('#rtog');
       await page.waitForSelector('#radar:not([hidden]) #rlist .mk');
+      assert.strictEqual(await page.textContent('#rtog'), 'Hide');
       assert.ok(await page.locator('#rlist .mk').count() <= 6, 'the top markets first: products come next');
       await page.click('#rall');
       assert.strictEqual(await page.locator('#rlist .mk').count(), 17, 'every market, also the empty ones');
