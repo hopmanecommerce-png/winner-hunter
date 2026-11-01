@@ -31,6 +31,9 @@ async function worldEnv() {
   put(product('swiss.test/products/kissen', '1003', { product_title: '<img src=x onerror=alert(1)>', days: 9, markets: '{"CH":{"ads":1,"days":9,"new14":1}}', currency: 'CHF' }));
   env.db.prepare("INSERT INTO bestseller (product_key, store, rank, ok, checked_at, history) VALUES ('strong.test/products/pod', 'strong.test', 2, 1, 'x', '[]')").run();
   env.db.prepare("INSERT INTO store_trust (store, status, score, reviews, profile) VALUES ('strong.test', 'page', 4.6, 900, 'strong.test')").run();
+  const check = env.db.prepare("INSERT INTO world_checks (product_key, model, input, people, animals, gymwear, physical, category, category_conf, tokens, checked_at) VALUES (?, 'jev-1.14.0', ?, ?, ?, ?, ?, ?, 0.9, 2400, 'x')");
+  check.run('strong.test/products/pod', 'photo', 0.01, 0.01, 0.01, 0.98, 'home');
+  check.run('flag.test/products/food', 'photo', 0.03, 0.97, 0.01, 0.98, 'pet');
   env.db.prepare("INSERT INTO state (key, value, updated_at) VALUES ('world_run', ?, ?)").run(JSON.stringify({ status: 'done', health: 'ok', finished_at: new Date(NOW - 3600e3).toISOString(), ads: 4210, new_products: 96, blocked: 0 }), new Date(NOW).toISOString());
   return env;
 }
@@ -116,6 +119,20 @@ for (const [name, viewport] of [['phone', { width: 390, height: 844 }], ['deskto
       // A plain sort.
       await page.selectOption('#sort', 'days');
       await page.waitForFunction(() => /Pillow Pod/.test(document.querySelector('.card').textContent));
+      // Jev's answers: only data, on the card and in a filter. The product it has not seen has none.
+      const food = page.locator('.card', { hasText: 'Grain free dog food' });
+      assert.match(await food.locator('.tag.jev').innerText(), /pets take 97%/i);
+      assert.match(await food.locator('.jevl').innerText(), /Jev: pet/);
+      assert.strictEqual(await page.locator('.card', { hasText: 'Pillow Pod' }).locator('.tag.jev').count(), 0);
+      assert.strictEqual(await page.locator('.card', { hasText: 'onerror' }).locator('.jevl').count(), 0);
+      await page.selectOption('#jev', 'animals');
+      await page.waitForFunction(() => document.querySelectorAll('.card').length === 1);
+      await page.selectOption('#jev', 'none');
+      await page.waitForFunction(() => document.querySelectorAll('.card').length === 1 && /onerror/.test(document.querySelector('.card').textContent));
+      await page.selectOption('#jev', 'cat:home');
+      await page.waitForFunction(() => document.querySelectorAll('.card').length === 1 && /Pillow Pod/.test(document.querySelector('.card').textContent));
+      await page.selectOption('#jev', '');
+      await page.waitForFunction(() => document.querySelectorAll('.card').length === 3);
       // No in-between: a tap on the card or on ▶ opens the Ad Library, the card does not expand. Shop, its ads and 1688 sit on the shop line.
       const pod = page.locator('.card', { hasText: 'Pillow Pod' }).first();
       const lib = (await pod.locator('a.view').getAttribute('href'));

@@ -40,6 +40,7 @@ jobs:
       CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
       D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID || '8934aca9-51d3-4f87-9c62-e897843149a1' }}
       META_TOKEN: ${{ secrets.META_TOKEN }}
+      TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
       WORLD_MINUTES: ${{ inputs.minutes || '120' }}
       WORLD_PAGES: ${{ inputs.pages || '80' }}
     steps:
@@ -58,6 +59,11 @@ jobs:
 
       - name: Hunt outside the EU
         run: node winner-hunter/world.mjs
+
+      # Jev's answers about each new product, for the board. Also after a red hunt. No key or no balance only skips this.
+      - name: Jev check
+        if: ${{ !cancelled() }}
+        run: node winner-hunter/world-check.mjs
 
       # Each new product's rank in its store's best-seller list and the store's Trustpilot. Also after a red hunt.
       - name: Store signals

@@ -74,7 +74,8 @@ const TRUST_SQL = 'SELECT store, status, score, reviews, profile FROM store_trus
 // Outside the EU (world.mjs): products from the public Ad Library, with proof signals instead of reach. Read with the
 // winners; they take part in ★, ✓, notes and decisions like any product, but stay off the EU tabs.
 const WORLD_SQL = `SELECT w.* FROM world_products w`;
-const VERSION_SQL = `SELECT (SELECT MAX(rowid) FROM winners) AS r, (SELECT updated_at FROM state WHERE key = 'last_run') AS u, (SELECT updated_at FROM state WHERE key = 'world_run') AS wu`;
+const CHECK_SQL = 'SELECT product_key, people, animals, gymwear, physical, category, category_conf, input, checked_at FROM world_checks';
+const VERSION_SQL = `SELECT (SELECT MAX(rowid) FROM winners) AS r, (SELECT updated_at FROM state WHERE key = 'last_run') AS u, (SELECT updated_at FROM state WHERE key = 'world_run') AS wu, (SELECT updated_at FROM state WHERE key = 'world_check') AS jc`;
 const SNAP_MS = 15 * 60000; // read again after this long anyway
 const SNAPS = new WeakMap(); // per D1 binding
 let LAST = null; // on Cloudflare (one database): shared by the requests this isolate serves
@@ -82,13 +83,14 @@ let LAST = null; // on Cloudflare (one database): shared by the requests this is
 /** All winners rows, read again only when a run saved something (or after 15 minutes). */
 export async function snapshot(DB, now = Date.now()) {
   const v = await DB.prepare(VERSION_SQL).first();
-  const ver = `${v && v.r}|${v && v.u}|${v && v.wu}`;
+  const ver = `${v && v.r}|${v && v.u}|${v && v.wu}|${v && v.jc}`;
   const shared = typeof navigator !== 'undefined' && navigator.userAgent === 'Cloudflare-Workers';
   let s = SNAPS.get(DB) || (shared ? LAST : null);
   if (!s || s.ver !== ver || now - s.at > SNAP_MS || now < s.at) {
     const optional = (sql) => DB.prepare(sql).all().then((r) => r.results || [], () => []); // no table yet: the board still works
-    const [{ results: eu }, bs, tp, world] = await Promise.all([DB.prepare(SNAP_SQL).all(), optional(BS_SQL), optional(TRUST_SQL), optional(WORLD_SQL)]);
-    const results = eu.concat(world.map(worldRow));
+    const [{ results: eu }, bs, tp, world, jev] = await Promise.all([DB.prepare(SNAP_SQL).all(), optional(BS_SQL), optional(TRUST_SQL), optional(WORLD_SQL), optional(CHECK_SQL)]);
+    const checks = new Map(jev.map((c) => [c.product_key, c]));
+    const results = eu.concat(world.map((w) => worldRow(w, checks.get(w.product_key))));
     const best = new Map(bs.map((b) => [b.product_key, b]));
     const trust = new Map(tp.map((t) => [t.store, t]));
     for (const w of results) {
@@ -177,10 +179,27 @@ export const PROOF = { days: 30, ads: 5, markets: 2, shop: 75, reviews: 100 };
 const jsonOf = (s, or) => { try { return JSON.parse(s || '') ?? or; } catch (e) { return or; } };
 
 /** A world_products row in the shape of a winners row (reach_eu empty, ad_age_days the age of its oldest running ad). */
-export function worldRow(w) {
+export function worldRow(w, check) {
   return { ...w, gk: 'world|' + w.product_key, ad_age_days: w.days, reach_eu: null, scaled_count: w.ads, active_ads: w.shop_ads, data: '{}',
     world: { markets: jsonOf(w.markets, {}), creatives: num(w.creatives), new14: num(w.new14), in_eu: w.in_eu == null ? null : Number(w.in_eu), eu_rpd: w.eu_rpd == null ? null : Number(w.eu_rpd), shop_eu_rpd: w.shop_eu_rpd == null ? null : Number(w.shop_eu_rpd),
-      likes: w.likes == null ? null : Number(w.likes), page_id: w.page_id || '', active: Number(w.active) !== 0, store_products: w.store_products == null ? null : Number(w.store_products) } };
+      likes: w.likes == null ? null : Number(w.likes), page_id: w.page_id || '', active: Number(w.active) !== 0, store_products: w.store_products == null ? null : Number(w.store_products),
+      check: check ? { people: num(check.people), animals: num(check.animals), gymwear: num(check.gymwear), physical: num(check.physical), category: check.category || '', category_conf: check.category_conf == null ? null : Number(check.category_conf), input: check.input || '', at: check.checked_at || '' } : null } };
+}
+
+/** What Jev says about a product: the questions it answered yes to (0.5 or more). */
+export function jevFlags(c) {
+  if (!c) return [];
+  return [['people', c.people >= 0.5], ['animals', c.animals >= 0.5], ['gymwear', c.gymwear >= 0.5], ['digital', c.physical < 0.5]].filter((x) => x[1]).map((x) => x[0]);
+}
+const jevUnsure = (c) => !!c && [c.people, c.animals, c.gymwear, c.physical].some((v) => v > 0.15 && v < 0.85);
+/** The board's Jev filter: clean, unsure, not checked, one of jevFlags, or cat:<category>. */
+export function jevMatches(want, c) {
+  if (want === 'none') return !c;
+  if (!c) return false;
+  if (want === 'clean') return !jevFlags(c).length;
+  if (want === 'unsure') return jevUnsure(c);
+  if (want.startsWith('cat:')) return c.category === want.slice(4);
+  return jevFlags(c).includes(want);
 }
 
 /** The proof signals of one product: [{ k, ok, text }]; ok null: not known (yet). n: how many it has. */
@@ -355,6 +374,7 @@ function worldView(p, list, csv) {
   if (p.get('noteu') === '1') out = out.filter((r) => r.world.in_eu === 0);
   if (p.get('p4') === '1') out = out.filter((r) => r.proof.n >= 4);
   if (p.get('fresh') === '1') out = out.filter((r) => r.world.new14 > 0);
+  if (p.get('jev')) out = out.filter((r) => jevMatches(String(p.get('jev')).slice(0, 40), r.world.check));
   const q = String(p.get('q') || '').trim().slice(0, 80).toLowerCase();
   if (q) out = out.filter((r) => [r.product_title, r.advertiser, r.store_url, r.keyword].some((x) => String(x ?? '').toLowerCase().includes(q)));
   out.sort(Object.hasOwn(WORLD_SORTS, p.get('sort') || '') ? WORLD_SORTS[p.get('sort')] : stronger);
@@ -612,11 +632,13 @@ export function boardAlert(run, token, now = Date.now()) {
 }
 
 /** A problem with the hunt outside the EU, for its tab: { level, text } or null. */
-export function worldAlert(run, now = Date.now(), token = null) {
+export function worldAlert(run, now = Date.now(), token = null, check = null) {
   const tok = tokenProblem(token, now); // without a working token the "Not in EU" check stops
   const own = worldRunAlert(run, now);
   if (tok && own && own.level === 'red') return { level: 'red', text: `${own.text} · ${tok}` };
-  return tok ? { level: 'red', text: tok } : own;
+  if (tok) return { level: 'red', text: tok };
+  if (own) return own;
+  return check && check.stopped ? { level: 'yellow', text: `Jev-check gestopt / Jev check stopped: ${check.stopped}` } : null;
 }
 
 function worldRunAlert(run, now) {
@@ -686,6 +708,7 @@ export function toAd(r) {
       shop_eu_rpd: r.world.shop_eu_rpd,
       likes: r.world.likes,
       page_id: r.world.page_id,
+      check: r.world.check ? { ...r.world.check, flags: jevFlags(r.world.check) } : null,
     } : null,
   };
 }
@@ -711,6 +734,12 @@ const CSV_COLS = [
   ['in_eu', (a) => (a.world && a.world.in_eu != null ? a.world.in_eu : null)],
   ['eu_reach_per_day_product', (a) => (a.world ? a.world.eu_rpd : null)],
   ['eu_reach_per_day_shop_best_ad', (a) => (a.world ? a.world.shop_eu_rpd : null)],
+  ['jev_category', (a) => (a.world && a.world.check ? a.world.check.category : null)],
+  ['jev_people_eat_or_take', (a) => (a.world && a.world.check ? a.world.check.people : null)],
+  ['jev_animals_eat_or_take', (a) => (a.world && a.world.check ? a.world.check.animals : null)],
+  ['jev_gymwear', (a) => (a.world && a.world.check ? a.world.check.gymwear : null)],
+  ['jev_physical_product', (a) => (a.world && a.world.check ? a.world.check.physical : null)],
+  ['jev_input', (a) => (a.world && a.world.check ? a.world.check.input : null)],
 ];
 export const toCsv = (ads) => [CSV_COLS.map((c) => c[0]).join(','), ...ads.map((a) => CSV_COLS.map(([, f]) => csvCell(f(a))).join(','))].join('\r\n') + '\r\n';
 
@@ -771,7 +800,7 @@ async function ads(url, env, now, viewer) {
     last_run: run,
     prev_run: prev || null,
     world_run: worldRun,
-    alert: scope === 'world' ? worldAlert(worldRun, now, token) : boardAlert(run, token, now),
+    alert: scope === 'world' ? worldAlert(worldRun, now, token, await stateJson(env.DB, 'world_check')) : boardAlert(run, token, now),
     viewer,
   });
 }
