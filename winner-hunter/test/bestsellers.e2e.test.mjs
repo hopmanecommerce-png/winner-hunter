@@ -67,7 +67,7 @@ test('store best sellers and Trustpilot on the cards: rank and weekly move, Trus
     await page.fill('input[name=pin]', '482913');
     await Promise.all([page.waitForURL(base + '/'), page.click('button[type=submit]')]);
     await page.waitForSelector('.card');
-    assert.strictEqual(await page.locator('.card .bs.top').innerText(), '🏆 #2 best seller in its store · ↑3 in 8d');
+    assert.strictEqual(await page.locator('.card .bs.top').innerText(), '#2 best seller in its store · ↑3 in 8d');
     const tp = page.locator('.card .meta .mtp');
     assert.match(await tp.innerText(), /^4\.2 ★\s+trustpilot ↗\s+1\.3K\s+reviews$/i, 'score and reviews inside the stats block');
     assert.strictEqual(await tp.evaluate((el) => el.tagName), 'A', 'the Trustpilot row is a link');

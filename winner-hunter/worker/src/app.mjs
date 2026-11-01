@@ -607,7 +607,7 @@ function secure(res, { nonce = '', html = false } = {}) {
   h.set('Cross-Origin-Opener-Policy', 'same-origin');
   if (!h.has('Cache-Control')) h.set('Cache-Control', 'no-store');
   h.set('Content-Security-Policy', html
-    ? `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; img-src https:; media-src https:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`
+    ? `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; font-src https://fonts.gstatic.com; img-src https:; media-src https:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`
     : "default-src 'none'; frame-ancestors 'none'");
   return res;
 }
@@ -620,27 +620,20 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 function pinPage(nonce, msg = '', status = 200) {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex"><title>Winner Hunter</title>
-<meta name="theme-color" content="#04050a"><meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#141415"><meta name="color-scheme" content="dark">
 <style nonce="${nonce}">
-:root{color-scheme:dark;--bg:#04050a;--card:#0b0d18;--ink:#eef1ff;--muted:#8f95b8;--line:rgba(150,160,255,.14);--cy:#2ee6ff;--bad:#ff5c7a;--holo:linear-gradient(110deg,#2ee6ff,#8b5cff 52%,#ff4fd8)}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;color:var(--ink);-webkit-font-smoothing:antialiased;
-font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Display","Inter","Segoe UI",Roboto,system-ui,sans-serif;
-background:radial-gradient(40vmax 30vmax at 20% 10%,rgba(46,230,255,.16),transparent 70%),radial-gradient(36vmax 28vmax at 85% 0,rgba(255,79,216,.14),transparent 70%),radial-gradient(40vmax 30vmax at 50% 110%,rgba(139,92,255,.16),transparent 70%),var(--bg)}
-form{width:100%;max-width:350px;display:grid;gap:14px;padding:30px 24px 24px;border-radius:24px;border:1px solid transparent;
-background:linear-gradient(var(--card),var(--card)) padding-box,linear-gradient(135deg,rgba(46,230,255,.6),rgba(139,92,255,.15) 45%,rgba(255,79,216,.55)) border-box;box-shadow:0 30px 80px -30px rgba(46,230,255,.4)}
-.orb{position:relative;width:48px;height:48px;border-radius:50%;background:conic-gradient(#2ee6ff,#8b5cff,#ff4fd8,#2ee6ff);animation:s 6s linear infinite;box-shadow:0 0 26px rgba(46,230,255,.5),0 0 46px rgba(255,79,216,.3)}
-.orb::before{content:'';position:absolute;inset:4px;border-radius:50%;background:radial-gradient(circle,#fff 0 4px,#0b0d18 5px)}
-@keyframes s{to{transform:rotate(360deg)}}
-.k{font:600 10.5px ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-top:6px}
-h1{margin:-6px 0 0;font-size:26px;font-weight:780;letter-spacing:-.03em}p{margin:0;color:var(--muted);font-size:14px}
-input{font:700 24px/1 ui-monospace,Menlo,monospace;letter-spacing:.4em;text-align:center;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.04);color:var(--ink);width:100%;outline:none}
-input:focus{border-color:var(--cy);box-shadow:0 0 0 3px rgba(46,230,255,.14),0 0 26px -8px var(--cy)}
-button{font:700 12.5px ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;padding:16px;border:0;border-radius:14px;background:var(--holo);color:#06070d;cursor:pointer;box-shadow:0 0 30px -8px rgba(139,92,255,.9)}
-.err{color:var(--bad);font-weight:600}
-@media (prefers-reduced-motion:reduce){.orb{animation:none}}
+:root{color-scheme:dark;--bg:#141415;--card:#19191b;--ink:#ededed;--muted:#a1a1a6;--line:rgba(237,237,237,.08);--acc:#d9a441;--bad:#e5484d}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;color:var(--ink);-webkit-font-smoothing:antialiased;font:15px/1.4 "IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;background:var(--bg)}
+form{width:100%;max-width:360px;display:grid;gap:12px;padding:24px;border-radius:16px;border:1px solid var(--line);background:var(--card)}
+.k{font-size:12px;color:var(--muted)}
+h1{margin:0;font-size:24px;font-weight:500}p{margin:0;color:var(--muted);font-size:14px}
+input{font:500 24px/1 ui-monospace,Menlo,monospace;letter-spacing:.3em;text-align:center;padding:12px;border:1px solid var(--line);border-radius:8px;background:#232325;color:var(--ink);width:100%}
+input:focus{border-color:var(--acc);outline:none}
+button{font:500 15px inherit;font-family:inherit;padding:12px;border:0;border-radius:8px;background:#ededed;color:#141415;cursor:pointer}
+button:hover{background:#fff}
+.err{color:var(--bad);font-weight:500}
 </style></head><body>
-<form method="post" action="/login"><span class="orb" aria-hidden="true"></span>
-<span class="k">EU ad intelligence</span><h1>Winner Hunter</h1><p>Enter your PIN to open the board.</p>
+<form method="post" action="/login"><span class="k">Products already selling, with proof</span><h1>Winner Hunter</h1><p>Enter your PIN to open the board.</p>
 <input name="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="64" required autofocus aria-label="PIN">
 ${msg ? `<p class="err" role="alert">${esc(msg)}</p>` : ''}<button type="submit">Open</button></form></body></html>`;
   return secure(new Response(html, { status, headers: { 'Content-Type': 'text/html; charset=utf-8' } }), { nonce, html: true });
