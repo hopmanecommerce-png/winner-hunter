@@ -13,6 +13,7 @@ import { tiktokDecide, tiktokList } from './tiktok.mjs';
 import { AI_JS, aiList, aiPost } from './ai.mjs';
 import { adView } from './adview.mjs';
 import { TRAITS, AD_TRAITS, CHOICES, AD_CHOICES, SEP, YES_AT, VERSION } from './jev-questions.mjs';
+import { MOMENTUM_JS, readMomentum, attachMomentum, momentumFactor, byMomentum, momentumCard, momentumApi } from './momentum.mjs';
 import { MARKET_RULES } from './market-rules.mjs';
 import { LAUNCH_JS, launchList, launchPost } from './launch.mjs';
 import { SOURCING_JS, sourcingGet, sourcingPost } from './sourcing.mjs';
@@ -158,6 +159,7 @@ async function readTables(DB) {
     const t = trust.get(key.split('/')[0] || storeOf(w.store_url));
     if (t) w.tp = t;
   }
+  attachMomentum(results, await readMomentum(DB)); // momentum.mjs: the daily trend summaries (w.mo), a few rows, not one per product
   return results;
 }
 
@@ -545,11 +547,11 @@ export function fitWhy(r, taste) {
 export const fitOf = (r, taste) => fitWhy(r, taste).x;
 
 /** An Inbox row with its score: base (reach a day, or proof outside the EU) × what you taught it × best seller × Jev's risk, and why. */
-function ranked(r, taste, base, boost = 1) {
+function ranked(r, taste, base, boost = 1, extra = null) {
   const fit = fitWhy(r, taste);
   const risk = riskOf(r.jev);
-  const x = fit.x * boost * (risk ? risk.x : 1);
-  const why = [...fit.why, ...(boost !== 1 ? [{ text: 'Store best seller', x: boost }] : []), ...(risk ? risk.why.map((y) => ({ text: y.label, x: y.x })) : [])];
+  const x = fit.x * boost * (risk ? risk.x : 1) * (extra ? extra.x : 1); // extra: momentum.mjs's factor, { x, why }
+  const why = [...fit.why, ...(boost !== 1 ? [{ text: 'Store best seller', x: boost }] : []), ...(risk ? risk.why.map((y) => ({ text: y.label, x: y.x })) : []), ...(extra ? extra.why : [])];
   return Object.assign({}, r, { fit: fit.x, niche: fit.niche, score: base * x, ranked: { x: Math.round(x * 1000) / 1000, why } });
 }
 
@@ -594,7 +596,7 @@ function worldView(p, list, csv) {
   if (p.get('jev')) out = out.filter((r) => jevMatches(String(p.get('jev')).slice(0, 80), r.jev));
   const q = String(p.get('q') || '').trim().slice(0, 80).toLowerCase();
   if (q) out = out.filter((r) => [r.product_title, r.advertiser, r.store_url, r.keyword].some((x) => String(x ?? '').toLowerCase().includes(q)));
-  if (view === 'inbox') out = out.map((r) => ranked(r, list.taste, r.proof.n + 1)).sort((a, b) => b.score - a.score || stronger(a, b));
+  if (view === 'inbox') out = out.map((r) => ranked(r, list.taste, r.proof.n + 1, 1, momentumFactor(r))).sort((a, b) => b.score - a.score || stronger(a, b));
   else out.sort(Object.hasOwn(WORLD_SORTS, p.get('sort') || '') ? WORLD_SORTS[p.get('sort')] : stronger);
   const limit = csv ? 5000 : Math.min(Math.max(parseInt(p.get('limit'), 10) || (view === 'inbox' ? 20 : 40), 1), 100);
   const offset = offsetOf(p, csv);
@@ -619,7 +621,7 @@ export function viewOf(p, list, { csv = false } = {}) {
     offset = offsetOf(p, csv);
   } else if (view === 'inbox') {
     // Not decided yet; reach a day × what you taught the board × the store's best-seller rank × Jev's risks.
-    out = list.v.filter((r) => inboxOk(r, list.taste)).map((r) => ranked(r, list.taste, r.rpd, sellsBoost(r)));
+    out = list.v.filter((r) => inboxOk(r, list.taste)).map((r) => ranked(r, list.taste, r.rpd, sellsBoost(r), momentumFactor(r)));
     sort = (a, b) => b.score - a.score || cmp(a.ad_id, b.ad_id);
     limit = csv ? 5000 : Math.min(Math.max(parseInt(p.get('limit'), 10) || 20, 1), 100);
   } else {
@@ -725,6 +727,11 @@ export function worldMarketsOf(rows) {
     .sort((a, b) => b.products - a.products || WORLD_MARKETS.indexOf(a.cc) - WORLD_MARKETS.indexOf(b.cc));
   return { scope: 'world', markets, products: rows.length, proof: PROOF, rules_as_of: MARKET_RULES.as_of, rules_note: MARKET_RULES.note };
 }
+
+// Momentum (momentum.mjs): rising products that are not crowded first. The Inbox ranks × the same factor (ranked(): 1 for
+// a product without numbers yet, so it keeps its place).
+SORTS.mom = byMomentum(better);
+WORLD_SORTS.mom = byMomentum(stronger);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -998,6 +1005,7 @@ export function toAd(r) {
       likes: r.world.likes,
       page_id: r.world.page_id,
     } : null,
+    mo: momentumCard(r), // momentum.mjs: rising or falling, sparkline, ads survived, rivals, crowding; null before its first run
   };
 }
 
@@ -1401,6 +1409,17 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       if (!/^\d{1,25}$/.test(id)) return json({ error: 'Bad ad id' }, 400);
       const out = await adView(id, env, { now, launch });
       return json(out.body, out.status);
+    }
+    // ---- Momentum (momentum.mjs): the daily trend summaries, read only. A block of its own, as Launch. /momentum.js: the
+    // scoring and the sparklines the board draws with.
+    if (path === '/api/momentum' || path === '/momentum.js') {
+      if (!ok) return json({ error: 'Log in first' }, 401);
+      if (method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+      if (path === '/momentum.js') return text(MOMENTUM_JS, 200, { 'Content-Type': 'text/javascript; charset=utf-8' });
+      const scope = ['tiktok', 'eu'].includes(url.searchParams.get('scope')) ? url.searchParams.get('scope') : 'world';
+      // The products in memory and only what was decided (hidden): no stars or feedback read for the panel.
+      const lean = async () => products(await snapshot(env.DB, now), (await env.DB.prepare('SELECT ad_id, status, at FROM hidden').all()).results, [], now);
+      return json(await momentumApi(env, scope, { board: lean, toAd }));
     }
     return text('Not found', 404);
   } catch (e) {
