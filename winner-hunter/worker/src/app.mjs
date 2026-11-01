@@ -21,6 +21,7 @@ import { SOURCING_JS, sourcingGet, sourcingPost } from './sourcing.mjs';
 import { GOOGLE_SQL, TIKTOK_SHOPS_SQL, GOOGLE_CSV_COLS, googleRow, crossLink, googleProof, googleFacts, googleMarketsOf, googleAlert } from './google.mjs';
 import { ECON_JS, econContext, econAd, econBoard, econSorts, econGet, econPost, decisionsGet, decisionsPost, decisionLogged, tiktokLogged } from './econ.mjs';
 import { RISK_JS, riskChecks, riskHide, riskOut, riskList, riskPost } from './risk.mjs';
+import { PIPELINE_JS, pipelineGet, pipelinePost, pipelineImage } from './pipeline.mjs';
 
 const COOKIE = '__Host-wh';
 const MAX_AGE = 90 * 864e2; // seconds
@@ -1511,6 +1512,28 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
         const { j, err } = await readJson(req, url, 8000);
         if (err) return err;
         out = econ ? await econPost(env, j, now, deps) : await decisionsPost(env, j, now, deps);
+      } else return json({ error: 'Method not allowed' }, 405);
+      return json(out.body, out.status);
+    }
+    // ---- 🧭 Pipeline (pipeline.mjs): every approved product from Approved to Launched, its sourcing request pack, its 1688
+    // links (Sourcing's candidates) and target markets outside the EU. A block of its own, as Launch and Sourcing.
+    // /pipeline.js: the stages, links, pack and texts the board works out as you type. /api/pipeline/image: the photo as a file.
+    if (path === '/api/pipeline' || path === '/pipeline.js' || path === '/api/pipeline/image') {
+      if (!ok) return json({ error: 'Log in first' }, 401);
+      if (path === '/pipeline.js') return method === 'GET' ? text(PIPELINE_JS, 200, { 'Content-Type': 'text/javascript; charset=utf-8' }) : json({ error: 'Method not allowed' }, 405);
+      const deps = { board: async () => { const b = await board(env, now); return { products: b.k, rows: b.rows }; }, toAd, pageKey: productKey };
+      if (path === '/api/pipeline/image') {
+        if (method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+        const img = await pipelineImage(env, url.searchParams, now, deps);
+        if (!img.bytes) return json(img.body, img.status);
+        return secure(new Response(img.bytes, { headers: { 'Content-Type': img.type, 'Content-Disposition': `attachment; filename="${img.name}"` } }));
+      }
+      let out;
+      if (method === 'GET') out = await pipelineGet(env, url.searchParams, now, deps);
+      else if (method === 'POST') {
+        const { j, err } = await readJson(req, url, 8000);
+        if (err) return err;
+        out = await pipelinePost(env, j, now, deps);
       } else return json({ error: 'Method not allowed' }, 405);
       return json(out.body, out.status);
     }

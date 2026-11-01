@@ -440,7 +440,8 @@ export const SOURCING_JS = `'use strict';\nwindow.SOURCING = (${sourcingKit})();
 // D1: the shared row of a product, its candidates
 // ---------------------------------------------------------------------------
 
-const keyIn = (k) => (typeof k === 'string' && k.length <= 1000 && /^(eu|world|tiktok)\|./s.test(k) ? k : '');
+// The launch card's keys, as launch.mjs takes them (the Google tab's 'google|…' too: its cards have this panel as well).
+const keyIn = (k) => (typeof k === 'string' && k.length <= 1000 && /^(eu|world|google|tiktok)\|./s.test(k) ? k : '');
 const idIn = (x) => (Number.isSafeInteger(Number(x)) && Number(x) > 0 && String(x).length <= 15 ? Number(x) : 0);
 const numOr = (x) => (x == null || x === '' || !Number.isFinite(Number(x)) ? null : Number(x));
 const parse = (s) => {
