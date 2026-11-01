@@ -10,12 +10,14 @@ GitHub Actions (4x a day, outside the EU)  →  Cloudflare D1 (the database)  �
 
 ## Jev's answers (Outside EU tab)
 
-After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, once, from its name, type, shop and photo. The card shows its category and tags such as "People take 99%"; the **Jev** filter and the CSV have the same data. Nothing is hidden or ranked by it. It needs the GitHub secret `TYPESAFE_API_KEY`; without a key or a balance the products stay on the board without answers. About 0.01 cents a product.
+After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, once, from its name, type, shop and photo. The card shows its category and tags such as "People take 99%"; the **Jev** filter and the CSV have the same data. Its risks rank a product lower in both Inboxes, and the Inbox card says why: people or pets take it × 0.3, sizing returns, a medical claim, a brand or hard to ship × 0.5 each, for children, cosmetics, electric, fragile or big × 0.8 each, never below × 0.2. An EU product people or pets take stays out of the Inbox (Browse still lists it). Hard to ship, Medical claim and Cosmetics get a red tag. It needs the GitHub secret `TYPESAFE_API_KEY`; without a key or a balance the products stay on the board without answers. About 0.01 cents a product.
 
 ## What you see on the board
 
 - Only ads that pass **all four hard rules** (no points, no score): **Shopify store**, advertiser has **75+ active ads**,
-  ad live **7 to 42 days**, **500+ EU reach per day**. Anything else is never saved and never shown.
+  ad live **7 to 42 days** (7+ when it was measured, at most 42 today counted from the day it started), **500+ EU reach
+  per day**. Anything else is never saved and never shown. One product = one product page: the same product under two
+  titles or two advertisers is one card and one decision.
 - **Inbox** (start screen): every product you have not decided on, one at a time, best first. **✗ Reject**, **★ Keep**
   or **✓ Approved** (buttons, swipe left/right, or keys R / D). Each one leaves the inbox; **Undo** brings it back.
   When none are left: **🎉 Inbox zero**. "New today" = found in the last 24 hours.
@@ -23,8 +25,10 @@ After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, o
 - **📝 Note** (under the Inbox card, key N): write about the ad, the competitor or the product. It saves as you type and
   stays with the product. Your notes on other products of the same store or advertiser show below it.
 - **Why?** After each choice: tap a reason (Too expensive, Not my niche, Bad store… or Wow product, My niche…).
-  The board **learns**: niches you like go up in the Inbox, niches you reject go down,
-  "Bad store" takes that store out of the Inbox, "Too expensive" (twice) ranks expensive products lower.
+  The board **learns** (both Inboxes): a niche is Jev's category of a product; one you approve more often than usual
+  goes up, one you mark "Not my niche" goes down (a no for another reason says nothing about the niche). "Bad store"
+  takes that store out of the Inbox. "Too expensive" twice in one currency ranks that currency's products from the
+  cheaper price up at half; a product without a price ranks at × 0.75 while there is a limit for it.
 - **🧠**: what the board learned, your notes, and a box to tell the board something. Everything is in the D1
   table `feedback`; ask Claude "learn from my Winner Hunter feedback" to turn it into better keywords and rules.
 - **Browse**: everything that passes, most reach per day first, with search, sort and filters. **★**: your kept products.
@@ -32,7 +36,8 @@ After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, o
   the rules). The ✓ count jumps each time you tap **✓ Approved**.
 - **🏆 Store best seller**: proof that a product sells. Once a day (after the hunt) every board product gets its rank in
   its own store's best-seller list (Shopify's sales order, top 50) and how it moved in a week: "#2 best seller in its
-  store · ↑3 in 8d". The Inbox puts sellers first (× 1.5 in the store's top 10, × 1.2 in its top 50); Browse can sort
+  store · ↑3 in 8d". The Inbox puts sellers first (× 1.5 in the store's top 10 and top 2% of its products, × 1.2 in its top 50
+  and top 10%; nothing while the store's size is unknown); Browse can sort
   by it. No line = the store gives no list (headless shop); "Not in its store's top 50" = checked, not selling much.
 - **Trustpilot** (second row in the stats block): the store's TrustScore and number of reviews from its own Trustpilot
   page (trustpilot.com/review/<domain>), checked every 3 days for every store, also when the ad links to the home
@@ -44,6 +49,9 @@ After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, o
 - **✓ Approved** moves a product to **✓**; **✗ Reject** (not for me) hides it; **Undo** brings it back.
 - **CSV** downloads what you are looking at.
 - A "store photo" label means: photo from the shop's page, not the product photo of the ad.
+- "Measured 17 Sep": the card's figures (reach, ads, copies, days live) are from then, more than 2 days ago (the EU hunt
+  only runs by hand). "Product not identified": no product page, price or rank was found, the title is the ad's own
+  words. "Big catalogue, 1 ad": a store of 250+ products with fewer than 5 copies of this ad.
 
 ## Set up (once)
 
@@ -54,7 +62,12 @@ Add these 4 secrets in GitHub: **Settings → Secrets and variables → Actions 
 | `META_TOKEN` | Meta access token for the Ad Library API. Optional extra: `META_TOKEN_2`, `META_TOKEN_3` (other Meta apps, used when one hits its hourly limit). |
 | `CF_API_TOKEN` | Cloudflare API token. Make it at dash.cloudflare.com → My Profile → API Tokens → Create Token → Custom token, with **Account → D1 → Edit** and **Account → Workers Scripts → Edit**. |
 | `CF_ACCOUNT_ID` | Your Cloudflare account ID (Cloudflare dashboard → Workers & Pages, right side). |
-| `BOARD_PIN` | The PIN for the board. Use 6+ digits. |
+| `BOARD_PIN` | The PIN for the board. Use 6+ digits. 10 tries per address (IPv6: per /64) per 15 minutes. |
+
+Optional, on the Worker itself (not a GitHub secret): `BOARD_SECRET`, 32+ random characters
+(`cd winner-hunter/worker && npx wrangler secret put BOARD_SECRET`). The login cookie is then keyed by it and the PIN, so
+a copied cookie no longer gives the PIN away; changing it logs every phone out. Without it the cookie is keyed by the PIN
+alone, as before.
 
 Then, in **Actions**:
 

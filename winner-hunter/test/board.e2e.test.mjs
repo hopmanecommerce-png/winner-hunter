@@ -124,7 +124,11 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     assert.ok(await page.locator('#q').isVisible(), 'search right away in Browse');
     assert.strictEqual(await page.locator('.card').count(), 27);
     assert.strictEqual(await page.locator('.score').count(), 0, 'no score on the cards');
-    assert.match(await page.locator('.card').first().locator('.meta').innerText(), /81[\s\S]*shop ads[\s\S]*41d[\s\S]*live[\s\S]*3[\s\S]*copies/i);
+    // The first card was last measured 30 days ago, at 11 days live: the card says so, it does not guess today's age.
+    assert.match(await page.locator('.card').first().locator('.meta').innerText(), /81[\s\S]*shop ads[\s\S]*11d[\s\S]*live on 17 Sept?[\s\S]*3[\s\S]*copies/i);
+    assert.match(await page.locator('.card').first().locator('.meta [title]').nth(1).getAttribute('title'), /last measured, 17 Sept?.*41 days today if it still runs/);
+    assert.match(await page.locator('.card').first().locator('.tag.old').innerText(), /^Measured 17 Sept?$/i);
+    assert.strictEqual(await page.locator('.card .tag.old').count(), 1, 'the others were measured an hour ago');
     assert.match(await page.locator('.card').first().locator('.hero').innerText(), /90K[\s\S]*reach \/ day/i);
     assert.match(await page.textContent('#run'), /Last run 6 h ago · 48K ads · 23 new winners/);
     // Market Radar: one row at first (the products come first); Show opens it. Every seed product reaches NL 70% / BE 30%
@@ -388,19 +392,83 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     await shot('9b-learned');
     await page.waitForTimeout(300);
     assert.strictEqual((await (await fetch(base + '/api/ads?view=inbox', { headers: { cookie: (await page.context().cookies()).map((c) => `${c.name}=${c.value}`).join('; ') } })).json()).total, 1, 'saved: nothing left on the server but the product removed from ✓ and unstarred (back in the Inbox)');
-    // a failed run: red banner on top, on a phone
+    // a failed run and a Meta token that expires in 3 days: red banner on top, on a phone, with both problems
     env.db.prepare("UPDATE state SET value = ? WHERE key = 'last_run'").run(JSON.stringify({ status: 'done', health: 'failed', finished_at: new Date(NOW - 3600e3).toISOString(), ads_checked: 0, new_winners: 0,
       alert: 'Run failed: 0 ads checked (Meta token?) <b>x</b>' }));
+    env.db.prepare("INSERT INTO state (key, value, updated_at) VALUES ('token_expires_at', ?, 'x')").run(JSON.stringify({ at: new Date(NOW + 3.5 * 864e5).toISOString() }));
     await page.setViewportSize({ width: 390, height: 844 });
     await page.emulateMedia({ colorScheme: 'light' });
     await page.reload();
     await page.waitForSelector('#alert:not([hidden])');
-    assert.strictEqual(await page.textContent('#alert'), 'Run failed: 0 ads checked (Meta token?) <b>x</b>', 'shown as text');
+    assert.strictEqual(await page.textContent('#alert'), 'Run failed: 0 ads checked (Meta token?) <b>x</b> · Meta token expires in 3 days', 'both, as text');
     assert.strictEqual(await page.getAttribute('#alert', 'class'), 'alert');
     const box = await page.locator('#alert').boundingBox();
     assert.ok(box.y < 40, 'at the top');
     await noSideScroll('alert banner');
     await shot('7-alert');
+    assert.deepStrictEqual(errors, []);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+});
+
+test('the Inbox card says why a product moved (Jev\'s risks, your niche, a price), red tags for risky products, 🧠 per niche and currency', { skip: !chromium && 'Playwright not installed', timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  if (!browser) return t.skip('Chromium not available');
+  const env = await seededEnv();
+  // Jev: Pets for "hond", Clothing for "dress"; the first Inbox product (Stale Old Winner) has a medical claim and sizes.
+  const key = "'eu|' || advertiser_page_id || '|' || lower(trim(product_title))";
+  env.db.prepare(`INSERT OR IGNORE INTO world_checks (product_key, people, animals, gymwear, physical, category, input, checked_at, version, main, sub, answers)
+    SELECT ${key}, 0.01, 0.01, 0.01, 0.99, '', 'photo', 'x', 2, CASE keyword WHEN 'hond' THEN 'Pets' ELSE 'Clothing' END, '', CASE ad_id WHEN '9500' THEN '{"p":{"medical":0.8,"sizing":0.9},"choices":{}}' ELSE '{}' END FROM winners`).run();
+  // Decided before: two Clothing products approved, one Pets product "Not my niche", two EUR prices too expensive.
+  const fb = env.db.prepare('INSERT INTO feedback (ad_id, action, reasons, price, currency, at) VALUES (?, ?, ?, ?, ?, ?)');
+  fb.run('9000', 'seen', '[]', 30, 'EUR', 'x');
+  fb.run('9002', 'seen', '[]', 30, 'EUR', 'x');
+  fb.run('9001', 'rejected', '["niche","price"]', 40, 'EUR', 'x');
+  fb.run('9003', 'rejected', '["price"]', 52, 'EUR', 'x');
+  env.db.prepare("INSERT INTO hidden (ad_id, status, at) VALUES ('9000', 'seen', 'x'), ('9002', 'seen', 'x'), ('9001', 'rejected', 'x'), ('9003', 'rejected', 'x')").run();
+  // A store of 1,200 products that copies this ad 3 times; an ad whose product was never found (home page, no price).
+  env.db.prepare("UPDATE winners SET data = json_set(data, '$.store_products', 1200) WHERE ad_id = '9005'").run();
+  env.db.prepare(`INSERT INTO winners (ad_id, product_title, advertiser_page_id, advertiser, active_ads, ad_age_days, ad_start_date, reach_eu, product_url, store_url, ad_library_url, keyword, currency, price, scaled_count, first_seen, last_seen, data)
+    SELECT '9335', 'LAST DAY: 70% OFF EVERYTHING', '997', advertiser, active_ads, ad_age_days, ad_start_date, reach_eu, 'https://shop7.test/', store_url, ad_library_url, keyword, currency, NULL, scaled_count, first_seen, last_seen, data FROM winners WHERE ad_id = '9007'`).run();
+  const server = await serve(env);
+  const base = `http://localhost:${server.address().port}`;
+  const errors = [];
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const page = await ctx.newPage();
+  await page.clock.setFixedTime(new Date(NOW));
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.addInitScript(() => localStorage.setItem('wh-scope', 'eu'));
+  await ctx.route(/^https:\/\//, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>' }));
+  try {
+    await page.goto(base + '/');
+    await page.fill('input[name=pin]', '482913');
+    await Promise.all([page.waitForURL(base + '/'), page.click('button[type=submit]')]);
+    await page.waitForSelector('.card');
+    const c = page.locator('.card');
+    assert.match(await c.locator('.t').innerText(), /Stale Old Winner/);
+    assert.match(await c.locator('.tag.red').innerText(), /^Medical claim 80%$/i);
+    // 9500 is Pets (one "Not my niche" against two yeses: usual rate 3 in 5, Pets 0.4 / 0.6) and EUR 30.95 is under the EUR 40 limit
+    assert.strictEqual(await c.locator('.jevl.rk').innerText(), 'Inbox rank × 0.17: Not your niche: Pets × 0.67 · Sizing returns × 0.5 · Medical claim × 0.5');
+    assert.ok(await c.locator('.jevl.rk.down').count(), 'down: in the accent colour');
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no sideways scroll');
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/inbox-why.png` });
+    // Browse: the red tag on the card too; the weaker leads say so
+    await page.click('[data-view=all]');
+    await page.waitForFunction(() => document.querySelectorAll('.card').length > 20);
+    assert.match(await page.locator('.card[data-id="9500"] .tag.red').innerText(), /Medical claim/i);
+    assert.match(await page.locator('.card[data-id="9005"] .tag.out').innerText(), /^Big catalogue, 3 ads$/i);
+    assert.match(await page.locator('.card[data-id="9005"] .tag.out').getAttribute('title'), /sells 1\.2K products and runs 3 copies of this ad/);
+    assert.match(await page.locator('.card[data-id="9335"] .tag.out').innerText(), /^Product not identified$/i);
+    assert.strictEqual(await page.locator('.card .tag.out').count(), 2, 'no other card is flagged');
+    // 🧠: the niches as Jev's categories, each limit in its own currency
+    await page.click('[data-view=learned]');
+    await page.waitForSelector('#learn:not([hidden]) h2');
+    assert.match(await page.locator('#learn .lchips').innerText(), /↑ Clothing × 1\.\d+\s*↓ Pets × 0\.\d+/);
+    assert.match(await page.textContent('#learn'), /Products from €40 up go down in your Inbox \(× 0\.5\)/);
+    assert.match(await page.textContent('#learn'), /without a price ranks at × 0\.75/);
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/learned-niches.png`, fullPage: true });
     assert.deepStrictEqual(errors, []);
   } finally {
     await browser.close();

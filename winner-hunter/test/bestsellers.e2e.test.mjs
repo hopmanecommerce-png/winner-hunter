@@ -45,9 +45,9 @@ test('store best sellers and Trustpilot on the cards: rank and weekly move, Trus
   const browser = await launch();
   if (!browser) return t.skip('Chromium not available');
   const env = await seededEnv();
-  // item-1 (the Inbox's first product) climbed from #5 to #2 in 8 days; item-3 is checked but not in its store's top 50.
+  // The Inbox's first product (Stale Old Winner, shop1) climbed from #5 to #2 in 8 days; item-3 is checked but not in its store's top 50.
   env.db.prepare(`INSERT INTO bestseller (product_key, store, product_id, rank, ok, checked_at, history) VALUES
-    ('shop1.test/products/item-1', 'shop1.test', '12', 2, 1, 'x', '[["2026-10-09",5],["2026-10-17",2]]'),
+    ('shop1.test/products/stale-old-winner', 'shop1.test', '12', 2, 1, 'x', '[["2026-10-09",5],["2026-10-17",2]]'),
     ('shop3.test/products/item-3', 'shop3.test', '30', NULL, 1, 'x', '[["2026-10-17",null]]')`).run();
   // Trustpilot: shop1 from its Trustpilot page (4.2 from 1,252 reviews), shop2 by its widget; shop3 only shows a
   // Trustpilot logo (checked without a token); shop5 is not on Trustpilot.
