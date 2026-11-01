@@ -30,7 +30,8 @@ const SETTLED = new Set(['page', 'nopage', 'widget']);
 
 export const WANTED_SQL = `SELECT DISTINCT product_url, store_url, 1 AS later FROM winners
 WHERE (${STRICT} AND last_seen >= ?1) OR ad_id IN (SELECT ad_id FROM stars) OR ad_id IN (SELECT ad_id FROM hidden WHERE status = 'seen')
-UNION SELECT product_url, store_url, 0 AS later FROM world_products WHERE active = 1 ORDER BY later`; // the products outside the EU (world.mjs) first, the EU's with the time that is left
+UNION SELECT product_url, store_url, 0 AS later FROM world_products WHERE active = 1
+UNION SELECT product_url, store_url, 0 AS later FROM google_products WHERE active = 1 ORDER BY later`; // outside the EU (world.mjs) and on Google (google.mjs) first, the EU's with the time that is left
 export const SAVE_SQL = `INSERT INTO bestseller (product_key, store, product_id, rank, ok, checked_at, history)
 SELECT json_extract(value, '$.key'), json_extract(value, '$.store'), json_extract(value, '$.id'), json_extract(value, '$.rank'),
   json_extract(value, '$.ok'), ?2, json_extract(value, '$.history') FROM json_each(?1) WHERE true

@@ -13,7 +13,7 @@ import { validate, flagsOf } from './ai-schema.mjs';
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_IDS = 90; // D1 takes up to 100 bound values a query
 /** The product key of a board row (a winners or world_products row from app.mjs snapshot()): the same as launch.mjs keyOf. */
-export const keyOfRow = (r) => (r.world ? String(r.gk) : 'eu|' + r.gk);
+export const keyOfRow = (r) => (r.world || r.google ? String(r.gk) : 'eu|' + r.gk);
 const jsonOf = (s, or) => {
   try {
     return JSON.parse(s || '') ?? or;

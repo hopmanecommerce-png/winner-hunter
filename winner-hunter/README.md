@@ -176,7 +176,8 @@ Add these 4 secrets in GitHub: **Settings → Secrets and variables → Actions 
 | `CF_API_TOKEN` | Cloudflare API token. Make it at dash.cloudflare.com → My Profile → API Tokens → Create Token → Custom token, with **Account → D1 → Edit** and **Account → Workers Scripts → Edit**. |
 | `CF_ACCOUNT_ID` | Your Cloudflare account ID (Cloudflare dashboard → Workers & Pages, right side). |
 | `BOARD_PIN` | The PIN for the board. Use 6+ digits. 10 tries per address (IPv6: per /64) and 30 per network (IPv6 /48, IPv4 /24) per 15 minutes. |
-| `CF_D1_TOKEN` | Optional, better: a second Cloudflare token with only **Account → D1 → Edit**. The hunts (World Hunter, Winner Hunter, Jev check, Ad prefetch, Lasso stores) then use it instead of `CF_API_TOKEN`, so the jobs that open Facebook and shops hold no token that can change the board. |
+| `CF_D1_TOKEN` | Optional, better: a second Cloudflare token with only **Account → D1 → Edit**. The hunts (World Hunter, Winner Hunter, Google Hunter, Jev check, Ad prefetch, Lasso stores) then use it instead of `CF_API_TOKEN`, so the jobs that open Facebook and shops hold no token that can change the board. |
+| `SCRAPECREATORS_API_KEY` | Optional: the Scrape Creators API key for the **Google** tab (Google Hunter). Without it the Google hunt does not run; nothing else needs it. |
 | `URLSCAN_API_KEY` | Optional, only for **Lasso stores**: a free urlscan.io account's API key (more searches a day). |
 
 The login cookie is keyed by the PIN and a random key the board makes at the first login and keeps in D1 (`state` row
@@ -232,10 +233,25 @@ are in `keywords-optin.txt`: searched only when `KEYWORDS_OPTIN=1` is set for th
 keywords box.
 Other countries: add a repository variable `HUNT_COUNTRIES` (default `NL,BE,DE,FR,AT,ES,IT,IE,DK,SE,PL`).
 
+## Google
+
+`google.mjs` (workflow `google-hunter.yml`) finds products Shopify stores advertise on Google (Search, Shopping, YouTube,
+Display) in Google's Ads Transparency Center, through the Scrape Creators API. **Off by default:** it runs when you start it
+(Actions → Google Hunter), or every day once the repository variable `GOOGLE_HUNT` is `on`. `GOOGLE_CREDITS` (300) is a hard
+cap of credits per run (300 credits ≈ $0.56 at the $47 pack); tick **Dry run** to see what it finds without saving anything.
+
+The **Google** tab shows our four rules on every card, each with how it was checked: **✓** exactly as on Meta (Shopify store,
+ad 7–42 days live), **≈** approximated with Google's data (75+ ads: Google's estimate of the ads shown in the last 3 days;
+500+ EU reach a day: Google's EU impression ranges, where it publishes them), **?** not checked (no EU figure, or an ad
+shown only outside the EU: never shown as a pass). Restricted categories, Jev's risks, best sellers and your decisions work as on the other tabs. A card
+says **Also on Meta**, **Also on TikTok** or **Not on Meta**; a Meta card says **Also on Google**. Every field, cost and open
+question: [docs/google-ads/README.md](../docs/google-ads/README.md).
+
 ## Files
 
 ```
 run.mjs          nightly run (batches, cursor, time budget)
+google.mjs       the Google hunt (lib/google-ads.mjs: the Scrape Creators client, its answers, our rules on them; worker/src/google.mjs: the tab)
 bestsellers.mjs  store signals for the board's products: best-seller rank + Trustpilot (after the hunt; lib/bestsellers.mjs, lib/trust.mjs)
 lasso.mjs        optional discovery source: stores with Lasso's hosted checkout (lib/lasso.mjs; see "Lasso stores" below)
 momentum.mjs     once a day: each product's numbers, trend, rivals and crowding (lib/momentum.mjs; the board: worker/src/momentum.mjs)

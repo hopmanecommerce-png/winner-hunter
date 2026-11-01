@@ -1,0 +1,160 @@
+{
+  "_source": "The example answer in the vendor docs (https://docs.scrapecreators.com/v1/google/company/ads), copied verbatim on 2026-11-01. Real data the vendor published, used only to test the parsing.",
+  "success": true,
+  "credits_remaining": 49998226428,
+  "credits_charged": 1,
+  "ads": [
+    {
+      "advertiserId": "AR01614014350098432001",
+      "creativeId": "CR08567627846124568577",
+      "format": "image",
+      "adUrl": "https://adstransparency.google.com/advertiser/AR01614014350098432001/creative/CR08567627846124568577",
+      "advertiserName": "lululemon athletica canada inc.",
+      "imageUrl": null,
+      "firstShown": "2026-03-11T17:08:22.000Z",
+      "lastShown": "2026-05-04T17:59:12.000Z"
+    },
+    {
+      "advertiserId": "AR01614014350098432001",
+      "creativeId": "CR02637147045441306625",
+      "format": "text",
+      "adUrl": "https://adstransparency.google.com/advertiser/AR01614014350098432001/creative/CR02637147045441306625",
+      "advertiserName": "lululemon athletica canada inc.",
+      "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/7468813441689462696",
+      "firstShown": "2024-11-01T01:34:54.000Z",
+      "lastShown": "2026-05-04T17:58:57.000Z"
+    },
+    {
+      "advertiserId": "AR01614014350098432001",
+      "creativeId": "CR08098532145120673793",
+      "format": "text",
+      "adUrl": "https://adstransparency.google.com/advertiser/AR01614014350098432001/creative/CR08098532145120673793",
+      "advertiserName": "lululemon athletica canada inc.",
+      "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/766417217461683779",
+      "firstShown": "2024-08-27T12:51:22.000Z",
+      "lastShown": "2026-05-04T17:54:24.000Z"
+    },
+    {
+      "advertiserId": "AR01614014350098432001",
+      "creativeId": "CR04864897919897042945",
+      "format": "text",
+      "adUrl": "https://adstransparency.google.com/advertiser/AR01614014350098432001/creative/CR04864897919897042945",
+      "advertiserName": "lululemon athletica canada inc.",
+      "imageUrl": null,
+      "firstShown": "2026-03-17T13:10:08.000Z",
+      "lastShown": "2026-05-04T17:54:21.000Z"
+    },
+    {
+      "advertiserId": "AR01614014350098432001",
+      "creativeId": "CR12592137366413508609",
+      "format": "text",
+      "adUrl": "https://adstransparency.google.com/advertiser/AR01614014350098432001/creative/CR12592137366413508609",
+      "advertiserName": "lululemon athletica canada inc.",
+      "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/3081390492094130235",
+      "firstShown": "2024-05-07T10:41:57.000Z",
+      "lastShown": "2026-05-04T17:51:00.000Z"
+    },
+    {
+      "advertiserId": "AR01614014350098432001",
+      "creativeId": "CR05939968563828752385",
+      "format": "text",
+      "adUrl": "https://adstransparency.google.com/advertiser/AR01614014350098432001/creative/CR05939968563828752385",
+      "advertiserName": "lululemon athletica canada inc.",
+      "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/6834179606872602922",
+      "firstShown": "2023-05-19T23:27:29.000Z",
+      "lastShown": "2026-05-04T17:50:07.000Z"
+    },
+    {
+      "advertiserId": "AR01614014350098432001",
+      "creativeId": "CR17970554950748471297",
+      "format": "text",
+      "adUrl": "https://adstransparency.google.com/advertiser/AR01614014350098432001/creative/CR17970554950748471297",
+      "advertiserName": "lululemon athletica canada inc.",
+      "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/16211925358676711394",
+      "firstShown": "2024-10-02T18:09:28.000Z",
+      "lastShown": "2026-05-04T17:48:57.000Z"
+    },
+    {
+      "advertiserId": "AR01614014350098432001",
+      "creativeId": "CR12213525725709336577",
+      "format": "text",
+      "adUrl": "https://adstransparency.google.com/advertiser/AR01614014350098432001/creative/CR12213525725709336577",
+      "advertiserName": "lululemon athletica canada inc.",
+      "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/146125619079881058",
+      "firstShown": "2023-05-19T22:27:14.000Z",
+      "lastShown": "2026-05-04T17:47:53.000Z"
+    },
+    {
+      "advertiserId": "AR01614014350098432001",
+      "creativeId": "CR18446650898689032193",
+      "format": "text",
+      "adUrl": "https://adstransparency.google.com/advertiser/AR01614014350098432001/creative/CR18446650898689032193",
+      "advertiserName": "lululemon athletica canada inc.",
+      "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/11117565455095683804",
+      "firstShown": "2025-08-21T23:16:58.000Z",
+      "lastShown": "2026-05-04T17:47:23.000Z"
+    },
+    {
+      "advertiserId": "AR01614014350098432001",
+      "creativeId": "CR01495008090590806017",
+      "format": "text",
+      "adUrl": "https://adstransparency.google.com/advertiser/AR01614014350098432001/creative/CR01495008090590806017",
+      "advertiserName": "lululemon athletica canada inc.",
+      "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/9248226952724393849",
+      "firstShown": "2023-06-14T07:08:49.000Z",
+      "lastShown": "2026-05-04T17:42:16.000Z"
+    },
+    {
+      "advertiserId": "AR01614014350098432001",
+      "creativeId": "CR05242608124275195905",
+      "format": "text",
+      "adUrl": "https://adstransparency.google.com/advertiser/AR01614014350098432001/creative/CR05242608124275195905",
+      "advertiserName": "lululemon athletica canada inc.",
+      "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/13173570315543239209",
+      "firstShown": "2022-10-22T19:09:17.000Z",
+      "lastShown": "2026-05-04T17:42:02.000Z"
+    },
+    {
+      "advertiserId": "AR01614014350098432001",
+      "creativeId": "CR03664498721518780417",
+      "format": "text",
+      "adUrl": "https://adstransparency.google.com/advertiser/AR01614014350098432001/creative/CR03664498721518780417",
+      "advertiserName": "lululemon athletica canada inc.",
+      "imageUrl": null,
+      "firstShown": "2025-05-07T19:20:43.000Z",
+      "lastShown": "2026-05-04T17:39:44.000Z"
+    },
+    {
+      "advertiserId": "AR01614014350098432001",
+      "creativeId": "CR11629681142940041217",
+      "format": "text",
+      "adUrl": "https://adstransparency.google.com/advertiser/AR01614014350098432001/creative/CR11629681142940041217",
+      "advertiserName": "lululemon athletica canada inc.",
+      "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/7795391910101500990",
+      "firstShown": "2026-03-23T12:56:23.000Z",
+      "lastShown": "2026-05-04T17:35:58.000Z"
+    },
+    {
+      "advertiserId": "AR01614014350098432001",
+      "creativeId": "CR15856314761936371713",
+      "format": "text",
+      "adUrl": "https://adstransparency.google.com/advertiser/AR01614014350098432001/creative/CR15856314761936371713",
+      "advertiserName": "lululemon athletica canada inc.",
+      "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/9220948714393782339",
+      "firstShown": "2024-11-01T00:13:00.000Z",
+      "lastShown": "2026-05-04T17:34:38.000Z"
+    },
+    {
+      "advertiserId": "AR01614014350098432001",
+      "creativeId": "CR00295771342291075073",
+      "format": "text",
+      "adUrl": "https://adstransparency.google.com/advertiser/AR01614014350098432001/creative/CR00295771342291075073",
+      "advertiserName": "lululemon athletica canada inc.",
+      "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/2311233975026499608",
+      "firstShown": "2024-07-08T08:06:45.000Z",
+      "lastShown": "2026-05-04T17:33:09.000Z"
+    }
+  ],
+  "cursor": "CgoAP7zmu%2FzKj6ijEhBBAgiPtk1y16J9lpkAAAAAGgn8%2BHbW%2BJylE6g%3D",
+  "number_of_ads_estimate": 20000
+}

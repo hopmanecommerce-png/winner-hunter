@@ -1,0 +1,101 @@
+# The Google hunt (winner-hunter/google.mjs): products Shopify stores advertise on Google, from Google's Ads Transparency
+# Center through the Scrape Creators API, checked with the board's rules where Google's data allows it (docs/google-ads/README.md).
+# The board shows them under Google.
+# OFF by default: it runs when you start it (Actions → Google Hunter → Run workflow). Its daily schedule only runs once the
+# repository variable GOOGLE_HUNT is "on" (Settings → Secrets and variables → Actions → Variables); any other value or none: off.
+# Secrets: SCRAPECREATORS_API_KEY (app.scrapecreators.com), CF_API_TOKEN, CF_ACCOUNT_ID (CF_D1_TOKEN, a D1-only Cloudflare
+# token, is used instead of CF_API_TOKEN when it is there). TYPESAFE_API_KEY (optional): Jev's answers for the new products.
+# Credits: GOOGLE_CREDITS (the "credits" box, or the repository variable for the schedule) is a hard cap per run, 300 by default.
+name: Google Hunter
+
+on:
+  workflow_dispatch:
+    inputs:
+      credits:
+        description: 'Most Scrape Creators credits this run may spend (hard cap; 300 ≈ $0.56 at the $47 pack)'
+        required: false
+        default: '300'
+      dry_run:
+        description: 'Dry run: search and check, but save nothing (the products are listed in the run summary)'
+        type: boolean
+        required: false
+        default: false
+      keywords:
+        description: 'Only these keywords (empty = next ones from keywords.txt; several: posture | lamp)'
+        required: false
+        default: ''
+      domains:
+        description: 'Also these shops or advertisers (store.com | AR0123…)'
+        required: false
+        default: ''
+  schedule:
+    # Only with the repository variable GOOGLE_HUNT = on (see the job's if). Once a day, off the hour.
+    - cron: '41 4 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: google-hunter
+  cancel-in-progress: false
+
+jobs:
+  hunt:
+    # Started by hand: always. On the schedule: only when it is switched on.
+    if: ${{ github.event_name != 'schedule' || vars.GOOGLE_HUNT == 'on' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SCRAPECREATORS_API_KEY: ${{ secrets.SCRAPECREATORS_API_KEY }}
+      CF_API_TOKEN: ${{ secrets.CF_D1_TOKEN || secrets.CF_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID || '8934aca9-51d3-4f87-9c62-e897843149a1' }}
+      TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+      GOOGLE_CREDITS: ${{ inputs.credits || vars.GOOGLE_CREDITS || '300' }}
+      GOOGLE_DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+      GOOGLE_KEYWORDS: ${{ inputs.keywords }}
+      GOOGLE_DOMAINS: ${{ inputs.domains }}
+      GOOGLE_REGIONS: ${{ vars.GOOGLE_REGIONS || 'NL,DE,FR' }}
+      GOOGLE_MINUTES: '60'
+    steps:
+      - name: Check secrets
+        run: |
+          missing=""
+          [ -n "$SCRAPECREATORS_API_KEY" ] || missing="$missing SCRAPECREATORS_API_KEY"
+          [ -n "$CF_API_TOKEN" ] || missing="$missing CF_API_TOKEN"
+          [ -n "$CF_ACCOUNT_ID" ] || missing="$missing CF_ACCOUNT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing GitHub secret(s):$missing (Settings → Secrets and variables → Actions; see docs/google-ads/README.md)"
+            exit 1
+          fi
+          case "$GOOGLE_CREDITS" in ''|*[!0-9]*) echo "::error::credits must be a number"; exit 1;; esac
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+
+      # A dry run changes nothing in D1, not even the tables: the hunt reads what is there and saves nothing.
+      - name: Database tables
+        if: ${{ !inputs.dry_run }}
+        run: node winner-hunter/migrate.mjs
+
+      - name: Hunt on Google
+        run: node winner-hunter/google.mjs
+
+      # Jev's answers about the new products (risk flags on the cards, the Inbox's order). No key or no balance only skips this.
+      - name: Jev check
+        if: ${{ !cancelled() && !inputs.dry_run }}
+        run: node winner-hunter/world-check.mjs
+
+      # Trustpilot's pages sit behind a bot check: the runner's Google Chrome passes it once (lib/trust.mjs).
+      - name: Install Playwright
+        if: ${{ !cancelled() && !inputs.dry_run }}
+        continue-on-error: true
+        working-directory: winner-hunter
+        run: npm install --no-save --no-package-lock playwright-core@1.56.1
+
+      # Each new product's rank in its store's best-seller list and the store's Trustpilot. Also after a red hunt.
+      - name: Store signals
+        if: ${{ !cancelled() && !inputs.dry_run }}
+        run: node winner-hunter/bestsellers.mjs

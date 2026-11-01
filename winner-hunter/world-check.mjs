@@ -2,7 +2,7 @@
 /*
  * Asks Jev about the products outside the EU it has no answers for and stores them in D1 table world_checks; the board
  * shows them. Only adds data: nothing is hidden or removed here. A product is asked again when the questions change, and
- * once more when its ad's words become known.
+ * once more when its ad's words become known. Then the EU's products, then the Google tab's (google.mjs), with what is left.
  *   CF_API_TOKEN=… CF_ACCOUNT_ID=… TYPESAFE_API_KEY=… [JEV_MINUTES=15] node winner-hunter/world-check.mjs
  * No key, no balance or a changed API is no failed hunt: the run says so in D1 state 'world_check', and the board shows it.
  */
@@ -33,6 +33,28 @@ const DB_COLS = (c) => (c === 'key' ? 'product_key' : c);
 export const SAVE_SQL = `INSERT INTO world_checks (${COLS.map(DB_COLS).join(', ')}, checked_at)
 SELECT ${COLS.map((c) => `json_extract(value, '$.${c}')`).join(', ')}, ?2 FROM json_each(?1) WHERE true
 ON CONFLICT(product_key) DO UPDATE SET ${COLS.filter((c) => c !== 'key').map((c) => `${c} = excluded.${c}`).join(', ')}, checked_at = excluded.checked_at`;
+
+// The Google tab's products (google.mjs), with what is left of the run after the ones outside the EU and the EU's. Saved under
+// 'google|' + the product page. A product page Jev already answered for outside the EU is not asked again: the board uses that answer.
+const GOOGLE_WHERE = `g.active = 1 AND (c.product_key IS NULL OR COALESCE(c.version, 1) < ${VERSION}) AND (w.product_key IS NULL OR COALESCE(w.version, 1) < ${VERSION})`;
+export const GOOGLE_TODO_SQL = `SELECT g.product_key, g.product_title AS title, g.image_url, g.store_url, g.price, g.compare_at_price, g.currency, g.store_products, g.advertiser, g.keyword,
+  g.copies, g.days, g.regions, COALESCE(g.product_type, '') AS type
+FROM google_products g LEFT JOIN world_checks c ON c.product_key = 'google|' || g.product_key LEFT JOIN world_checks w ON w.product_key = g.product_key
+WHERE ${GOOGLE_WHERE} ORDER BY g.first_seen LIMIT ?1`;
+export const GOOGLE_LEFT_SQL = `SELECT COUNT(*) AS n FROM google_products g LEFT JOIN world_checks c ON c.product_key = 'google|' || g.product_key LEFT JOIN world_checks w ON w.product_key = g.product_key WHERE ${GOOGLE_WHERE}`;
+const GOOGLE_ADS_SQL = "SELECT product_key, headline, image_url FROM google_ads WHERE product_key IN (SELECT value FROM json_each(?1)) AND COALESCE(headline, '') != '' ORDER BY seen_at DESC";
+
+/** A Google product's ads for Jev: their headlines (the words Google shows), the first picture, where they ran. */
+export function googleAdsOf(rows, p) {
+  let countries = [];
+  try {
+    countries = JSON.parse(p.regions || '[]');
+  } catch (e) {
+    countries = [];
+  }
+  return { titles: [...new Set(rows.map((r) => String(r.headline || '').trim()).filter(Boolean))].slice(0, 5), texts: [], image: (rows.find((r) => r.image_url) || {}).image_url || '',
+    countries: Array.isArray(countries) ? countries : [], count: p.copies ?? null, days: p.days ?? null, new14: null, creatives: p.copies ?? null };
+}
 
 /** The ads of a product, the ones with the most copies first: unique titles and words, and the first picture. */
 export function adsOf(rows, product) {
@@ -69,11 +91,21 @@ export async function checkAll({ db, key, doFetch = globalThis.fetch, now = Date
   const todo = await db.query(TODO_SQL);
   // Outside the EU first, the EU's with what is left of this run. EU pictures are old Facebook links: one that is gone is no reason to skip.
   const eu = todo.length < MAX_PER_RUN ? await db.query(EU_TODO_SQL, [when(), MAX_PER_RUN - todo.length]) : [];
+  // Then the Google tab's. A database without its table yet: none.
+  const room = MAX_PER_RUN - todo.length - eu.length;
+  const google = room > 0 ? await db.query(GOOGLE_TODO_SQL, [room]).catch((e) => { if (/no such table/i.test(e.message)) return []; throw e; }) : [];
   const adsBy = new Map();
   if (todo.length) {
     for (const a of await db.query(ADS_OF_SQL, [JSON.stringify(todo.map((p) => p.product_key))])) {
       if (!adsBy.has(a.product_key)) adsBy.set(a.product_key, []);
       adsBy.get(a.product_key).push(a);
+    }
+  }
+  const gAdsBy = new Map();
+  if (google.length) {
+    for (const a of await db.query(GOOGLE_ADS_SQL, [JSON.stringify(google.map((p) => p.product_key))])) {
+      if (!gAdsBy.has(a.product_key)) gAdsBy.set(a.product_key, []);
+      gAdsBy.get(a.product_key).push(a);
     }
   }
   const rows = [];
@@ -94,6 +126,8 @@ export async function checkAll({ db, key, doFetch = globalThis.fetch, now = Date
       products: p.store_products, advertiser: p.advertiser, likes: p.likes, keyword: p.keyword, ads: adsOf(adsBy.get(p.product_key) || [], p) } })),
     ...eu.map((p) => ({ id: 'eu|' + p.gk, label: p.store_url || p.gk, what: { key: productKey(p.product_url), title: p.title, store: p.store_url, image: p.image_url, must: false, price: p.price, was: p.compare_at_price, currency: p.currency,
       advertiser: p.advertiser, keyword: p.keyword, ads: { titles: [p.title], texts: copyOf(p.data), count: p.ads ?? null, days: p.days ?? null, countries: [] } } })),
+    ...google.map((p) => ({ id: 'google|' + p.product_key, label: p.product_key, what: { key: p.product_key, title: p.title, type: p.type, store: p.store_url, image: p.image_url, price: p.price, was: p.compare_at_price,
+      currency: p.currency, products: p.store_products, advertiser: p.advertiser, keyword: p.keyword, ads: googleAdsOf(gAdsBy.get(p.product_key) || [], p) } })),
   ];
   try {
     await pool(jobs, atOnce, async (job) => {
@@ -119,7 +153,8 @@ export async function checkAll({ db, key, doFetch = globalThis.fetch, now = Date
     await save().catch((e) => { lost = e; });
     const [left] = await db.query(LEFT_SQL).catch(() => [{ n: 0 }]);
     const [euLeft] = await db.query(EU_LEFT_SQL, [when()]).catch(() => [{ n: 0 }]);
-    t.left = (Number(left && left.n) || 0) + (Number(euLeft && euLeft.n) || 0);
+    const [gLeft] = await db.query(GOOGLE_LEFT_SQL).catch(() => [{ n: 0 }]);
+    t.left = (Number(left && left.n) || 0) + (Number(euLeft && euLeft.n) || 0) + (Number(gLeft && gLeft.n) || 0);
     await db.setState('world_check', { ...t, at: when(), cost: Math.round(t.tokens * PRICE_PER_TOKEN * 1e4) / 1e4 }).catch(() => {});
   }
   if (lost) throw lost;

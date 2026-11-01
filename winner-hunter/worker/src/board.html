@@ -438,6 +438,19 @@
   .proofl { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font: 500 11px/1.35 var(--mono); color: var(--muted); }
   .proofl li.yes { color: var(--win); }
   .proofl li.idk { color: var(--faint); }
+  /* Google: our four rules, each marked how it was checked: ✓ exact, ≈ approximated, ? not checked, ✗ failed */
+  .grules { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font: 500 11px/1.35 var(--mono); color: var(--muted); }
+  .grules li { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 4px; align-items: baseline; }
+  .grules li > b { font-weight: 600; text-align: center; }
+  .grules li > span { min-width: 0; overflow-wrap: anywhere; }
+  .grules li.yes > b { color: var(--win); }
+  .grules li.aprx > b { color: var(--acc); }
+  .grules li.idk > b { color: var(--faint); }
+  .grules li.bad > b { color: var(--bad); }
+  .grules small { display: block; color: var(--faint); }
+  .glegend { margin: 0; font: 500 11px/1.35 var(--mono); color: var(--faint); }
+  .flags span.fmt { padding: 4px 8px; color: var(--faint); }
+  @media (max-width: 759px) { .scope { overflow-x: auto; scrollbar-width: none; max-width: 100%; } .scope::-webkit-scrollbar { display: none; } .scope button { padding: 0 10px; } }
   @media (min-width: 760px) {
     .radar.world .rbody { grid-template-columns: minmax(250px, 310px) minmax(0, 1fr); }
   }
@@ -909,7 +922,7 @@
     </div>
   </header>
   <div class="status" id="runbox"><i class="dot"></i><span class="run" id="run">Loading…</span></div>
-  <div class="scope" role="group" aria-label="Which products"><button data-scope="world" aria-pressed="true">Outside EU <small id="nworld"></small></button><button data-scope="eu" aria-pressed="false">EU <small id="neu"></small></button><button data-scope="tiktok" aria-pressed="false">TikTok <small id="ntt"></small></button></div>
+  <div class="scope" role="group" aria-label="Which products"><button data-scope="world" aria-pressed="true">Outside EU <small id="nworld"></small></button><button data-scope="eu" aria-pressed="false">EU <small id="neu"></small></button><button data-scope="tiktok" aria-pressed="false">TikTok <small id="ntt"></small></button><button data-scope="google" aria-pressed="false">Google <small id="ngoogle"></small></button></div>
 
   <div class="tools">
   <section class="radar min" id="radar" aria-label="Market Radar" hidden>
@@ -959,6 +972,10 @@
         <button class="chip" data-f="p4" aria-pressed="false" title="At least 4 of the 6 proof signals">4+ proof</button>
         <button class="chip" data-f="noteu" aria-pressed="false" title="The shop runs no active ads in the EU (Meta's API)">Not in EU</button>
         <button class="chip" data-f="fresh" aria-pressed="false" title="Ads for this product started in the last 14 days">New ads 14d</button>
+        <button class="chip" data-f="gfull" aria-pressed="false" title="All four rules checked and passed (exactly or approximately): Google published a figure for its reach" hidden>All 4 rules</button>
+        <button class="chip" data-f="gmeta" aria-pressed="false" title="The same product page or its shop is on the Meta board too" hidden>Also on Meta</button>
+        <button class="chip" data-f="gnometa" aria-pressed="false" title="Neither the product page nor its shop is on the Meta board" hidden>Not on Meta</button>
+        <button class="chip" data-f="gtt" aria-pressed="false" title="Its shop or the product is on the TikTok tab" hidden>Also on TikTok</button>
         <button class="chip" data-f="hidden" aria-pressed="false" title="Products you approved or rejected">Approved &amp; rejected</button>
       </div>
     </div>
@@ -1066,11 +1083,15 @@ const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) 
 const WSORTED = { eu: 'by EU reach a day', proof: 'most proof first', days: 'by oldest ad', ads: 'by ads for the product', markets: 'by number of markets', shop: 'by shop ads', fresh: 'by new ads in 14 days', best: 'by store best-seller rank', reviews: 'by Trustpilot reviews', new: 'newest first' , jevp: 'by Jev product score', jeva: 'by Jev ad score' };
 const WSORT_LABEL = { proof: 'Most proof', days: 'Oldest ad', ads: 'Most ads for product', markets: 'Most markets', shop: 'Most shop ads', fresh: 'New ads 14d', best: 'Store best seller', reviews: 'Trustpilot reviews', eu: 'EU reach / day', new: 'Newest' , jevp: 'Jev product score', jeva: 'Jev ad score' };
 const ESORT_LABEL = { rpd: 'Reach / day', new: 'Newest', scaled: 'Most ad copies', ads: 'Most shop ads', reach: 'Total reach', best: 'Store best seller' , jevp: 'Jev product score', jeva: 'Jev ad score' };
+// Google (the Google hunt): all four rules checked first, then the most proof; every other order is one plain fact.
+const GSORT_LABEL = { proof: 'All 4 rules, most proof', days: 'Oldest ad', copies: 'Most ads for product', ads: 'Most shop ads', regions: 'Most countries', impr: 'Impressions / day', best: 'Store best seller', reviews: 'Trustpilot reviews', new: 'Newest', jevp: 'Jev product score', jeva: 'Jev ad score' };
+const GSORTED = { proof: 'all four rules first, most proof', days: 'by oldest ad', copies: 'by ads for the product', ads: 'by shop ads', regions: 'by number of countries', impr: 'by impressions a day', best: 'by store best-seller rank', reviews: 'by Trustpilot reviews', new: 'newest first', jevp: 'by Jev product score', jeva: 'by Jev ad score' };
 // Momentum (momentum.js): rising products that are not crowded first.
 for (const [o, v] of [[SORTED, 'by momentum'], [WSORTED, 'by momentum'], [ESORT_LABEL, 'Momentum'], [WSORT_LABEL, 'Momentum']]) o.mom = v;
 const saved = store.get('wh-scope');
-const scope0 = saved === 'eu' || saved === 'tiktok' ? saved : 'world'; // the markets outside the EU come first
-const st = { scope: scope0, view: scope0 === 'eu' ? 'inbox' : 'all', q: '', sort: 'rpd', wsort: 'proof', jev: '', r2500: false, r10k: false, p4: false, noteu: false, fresh: false, hidden: false, cc: '', offset: 0 };
+const scope0 = saved === 'eu' || saved === 'tiktok' || saved === 'google' ? saved : 'world'; // the markets outside the EU come first
+const st = { scope: scope0, view: scope0 === 'eu' ? 'inbox' : 'all', q: '', sort: 'rpd', wsort: 'proof', gsort: 'proof', jev: '', r2500: false, r10k: false, p4: false, noteu: false, fresh: false,
+  gfull: false, gmeta: false, gnometa: false, gtt: false, hidden: false, cc: '', offset: 0 };
 let ADS = [];
 let total = 0;
 let loading = false;
@@ -1086,12 +1107,20 @@ let marketsStale = false;
 function params(extra) {
   const p = new URLSearchParams({ view: st.view });
   const world = st.scope === 'world';
+  const google = st.scope === 'google';
   if (world) p.set('scope', 'world');
+  if (google) p.set('scope', 'google');
   if (st.view === 'all') {
     if (st.q) p.set('q', st.q);
     if (world) {
       if (st.wsort !== 'proof') p.set('sort', st.wsort);
       for (const f of ['p4', 'noteu', 'fresh']) if (st[f]) p.set(f, '1');
+    } else if (google) {
+      if (st.gsort !== 'proof') p.set('sort', st.gsort);
+      if (st.gfull) p.set('full', '1');
+      if (st.gmeta) p.set('meta', '1');
+      else if (st.gnometa) p.set('meta', '0');
+      if (st.gtt) p.set('tiktok', '1');
     } else {
       if (st.sort !== 'rpd') p.set('sort', st.sort);
       if (st.r10k) p.set('rpd', '10000'); else if (st.r2500) p.set('rpd', '2500');
@@ -1278,6 +1307,7 @@ function worldCard(a, inbox) {
   const isNew = Date.now() - Date.parse(a.first_seen) < NEW_MS;
   const tags = (isNew ? '<span class="tag new">New</span>' : '')
     + (w.in_eu === 0 ? '<span class="tag noteu" title="The shop has no active ads in the EU (Meta\'s API)">Not in EU</span>' : w.in_eu === 1 ? '<span class="tag" title="The shop also runs ads in the EU (Meta\'s API)">Also in EU</span>' : '')
+    + onGoogle(a)
     + jevTags(a)
     + (a.niche && a.niche.w >= 1.25 ? `<span class="tag fit" title="You approve ${esc(a.niche.name)} more often than other products">Your niche</span>` : '')
     + leadTags(a)
@@ -1351,14 +1381,110 @@ function worldCard(a, inbox) {
   </article>`;
 }
 
+// A Meta product whose product page or shop is advertised on Google too (the Google tab): a strong signal.
+const onGoogle = (a) => (a.on_google ? `<span class="tag noteu" title="${a.on_google === 'product' ? 'The same product page is advertised on Google (the Google tab)' : 'Its shop also advertises on Google (the Google tab)'}">${a.on_google === 'product' ? 'Also on Google' : 'Shop on Google'}</span>` : '');
+
+// ---- Google: products Shopify stores advertise on Google (the Google hunt, from Google's Ads Transparency Center). Google
+// publishes no reach, so each of our four rules says how it was checked: ✓ exactly as on Meta, ≈ approximated with the
+// closest fact Google gives (its text says which), ? not checked (Google gives nothing for it: never shown as a ✓), ✗ failed.
+const G_MARK = (i) => (i.state === 'bad' ? '✗' : i.state === 'unknown' ? '?' : i.state === 'pending' ? '…' : i.how === 'exact' ? '✓' : '≈');
+const G_CLS = (i) => (i.state === 'bad' ? 'bad' : i.state === 'unknown' || i.state === 'pending' ? 'idk' : i.how === 'exact' ? 'yes' : 'aprx');
+const G_HOW = (i) => (i.state === 'unknown' ? 'not checked: Google gives nothing to check it with' : i.how === 'exact' ? 'checked exactly as on Meta' : 'approximated with Google\'s data');
+const G_FORMAT = { text: ['Text', 'Text ads: Google Search'], image: ['Image', 'Image ads: Shopping and Display'], video: ['Video', 'Video ads: YouTube'] };
+function gRules(a, full) {
+  return `<ul class="grules" aria-label="Our four rules on Google's data">${a.google.rules.map((i) => `<li class="${G_CLS(i)}" data-rule="${esc(i.key)}" title="${esc(i.label)}: ${esc(i.text)} (${esc(G_HOW(i))})"><b aria-label="${esc(G_HOW(i))}">${G_MARK(i)}</b><span>${esc(i.label)}${full ? `<small>${esc(i.text)}</small>` : ''}</span></li>`).join('')}</ul>`;
+}
+function gCross(a) {
+  const c = a.google.cross || {};
+  const where = c.where === 'world' ? 'outside the EU' : 'EU';
+  return (c.meta === 'product' ? `<span class="tag noteu" title="The same product page is on the Meta board (${where}): advertised on Meta and Google">Also on Meta</span>`
+    : c.meta === 'store' ? `<span class="tag" title="Its shop is on the Meta board (${where}), with another product">Shop on Meta</span>`
+    : '<span class="tag out" title="Neither this product page nor its shop is on the Meta board: Google only, so far">Not on Meta</span>')
+    + (c.tiktok ? `<span class="tag noteu" title="${c.tiktok === 'product' ? 'The same product is on the TikTok tab' : 'Its shop is on the TikTok tab'}">${c.tiktok === 'product' ? 'Also on TikTok' : 'Shop on TikTok'}</span>` : '');
+}
+function googleCard(a, inbox) {
+  const g = a.google;
+  const isNew = Date.now() - Date.parse(a.first_seen) < NEW_MS;
+  const tags = (isNew ? '<span class="tag new">New</span>' : '') + gCross(a) + jevTags(a)
+    + (a.niche && a.niche.w >= 1.25 ? `<span class="tag fit" title="You approve ${esc(a.niche.name)} more often than other products">Your niche</span>` : '')
+    + (a.hidden === 'seen' ? `<span class="tag made" title="You approved it">✓ Approved${a.made_at ? ' ' + esc(day(a.made_at)) : ''}</span>` : a.hidden ? '<span class="tag">Rejected</span>' : '')
+    + (a.pass === false ? '<span class="tag out" title="No longer passes: its ad is older than 42 days today, or it failed a rule when checked again">Out of rules</span>' : '')
+    + (measuredOld(a) ? `<span class="tag old" title="The Google figures were last checked ${esc(day(a.last_seen))} (${esc(ago(a.last_seen))}): the Google hunt runs when you start it">Checked ${esc(day(a.last_seen))}</span>` : '');
+  const photo = safe(a.img) ? `<img src="${safe(a.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<div class="dom">${esc(host(a.store) || a.adv)}</div>`;
+  const price = a.price != null ? `<div class="price"><span>${esc(money(a.price, a.cur))}</span>${a.was > a.price ? `<s>${esc(money(a.was, a.cur))}</s><span class="off">−${esc(a.off)}%</span>` : ''}</div>` : '';
+  const acts = a.hidden === 'seen' ? '<button class="un" data-act="none" data-confirm="1">Remove from ✓</button>'
+    : a.hidden ? '<button class="un" data-act="none">Unhide</button>'
+    : `<button class="ok" data-act="seen" title="You approve it: it moves to ✓">${ICON.check}Approved</button><button class="no" data-act="rejected" title="Not for me: hide it">${ICON.x}Reject</button>`;
+  const passed = g.checked.exact + g.checked.approx;
+  const why = `${g.checked.exact} exact, ${g.checked.approx} approximated${g.checked.unknown ? `, ${g.checked.unknown} not checked` : ''}`;
+  const hero = `<b>${esc(passed)}/4</b><span>rules · ${esc(g.rules.map(G_MARK).join(' '))}</span>`;
+  const regions = g.regions.slice().sort((x, y) => (y === st.cc) - (x === st.cc));
+  const fmts = g.formats.map((f) => (Object.hasOwn(G_FORMAT, f) ? G_FORMAT[f] : [String(f), String(f)])).map(([label, tip]) => `<span class="fmt" title="${esc(tip)}">${esc(label)}</span>`).join('');
+  const flags = regions.length || fmts ? `<div class="flags" title="Countries its Google ads were shown in, and their formats">${regions.map((c) => `<span class="${c === st.cc ? 'hit' : ''}"><i>${flag(c)}</i>${esc(c)}</span>`).join('')}${fmts}</div>` : '';
+  const proof = g.proof || { n: 0, of: 6, items: [] };
+  const plist = proof.items.map((i) => `${PROOF_TEXT[proofState(i)]} ${i.text}`).join('\n');
+  const formats = g.formats.length ? g.formats.join(' · ') : '–';
+  const adv = safe(g.advertiser) ? `<a href="${safe(g.advertiser)}" target="_blank" rel="noopener noreferrer" title="The advertiser in Google's Ads Transparency Center">Advertiser ↗</a>` : '';
+  const impr = g.impr ? `${fmt(g.impr.lower)}–${g.impr.upper == null ? '?' : fmt(g.impr.upper)} ${g.impr.scope === 'eu' ? 'EU impressions' : 'impressions (total)'}` : 'no impressions published';
+  return `<article class="card${inbox ? ' open' : ''}" data-id="${esc(a.id)}">
+    ${inbox ? '' : `<div class="ph">${photo}
+      <div class="badges">${tags}</div>
+      <div class="hero" title="Our four rules on Google's data: ${esc(why)}">${hero}</div>
+      ${safe(a.ad) ? `<a class="view" href="${safe(a.ad)}" target="_blank" rel="noopener noreferrer" aria-label="Open the ad in Google's Ads Transparency Center">${ICON.play}</a>` : ''}
+    </div>`}
+    <div class="bd">
+      ${inbox && tags ? `<div class="tags">${tags}</div>` : ''}
+      <h2 class="t">${esc(nice(a))}</h2>
+      ${price}
+      ${flags}
+      ${gRules(a, inbox)}
+      <div class="meta${inbox ? ' m4' : ''}">
+        <div class="m" title="Days since Google first showed the ad${g.first_shown ? ` (${esc(String(g.first_shown).slice(0, 10))})` : ''}; last shown ${esc(String(g.last_shown || '').slice(0, 10))}"><b>${a.age == null ? '–' : esc(a.age) + 'd'}</b><span>live</span></div>
+        <div class="m" title="Google's estimate of the advertiser's ads shown in the last ${esc(g.window || 3)} days (not a count of active ads)"><b>${a.ads == null ? '?' : '~' + esc(fmt(a.ads))}</b><span>shop ads</span></div>
+        <div class="m" title="Google ads (creatives) for this product that the hunt saw"><b>${esc(fmt(a.scaled || 1))}</b><span>ads</span></div>
+        ${inbox ? `<div class="m" title="Countries its Google ads were shown in"><b>${esc(g.regions.length)}</b><span>countries</span></div>` : ''}
+        ${trustRow(a)}
+      </div>
+      ${inbox ? `<div class="who">${esc(host(a.store) || a.adv)}${a.products != null ? ' · ' + esc(fmt(a.products)) + ' products' : ''}</div>` : `<div class="who ln">
+        ${shopLink(a)}
+        ${a.products != null ? `<span>${esc(fmt(a.products))} products</span>` : ''}
+        ${adv}
+      </div>`}
+      ${bestLine(a)}
+      ${jevLine(a.jev, inbox)}
+      ${inbox ? rankLine(a) : ''}
+      ${inbox ? `<p class="glegend">✓ exactly as on Meta · ≈ approximated with Google's data · ? not checked (Google gives nothing for it)</p>
+      <div class="iproof" title="${esc(plist)}">${esc(proof.n)}/${esc(proof.of)} proof</div>
+      <ul class="proofl">${proof.items.map((i) => `<li class="${proofState(i)}">${PROOF_TEXT[proofState(i)]} ${esc(i.text)}</li>`).join('')}</ul>
+      <div class="more"><div class="facts">
+        <span>${esc(formats)}</span>
+        <span>${esc(impr)}</span>
+        ${g.first_shown ? `<span>first shown ${esc(String(g.first_shown).slice(0, 10))}</span>` : ''}
+        ${g.last_shown ? `<span>last shown ${esc(String(g.last_shown).slice(0, 10))}</span>` : ''}
+        ${a.adv ? `<span>${esc(a.adv)}</span>` : ''}
+        <span>${a.kw ? `search “${esc(a.kw)}”` : g.via === 'board' ? 'found by its shop on the board' : 'found by its domain'}</span>
+        <span>checked ${esc(ago(a.last_seen))}</span>
+      </div></div>` : ''}
+    </div>
+    ${inbox ? `<div class="links">
+      ${safe(a.ad) ? `<a class="pri" href="${safe(a.ad)}" target="_blank" rel="noopener noreferrer">Ad on Google ↗</a>` : ''}
+      ${adv}
+      ${safe(a.product) ? `<a href="${safe(a.product)}" target="_blank" rel="noopener noreferrer">Product ↗</a>` : ''}
+    </div>` : ''}
+    ${inbox ? '' : `<div class="acts">${acts}</div>`}
+  </article>`;
+}
+
 // inbox: the one Inbox card: only the data (no photo) and one link, the ad in the Facebook Ad Library.
 // Elsewhere a tap on the card or on ▶ opens the ad in the Facebook Ad Library.
 function card(a, inbox) {
+  if (a.google) return googleCard(a, inbox);
   if (a.world) return worldCard(a, inbox);
   const isNew = Date.now() - Date.parse(a.first_seen) < NEW_MS;
   const old = measuredOld(a);
   const liveTip = `Days the ad had run when last measured, ${day(a.last_seen)} (7–42 days)${a.age != null ? `; ${a.age} days today if it still runs` : ''}`;
   const tags = (isNew ? '<span class="tag new">New</span>' : '')
+    + onGoogle(a)
     + jevTags(a)
     + (a.niche && a.niche.w >= 1.25 ? `<span class="tag fit" title="You approve ${esc(a.niche.name)} more often than other products">Your niche</span>` : '')
     + leadTags(a)
@@ -1470,8 +1596,9 @@ function radar() {
   $('radar').classList.toggle('min', min);
   $('rtog').textContent = min ? 'Show' : 'Hide';
   $('rtog').setAttribute('aria-expanded', String(!min));
-  $('radar').classList.toggle('world', st.scope === 'world');
+  $('radar').classList.toggle('world', st.scope === 'world' || st.scope === 'google'); // the same layout: a list, no map of Europe
   if (st.scope === 'world') { worldRadar(m); return; }
+  if (st.scope === 'google') { googleRadar(m); return; }
   $('rfootT').textContent = 'EU reach a day of the products on the board, split by the countries their ads reach. Tap a country to hunt only there.';
   $('rsub').textContent = `${m.markets.length} markets · ${fmt(m.total_rpd)} reach / day`;
   const top = m.markets[0];
@@ -1539,11 +1666,34 @@ function worldRadar(m) {
   $('rall').hidden = m.markets.length <= n;
   $('rall').textContent = showAll ? 'Top only' : `All ${m.markets.length} markets and selling rules`;
 }
+// Google: the countries its products' ads were shown in (Google lists them per ad). No reach here either.
+function googleRadar(m) {
+  const top = m.markets[0];
+  $('rsub').textContent = `${m.markets.length} ${m.markets.length === 1 ? 'country' : 'countries'} · ${fmt(m.products)} products · Google Ads Transparency Center`;
+  $('rfootT').textContent = 'Where the products\' Google ads were shown, as Google lists it per ad. Google publishes no reach: impression ranges for some ads only (≈ on the cards). Tap a country to show only its products.';
+  $('rtop').innerHTML = `<div class="ring"><svg viewBox="0 0 104 104"><circle class="trk" cx="52" cy="52" r="44" fill="none" stroke-width="7"/><circle class="val" id="ringVal" cx="52" cy="52" r="44" fill="none" stroke-width="7" stroke-linecap="round" stroke-dasharray="0 ${RING}"/></svg><span class="fl">${flag(top.cc)}</span></div>
+    <div class="rnum"><span class="nm">${esc(land(top.cc))}</span>
+      <span class="big"><b>${esc(fmt(top.products))}</b> ${top.products === 1 ? 'product' : 'products'} · ${esc(fmt(top.shops))} ${top.shops === 1 ? 'shop' : 'shops'}</span>
+      <span class="lead">${esc(fmt(top.full))} pass all four rules${top.top ? ' · e.g. ' + esc(top.top.title.slice(0, 48)) : ''}</span></div>`;
+  $('rtop').setAttribute('aria-pressed', String(st.cc === top.cc));
+  requestAnimationFrame(() => { const v = $('ringVal'); if (v) v.setAttribute('stroke-dasharray', `${(top.share / 100) * RING} ${RING}`); });
+  const max = top.products || 1;
+  const n = window.innerWidth >= 760 ? 6 : 3;
+  const shown = m.markets.map((x, i) => ({ ...x, rank: i + 1 })).filter((x, i) => showAll || i < n || x.cc === st.cc);
+  $('rlist').innerHTML = shown.map((x) => `<li><button class="mk" data-cc="${esc(x.cc)}" aria-pressed="${st.cc === x.cc}">
+      <span class="rk">${esc(x.rank)}</span><span class="fl">${flag(x.cc)}</span>
+      <span class="mid"><span class="nm">${esc(land(x.cc))}<small>${esc(fmt(x.shops))} ${x.shops === 1 ? 'shop' : 'shops'} · ${esc(fmt(x.full))} with all 4 rules</small></span><span class="bar"><i></i></span></span>
+      <span class="vv"><b>${esc(fmt(x.products))}</b><span>${esc(String(x.share))}%</span></span></button></li>`).join('');
+  const bars = [...$('rlist').querySelectorAll('.bar i')];
+  requestAnimationFrame(() => bars.forEach((b, i) => b.style.setProperty('--w', Math.max(2, (shown[i].products / max) * 100) + '%')));
+  $('rall').hidden = m.markets.length <= n;
+  $('rall').textContent = showAll ? 'Top only' : `All ${m.markets.length} countries`;
+}
 async function loadMarkets() {
   if (st.scope === 'tiktok') return;
   const asked = st.scope;
   try {
-    const res = await fetch('/api/markets' + (asked === 'world' ? '?scope=world' : ''), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    const res = await fetch('/api/markets' + (asked === 'world' || asked === 'google' ? '?scope=' + asked : ''), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
     if (!res.ok || asked !== st.scope) return;
     const got = await res.json();
     if (asked !== st.scope) return;
@@ -1595,21 +1745,23 @@ function render(append, fresh) {
   for (const b of document.querySelectorAll('[data-f]')) b.setAttribute('aria-pressed', String(!!st[b.dataset.f]));
   $('allrow').hidden = $('allrow2').hidden = st.view !== 'all';
   const world = st.scope === 'world';
+  const google = st.scope === 'google';
   for (const b of document.querySelectorAll('[data-f]')) {
     const f = b.dataset.f;
-    b.hidden = (f === 'r2500' || f === 'r10k') ? world : (f === 'p4' || f === 'noteu' || f === 'fresh') ? !world : false;
+    b.hidden = (f === 'r2500' || f === 'r10k') ? world || google : (f === 'p4' || f === 'noteu' || f === 'fresh') ? !world : /^g(full|meta|nometa|tt)$/.test(f) ? !google : false;
   }
   $('ccChip').hidden = !st.cc;
   $('ccChip').innerHTML = st.cc ? `<b>${flag(st.cc)}</b>${esc(land(st.cc))} ✕` : '';
   $('ccChip').setAttribute('aria-label', st.cc ? `Market ${land(st.cc)}: tap to show all markets` : '');
-  const filtered = st.view === 'all' && (st.q || st.hidden || st.cc || st.jev || (world ? st.p4 || st.noteu || st.fresh : st.r2500 || st.r10k));
+  const filtered = st.view === 'all' && (st.q || st.hidden || st.cc || st.jev || (world ? st.p4 || st.noteu || st.fresh : google ? st.gfull || st.gmeta || st.gnometa || st.gtt : st.r2500 || st.r10k));
   $('count').hidden = !filtered;
-  const sorted = world ? WSORTED[st.wsort] || '' : st.cc && st.sort === 'rpd' ? `by ${st.cc} reach per day` : SORTED[st.sort] || '';
+  const sorted = world ? WSORTED[st.wsort] || '' : google ? GSORTED[st.gsort] || '' : st.cc && st.sort === 'rpd' ? `by ${st.cc} reach per day` : SORTED[st.sort] || '';
   $('count').textContent = filtered ? `${total.toLocaleString('en-US')} ${total === 1 ? 'match' : 'matches'} · ${sorted}` : '';
   $('empty').hidden = ADS.length > 0;
   const msg = st.view === 'made' ? 'Nothing approved yet. Tap ✓ Approved on a product and it shows here, the last one first.'
     : filtered ? 'No products match.'
     : world ? 'Nothing yet outside the EU: the first scan has not finished. Products need a Shopify store and an ad running 7+ days.'
+    : google ? 'Nothing from Google yet: the Google hunt runs when you start it (GitHub → Actions → Google Hunter). Products need a Shopify store, 75+ ads and an ad 7–42 days old, and fail no rule.'
     : 'Nothing yet: products need a Shopify store, 75+ active ads, 7–42 days live and 500+ EU reach a day.';
   $('empty').innerHTML = `${EMPTY_ICON}<div>${esc(msg)}</div>`;
   $('moreBtn').hidden = (st.view !== 'all' && st.view !== 'made') || ADS.length >= total;
@@ -1629,6 +1781,7 @@ function cleared(add) {
 // The hunt outside the EU starts at these UTC hours, at :17 (world-hunter.yml); GitHub can start it later. The EU hunt only runs by hand.
 const HUNT_HOURS = [1, 7, 13, 19];
 function nextHunt() {
+  if (st.scope === 'google') return 'The Google hunt runs when you start it (Actions → Google Hunter)';
   if (st.scope !== 'world') return 'The EU hunt is off';
   const n = new Date();
   const at = (h) => new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate(), h, 17));
@@ -1895,6 +2048,7 @@ function header(j, madeFresh = true) {
   $('nall').textContent = j.counts.all;
   $('nworld').textContent = j.counts.world ?? '';
   $('neu').textContent = j.counts.eu ?? '';
+  $('ngoogle').textContent = j.counts.google || '';
   FRESH = j.counts.fresh || 0;
   if (madeFresh && !PENDING_MADE) setMade(j.counts.made || 0);
   const al = j.alert;
@@ -1905,6 +2059,21 @@ function header(j, madeFresh = true) {
   const box = $('runbox');
   const moving = (x) => !!x && x.status === 'running' && Date.now() - Date.parse(x.updated_at || x.started_at) <= 45 * 60000; // same as "stuck?" below
   HUNTING = moving(r);
+  if (st.scope === 'google') {
+    const g = j.google_run;
+    HUNTING = moving(g);
+    if (!g) { box.className = 'status'; $('run').textContent = 'No Google hunt yet: start it in GitHub (Actions → Google Hunter)'; return; }
+    const c = g.credits || {};
+    if (g.status === 'running') {
+      box.className = 'status ' + (HUNTING ? 'live' : 'warn');
+      $('run').textContent = `${HUNTING ? 'Hunting on Google now' : 'Google hunt stuck?'} · started ${ago(g.started_at)} · ${fmt(c.spent || 0)} of ${fmt(c.cap || 0)} credits so far`;
+      return;
+    }
+    box.className = 'status ' + (g.health === 'failed' ? 'bad' : g.health === 'warning' ? 'warn' : 'ok');
+    const why = { cap: ' (cap reached: it goes on next run)', 'no-credits': ' · no credits left at Scrape Creators', key: ' · API key refused', outage: ' · Scrape Creators stopped answering', search: ' · a search failed: that keyword next run', time: ' · out of time: it goes on next run' }[g.stopped] || '';
+    $('run').innerHTML = `Last Google hunt <b>${esc(ago(g.finished_at || g.updated_at))}</b> · <b>${esc(fmt(g.products ?? 0))}</b> products · ${esc(fmt(c.spent || 0))} of ${esc(fmt(c.cap || 0))} credits${esc(why)}${g.dry_run ? ' · dry run, nothing saved' : ''}`;
+    return;
+  }
   if (st.scope === 'world') {
     const w = j.world_run;
     HUNTING = moving(w);
@@ -2244,6 +2413,8 @@ for (const b of document.querySelectorAll('[data-f]')) {
     st[f] = !st[f];
     if (f === 'r10k' && st.r10k) st.r2500 = false;
     if (f === 'r2500' && st.r2500) st.r10k = false;
+    if (f === 'gmeta' && st.gmeta) st.gnometa = false;
+    if (f === 'gnometa' && st.gnometa) st.gmeta = false;
     load();
   });
 }
@@ -2251,12 +2422,13 @@ let qTimer = 0;
 $('q').addEventListener('input', (e) => { clearTimeout(qTimer); qTimer = setTimeout(() => { st.q = e.target.value.trim(); load(); }, 300); });
 $('jev').addEventListener('change', (e) => setJev(e.target.value));
 $('jevbody').addEventListener('click', (e) => { const b = e.target.closest('[data-jev]'); if (b) setJev(st.jev === b.dataset.jev ? '' : b.dataset.jev); });
-$('sort').addEventListener('change', (e) => { if (st.scope === 'world') st.wsort = e.target.value; else st.sort = e.target.value; load(); });
+$('sort').addEventListener('change', (e) => { if (st.scope === 'world') st.wsort = e.target.value; else if (st.scope === 'google') st.gsort = e.target.value; else st.sort = e.target.value; load(); });
 function sortOptions() {
   const world = st.scope === 'world';
-  const labels = world ? WSORT_LABEL : ESORT_LABEL;
+  const google = st.scope === 'google';
+  const labels = world ? WSORT_LABEL : google ? GSORT_LABEL : ESORT_LABEL;
   $('sort').innerHTML = Object.entries(labels).map(([k, t]) => `<option value="${k}">${esc(t)}</option>`).join('');
-  $('sort').value = world ? st.wsort : st.sort;
+  $('sort').value = world ? st.wsort : google ? st.gsort : st.sort;
 }
 function goScope(s) {
   if (st.scope === s) return;
@@ -2299,7 +2471,7 @@ const lnReady = new Promise((ok, no) => {
   $('lnkit').addEventListener('error', () => no(new Error('the launch code did not load')), { once: true });
 });
 lnReady.catch(() => {}); // said when the view opens
-const LN_SRC = { eu: 'EU', world: 'Outside EU', tiktok: 'TikTok' };
+const LN_SRC = { eu: 'EU', world: 'Outside EU', google: 'Google', tiktok: 'TikTok' };
 const lnEur = (v) => (v == null ? '–' : (v < 0 ? '−' : '') + money(Math.abs(v), 'EUR'));
 const lnFocus = () => (LN.list || []).find((l) => l.key === LN.focus) || null;
 const lnImg = (f) => (safe(f.img) ? `<img src="${safe(f.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<i>${esc(String(f.title || '?').slice(0, 1))}</i>`);
