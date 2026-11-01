@@ -12,6 +12,37 @@ GitHub Actions (4x a day, outside the EU)  →  Cloudflare D1 (the database)  �
 
 After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, once, from its name, type, shop and photo. The card shows its category and tags such as "People take 99%"; the **Jev** filter and the CSV have the same data. Its risks rank a product lower in both Inboxes, and the Inbox card says why: people or pets take it × 0.3, sizing returns, a medical claim, a brand or hard to ship × 0.5 each, for children, cosmetics, electric, fragile or big × 0.8 each, never below × 0.2. An EU product people or pets take stays out of the Inbox (Browse still lists it). Hard to ship, Medical claim and Cosmetics get a red tag. It needs the GitHub secret `TYPESAFE_API_KEY`; without a key or a balance the products stay on the board without answers. About 0.01 cents a product.
 
+## AI read (experimental)
+
+Twice a day `ai-check.mjs` (workflow **AI check**) asks a cheap Claude model (Claude Haiku 5.5) about each board product it has
+not read yet: the products outside the EU that still run, the EU's still on the board, and every product you approved or
+rejected. Per product: what it is (a plain name), niche, the ads' hook, the buyer, wow factor, saturation, claims risk, and a
+0-100 **fit** with reasons for and against and how sure it is. It is saved in D1 table `ai_checks`.
+
+- **Hidden first.** Each card gets **AI read · experimental**, closed. It stays closed until you open it, so you decide on your own
+  first, and nothing is sorted, filtered or hidden by it. The first time you open one is noted, so the eval can keep your blind
+  decisions apart from those made after a look.
+- **How good is it?** `ai-eval.mjs` compares the fit (50 or more counts as approve) with your ✓ / ✗ decisions: agreement, Cohen's
+  kappa (agreement beyond chance) and AUC (does a higher fit go with your approvals), blind decisions apart, by confidence and by
+  your reasons. It runs after every AI check, its result shows at the bottom of each AI read, and on your own computer
+  `node winner-hunter/ai-eval.mjs --details` also lists where you and the AI disagree (never in the public Actions log): the
+  products you approved and it scored low are the first ones to look at again. Your approvals are the yardstick, not proof of a
+  winner, and old ones are noisy (the 1 Nov 2026 review found 21 of 36 restricted or sized): `--since 2026-11-02` counts only the
+  decisions from that day on. Rule of thumb: worth a look once it agrees on 50+ blind decisions with a kappa of 0.4 or more.
+- **Set up:** add the GitHub secret `ANTHROPIC_API_KEY` (console.anthropic.com → API keys), and set a monthly spend limit for that
+  key's workspace in the Anthropic Console as a hard backstop. Without the secret the AI check is off and the board shows no AI
+  read. Run it by hand: Actions → AI check → Run workflow. It goes through the Message Batches API (half price): a batch usually
+  ends within minutes, and one still running is collected by the next run.
+- **Cost:** about 0.02 cents a product. A run spends at most `max_usd` (default $0.50, counted at the worst case of every request)
+  and a month at most the repository variable `AI_MONTH_USD` (default $5). Another model: repository variable `AI_MODEL`
+  (for example `claude-sonnet-5-5`: more careful, 20 times the price; the caps hold either way).
+- **Safe with ad copy:** titles and ad texts are written by advertisers. The model is told they are only data; they reach it as one
+  escaped JSON block, one product per request; every answer must match a strict schema and is checked again; text that tries to
+  instruct the AI is flagged (⚠ on the card, low confidence). Your decisions, notes and reasons are never sent, and the Actions log
+  holds counts and money only.
+- **Tests:** `npm test` skips the tests that need Anthropic's SDK when it is not installed. To run them all, first
+  `npm install --no-save --no-package-lock playwright@1.56.1 @anthropic-ai/sdk@1.3.0` (the CI does). They use a fake API: nothing is sent.
+
 ## What you see on the board
 
 - Only ads that pass **all four hard rules** (no points, no score): **Shopify store**, advertiser has **75+ active ads**,
@@ -61,6 +92,44 @@ After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, o
 - "Measured 17 Sep": the card's figures (reach, ads, copies, days live) are from then, more than 2 days ago (the EU hunt
   only runs by hand). "Product not identified": no product page, price or rank was found, the title is the ad's own
   words. "Big catalogue, 1 ad": a store of 250+ products with fewer than 5 copies of this ad.
+
+## 🔎 Sourcing (on a launch card)
+
+Under the decision on a 🚀 launch card, **🔎 Sourcing** takes the product to a supplier you trust, at a cost you know
+(`worker/src/sourcing.mjs`, D1 tables `product_sourcing` and `product_suppliers`). It saves as you go.
+
+- **Find it**: search links by name on 1688 (with the Chinese words you set; "translate the name" helps), AliExpress,
+  Alibaba and CJ, and by photo on Google Lens and Yandex (they take the product photo's link). 1688, AliExpress and
+  Alibaba only search a photo in their own app: save the photo, then tap the camera there.
+- **Suppliers**: paste a link, or the text the 1688 or AliExpress app shares (price, MOQ, rating, repeat buyers and
+  factory come along), then fill in the rest: price and currency, shipping to NL, MOQ, rating, factory or trader, repeat
+  buyers (1688: 回头率), packed weight, days to the customer, notes. They are listed by what one order costs at the
+  customer's door: the unit, its shipping and the EU import fees on a parcel from China (€3 duty from 1 Jul 2026 and
+  €2 handling per item line from 1 Nov 2026: €5; none from EU stock), in euros at ¥8.3 and $1.16 for €1 unless you set
+  your own rate. Flags say what to look at: a trader, few repeat buyers, a rating under 4.5, MOQ above 50, slow, no
+  shipping cost yet.
+- **Choose** puts the supplier's cost in euros, its link, shipping, MOQ and lead time in the card's Sourcing step: the
+  margin and break-even ROAS on top follow at once (a COGS you typed in the Margin step still counts first). A new price
+  or rate for the chosen one: the card follows. Choose another, remove it or choose none: the card keeps its numbers.
+- **Vet the supplier** and **Sample order**: two checklists of ten, from the sourcing research (an unedited video with
+  today's date, the CE/RoHS/REACH report, battery papers, packed size, defects, safe payment; samples from the top two,
+  the agent's QC, a competitor's unit, labels, line quotes, the €3 + €2 and your IOSS in writing).
+- **First message**: to an agent (find it on 1688, samples and QC, line quotes, the €3 + €2 and your IOSS) or to a
+  supplier (the questions to ask before you pay), in English or Chinese, with your name and test quantity. **Copy**.
+
+**Shared numbers**, for every part of the board that works out costs: `product_sourcing` holds, by the launch card's
+`product_key`, `supplier_cost` (euros for one unit: the product only, no shipping or EU fees), `supplier_url`,
+`weight_g` (one unit packed, in grams: one you type wins over a supplier's), `ship_cost` (euros, one order to NL),
+`moq` and `lead_days`. `chosenSupplier(env, key)` in `worker/src/sourcing.mjs` reads them.
+
+**CJ Dropshipping (optional)**: with a Worker secret `CJ_API_KEY`, the panel finds CJ products by photo (CJ allows that
+from account Level 3; below it, by name) or by name, and gives one product's cost, packed weight, stock (the EU apart)
+and cheapest freight to NL, DE and FR, from China and from CJ's EU warehouse. **Add as supplier** lists it by the route
+that lands cheapest. Without the secret it is off and calls nothing. Set it once: Cloudflare dashboard → Workers &
+Pages → winner-hunter-clean → Settings → Variables and Secrets → Add (type Secret, name `CJ_API_KEY`, your key from CJ:
+My CJ → Authorization → API), or `cd winner-hunter/worker && npx wrangler secret put CJ_API_KEY`. Off again: delete it.
+The CJ token is kept in D1 (`state` row `cj_token`) sealed with a key made from `CJ_API_KEY`: the hunts can read D1, and
+a token there is no use to them.
 
 ## Set up (once)
 
