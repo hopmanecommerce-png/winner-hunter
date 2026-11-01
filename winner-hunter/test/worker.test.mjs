@@ -203,7 +203,7 @@ test('/api/ads: All is the default view (no Top 20): ads that pass the rules, on
   assert.ok(!ids.includes('9100'), 'second ad of the same product collapsed');
   assert.ok(!ids.includes('9300'), 'too young');
   assert.ok(!ids.includes('9200'), '272 reach a day');
-  assert.deepStrictEqual(Object.keys(j.counts), ['all', 'inbox', 'fresh', 'starred', 'made', 'hidden', 'world', 'eu']);
+  assert.deepStrictEqual(Object.keys(j.counts), ['all', 'inbox', 'fresh', 'starred', 'made', 'hidden', 'world', 'eu', 'google']);
   assert.strictEqual(j.counts.inbox, 27, 'nothing decided yet: everything is in the inbox');
   assert.strictEqual(j.counts.all, 27);
   assert.strictEqual(j.last_run.new_winners, 23);

@@ -6,6 +6,7 @@
  *   GET  /api/ad/:id  the ad itself (text, video/images, CTA) (adview.mjs; the board no longer uses it: off unless AD_VIEWER = "on")
  *   GET  /api/markets EU reach a day per country over the board's products (Market Radar); ?scope=world: facts per market outside the EU
  *   ?scope=world on /api/ads and /export.csv: the products outside the EU (world.mjs), judged by proof signals, not reach
+ *   ?scope=google on /api/ads, /api/markets and /export.csv: the Google tab (google.mjs), each rule marked exact, approximated or not checked
  * All SQL is parameterized; sort orders come from a fixed list.
  */
 
@@ -16,6 +17,7 @@ import { TRAITS, AD_TRAITS, CHOICES, AD_CHOICES, SEP, YES_AT, VERSION } from './
 import { MARKET_RULES } from './market-rules.mjs';
 import { LAUNCH_JS, launchList, launchPost } from './launch.mjs';
 import { SOURCING_JS, sourcingGet, sourcingPost } from './sourcing.mjs';
+import { GOOGLE_SQL, TIKTOK_SHOPS_SQL, GOOGLE_CSV_COLS, googleRow, crossLink, googleProof, googleFacts, googleMarketsOf, googleAlert } from './google.mjs';
 
 const COOKIE = '__Host-wh';
 const MAX_AGE = 90 * 864e2; // seconds
@@ -93,7 +95,8 @@ WHERE rn = 1 AND ('eu|' || gk) NOT IN (SELECT product_key FROM world_checks WHER
 export const EU_LEFT_SQL = EU_TODO_SQL.replace(/^SELECT .*? AS ads, data\n/, 'SELECT COUNT(*) AS n\n').replace(' ORDER BY rpd DESC LIMIT ?2', '');
 const CHECK_SQL = 'SELECT product_key, people, animals, gymwear, physical, category, category_conf, input, checked_at, main, sub, main_conf, sub_conf, product_score, ad_score, answers, used FROM world_checks';
 // world_data, not world_run: the hunt outside the EU saves its progress every few minutes, but only changes the board's table once.
-const VERSION_SQL = `SELECT (SELECT MAX(rowid) FROM winners) AS r, (SELECT updated_at FROM state WHERE key = 'last_run') AS u, (SELECT updated_at FROM state WHERE key = 'world_data') AS wu, (SELECT updated_at FROM state WHERE key = 'world_check') AS jc`;
+// google_data: the Google hunt wrote google_products (google.mjs).
+const VERSION_SQL = `SELECT (SELECT MAX(rowid) FROM winners) AS r, (SELECT updated_at FROM state WHERE key = 'last_run') AS u, (SELECT updated_at FROM state WHERE key = 'world_data') AS wu, (SELECT updated_at FROM state WHERE key = 'world_check') AS jc, (SELECT updated_at FROM state WHERE key = 'google_data') AS gd`;
 const SNAP_MS = 15 * 60000; // read again after this long anyway
 const SNAPS = new WeakMap(); // per D1 binding
 let LAST = null; // on Cloudflare (one database): shared by the requests this isolate serves
@@ -105,7 +108,7 @@ let READ = null; // on Cloudflare, as LAST
 /** All winners rows, read again only when a run saved something (or after 15 minutes). */
 export async function snapshot(DB, now = Date.now()) {
   const v = await DB.prepare(VERSION_SQL).first();
-  const ver = `${v && v.r}|${v && v.u}|${v && v.wu}|${v && v.jc}`;
+  const ver = `${v && v.r}|${v && v.u}|${v && v.wu}|${v && v.jc}|${v && v.gd}`;
   const shared = typeof navigator !== 'undefined' && navigator.userAgent === 'Cloudflare-Workers';
   let s = SNAPS.get(DB) || (shared ? LAST : null);
   if (!s || s.ver !== ver || now - s.at > SNAP_MS || now < s.at) {
@@ -141,14 +144,19 @@ async function readTables(DB) {
     if (/no such (table|column)/i.test(String(e && e.message))) return [];
     throw e;
   });
-  const [{ results: eu }, bs, tp, world, jev] = await Promise.all([DB.prepare(SNAP_SQL).all(), optional(BS_SQL), optional(TRUST_SQL), optional(WORLD_SQL), optional(CHECK_SQL)]);
+  const [{ results: eu }, bs, tp, world, jev, google] = await Promise.all([DB.prepare(SNAP_SQL).all(), optional(BS_SQL), optional(TRUST_SQL), optional(WORLD_SQL), optional(CHECK_SQL), optional(GOOGLE_SQL)]);
   const checks = new Map(jev.map((c) => [c.product_key, c]));
   for (const w of eu) {
     w.gk = groupKey(w);
     const c = checks.get('eu|' + w.jk);
     w.jev = c ? checkOf(c) : null;
   }
-  const results = eu.concat(world.map((w) => worldRow(w, checks.get(w.product_key))));
+  const worlds = world.map((w) => worldRow(w, checks.get(w.product_key)));
+  // Google (google.mjs): Jev's answer under 'google|' + its product page, else the one outside the EU for the same page.
+  // Who shows the same product or shop on Meta or TikTok, both ways: read only when there are Google products.
+  const googles = google.map((g) => { const c = checks.get('google|' + g.product_key) || checks.get(g.product_key); return googleRow(g, c ? checkOf(c) : null); });
+  if (googles.length) crossLink(googles, eu.concat(worlds), await optional(TIKTOK_SHOPS_SQL), { key: productKey, store: storeOf });
+  const results = eu.concat(worlds, googles);
   const best = new Map(bs.map((b) => [b.product_key, b]));
   const trust = new Map(tp.map((t) => [t.store, t]));
   for (const w of results) {
@@ -352,7 +360,7 @@ export function proofOf(r) {
 const bsRank = (r) => (r.bs && Number(r.bs.ok) && r.bs.rank != null ? Number(r.bs.rank) : null);
 /** How many products its store sells, when known (EU: the hunt's store check; outside the EU: the scan). */
 export function storeSize(r) {
-  const n = r.world ? r.world.store_products : dataOf(r).store_products;
+  const n = r.world ? r.world.store_products : r.google ? r.google.store_products : dataOf(r).store_products;
   return n == null || !Number.isFinite(Number(n)) ? null : Number(n);
 }
 /**
@@ -406,9 +414,12 @@ export function products(rows, hidden = [], stars = [], now = Date.now()) {
     const age = w.world ? num(w.ad_age_days) : ageNow(w, now);
     const rpd = num(w.reach_eu) / Math.max(num(w.ad_age_days), 1);
     // A product from outside the EU has no reach: it is judged by its proof signals and never reaches the EU tabs.
-    const pass = !w.world && num(w.active_ads) >= MIN_ACTIVE_ADS && w.ad_age_days != null && num(w.ad_age_days) >= MIN_AGE_DAYS && age != null && age >= MIN_AGE_DAYS && age <= MAX_AGE_DAYS && rpd >= MIN_REACH_PER_DAY ? 1 : 0;
-    const r = Object.assign({}, w, { rpd, age_now: age, pass: w.world ? w.world.active : pass, mk: countriesOf(w) });
+    const pass = !w.world && !w.google && num(w.active_ads) >= MIN_ACTIVE_ADS && w.ad_age_days != null && num(w.ad_age_days) >= MIN_AGE_DAYS && age != null && age >= MIN_AGE_DAYS && age <= MAX_AGE_DAYS && rpd >= MIN_REACH_PER_DAY ? 1 : 0;
+    // A Google product (google.mjs) passed its rules when the hunt checked it; today its ad must still be 7–42 days old.
+    const gpass = w.google && w.google.active && age != null && age >= MIN_AGE_DAYS && age <= MAX_AGE_DAYS ? 1 : 0;
+    const r = Object.assign({}, w, { rpd, age_now: age, pass: w.world ? w.world.active : w.google ? gpass : pass, mk: countriesOf(w) });
     if (w.world) r.proof = proofOf(r);
+    if (w.google) r.proof = googleProof(r, bsRank(r));
     let g = groups.get(w.gk);
     if (!g) groups.set(w.gk, (g = { hid: 0, hat: '', star: 0, best: null, any: null, ids: [], jev: null }));
     g.ids.push(w.ad_id);
@@ -424,13 +435,15 @@ export function products(rows, hidden = [], stars = [], now = Date.now()) {
   const v = [];
   const k = [];
   const w = [];
+  const gl = [];
   for (const g of groups.values()) {
     // Jev answered per advertiser + title: the product shows the answer of its best ad, else of another ad of it.
     if (g.best) v.push(Object.assign(g.best, { hid: g.hid, hat: g.hat, star: g.star, jev: g.best.jev || g.jev }));
     k.push(g.any === g.best ? g.any : Object.assign(g.any, { hid: g.hid, hat: g.hat, star: g.star, jev: g.any.jev || g.jev }));
     if (g.any.world && g.any.world.active) w.push(g.any);
+    if (g.any.google && g.any.pass) gl.push(g.any); // gl: the Google tab
   }
-  return { v, k, w, groups, byAd };
+  return { v, k, w, gl, groups, byAd };
 }
 
 // Every decision (all of them: an old "Bad store" must stay undoable), for what the board learns.
@@ -601,10 +614,53 @@ function worldView(p, list, csv) {
   return { view, total: out.length, offset, rows: out.slice(offset, offset + limit) };
 }
 
+// Google (google.mjs): all four rules checked first (reach approximated, not unknown), then the most proof.
+const imprDay = (r) => (r.google.impr ? num(r.google.impr.lower) / Math.max(num(r.ad_age_days), 1) : -1);
+const surer = (a, b) => (b.google.verdict === 'winner') - (a.google.verdict === 'winner') || b.proof.n - a.proof.n || num(b.scaled_count) - num(a.scaled_count) || num(b.age_now) - num(a.age_now) || cmp(a.ad_id, b.ad_id);
+const GOOGLE_SORTS = {
+  proof: surer,
+  days: (a, b) => num(b.age_now) - num(a.age_now) || surer(a, b),
+  copies: (a, b) => num(b.scaled_count) - num(a.scaled_count) || surer(a, b),
+  ads: (a, b) => num(b.active_ads) - num(a.active_ads) || surer(a, b),
+  regions: (a, b) => b.google.regions.length - a.google.regions.length || surer(a, b),
+  impr: (a, b) => imprDay(b) - imprDay(a) || surer(a, b),
+  best: (a, b) => (bsRank(a) ?? 999) - (bsRank(b) ?? 999) || surer(a, b),
+  reviews: (a, b) => num(b.tp && b.tp.reviews) - num(a.tp && a.tp.reviews) || surer(a, b),
+  jevp: (a, b) => num(b.jev && b.jev.product_score) - num(a.jev && a.jev.product_score) || surer(a, b),
+  jeva: (a, b) => num(b.jev && b.jev.ad_score) - num(a.jev && a.jev.ad_score) || surer(a, b),
+  new: (a, b) => cmp(b.first_seen ?? '', a.first_seen ?? '') || surer(a, b),
+};
+
+/**
+ * The Google tab: filters (?full=1 all four rules checked, ?meta=1 / 0 also / not on the Meta board, ?tiktok=1, ?cc=NL a
+ * country its ads were shown in, ?jev=), sort and page. The Inbox: proof + 1 (one more with all four rules checked) × what you
+ * taught the board × Jev's risks; like the EU, nothing people or pets take.
+ */
+function googleView(p, list, csv) {
+  const view = p.get('view') === 'inbox' ? 'inbox' : 'all';
+  const hidden = view === 'all' && p.get('hidden') === '1';
+  let out = list.gl.filter((r) => (view === 'inbox' ? inboxOk(r, list.taste) : hidden ? r.hid > 0 : r.hid === 0));
+  const cc = String(p.get('cc') || '').toUpperCase();
+  if (/^[A-Z]{2}$/.test(cc)) out = out.filter((r) => r.google.regions.includes(cc));
+  if (p.get('full') === '1') out = out.filter((r) => r.google.verdict === 'winner');
+  if (p.get('meta') === '1') out = out.filter((r) => r.google.cross.meta);
+  if (p.get('meta') === '0') out = out.filter((r) => !r.google.cross.meta);
+  if (p.get('tiktok') === '1') out = out.filter((r) => r.google.cross.tiktok);
+  if (p.get('jev')) out = out.filter((r) => jevMatches(String(p.get('jev')).slice(0, 80), r.jev));
+  const q = String(p.get('q') || '').trim().slice(0, 80).toLowerCase();
+  if (q) out = out.filter((r) => [r.product_title, r.advertiser, r.store_url, r.keyword].some((x) => String(x ?? '').toLowerCase().includes(q)));
+  if (view === 'inbox') out = out.map((r) => ranked(r, list.taste, r.proof.n + 1 + (r.google.verdict === 'winner' ? 1 : 0))).sort((a, b) => b.score - a.score || surer(a, b));
+  else out.sort(Object.hasOwn(GOOGLE_SORTS, p.get('sort') || '') ? GOOGLE_SORTS[p.get('sort')] : surer);
+  const limit = csv ? 5000 : Math.min(Math.max(parseInt(p.get('limit'), 10) || (view === 'inbox' ? 20 : 40), 1), 100);
+  const offset = offsetOf(p, csv);
+  return { view, total: out.length, offset, rows: out.slice(offset, offset + limit) };
+}
+
 /** One view of the board: filters, one market (?cc=FR: best first by the reach a day there), sort and page. */
 export function viewOf(p, list, { csv = false } = {}) {
   const view = ['starred', 'made', 'inbox'].includes(p.get('view')) ? p.get('view') : 'all';
   if (p.get('scope') === 'world' && (view === 'all' || view === 'inbox')) return worldView(p, list, csv);
+  if (p.get('scope') === 'google' && (view === 'all' || view === 'inbox')) return googleView(p, list, csv);
   let out;
   let sort = SORTS.rpd;
   let limit = 100;
@@ -657,7 +713,7 @@ const inboxOk = (r, taste) => inInbox(r) && !blockedBy(r, taste) && !takenIn(r);
 const NEW_MS = 864e5; // found in the last day: new
 
 export const countsOf = (list, now = Date.now(), scope = 'eu') => {
-  const on = scope === 'world' ? list.w : list.v;
+  const on = scope === 'world' ? list.w : scope === 'google' ? list.gl : list.v;
   return {
     all: on.filter((r) => r.hid === 0).length,
     inbox: on.filter((r) => inboxOk(r, list.taste)).length,
@@ -667,6 +723,7 @@ export const countsOf = (list, now = Date.now(), scope = 'eu') => {
     hidden: on.filter((r) => r.hid > 0).length,
     world: list.w.filter((r) => r.hid === 0).length,
     eu: list.v.filter((r) => r.hid === 0).length,
+    google: list.gl.filter((r) => r.hid === 0).length,
   };
 };
 
@@ -960,7 +1017,7 @@ export function toAd(r) {
     // A store with a big catalogue that hardly copies this ad: its ads may sell the store, not this product.
     catalogue: products != null && products >= BIG_STORE && (num(r.scaled_count) || 1) < FEW_COPIES,
     // No product page, price or best-seller rank: the title is the ad's own words, the product itself is not known.
-    unidentified: !r.world && !productKey(r.product_url) && r.price == null && bsRank(r) == null,
+    unidentified: !r.world && !r.google && !productKey(r.product_url) && r.price == null && bsRank(r) == null,
     myshopify: shop && /\.myshopify\.com$/i.test(String(shop.text || '')) ? String(shop.text).slice(0, 100) : '',
     adv: r.advertiser || '',
     kw: r.keyword || '',
@@ -998,6 +1055,9 @@ export function toAd(r) {
       likes: r.world.likes,
       page_id: r.world.page_id,
     } : null,
+    // Google (google.mjs): its rules, each exact, approximated or not checked; where it ran; who else shows it.
+    google: r.google ? googleFacts(r) : null,
+    on_google: r.on_google || null, // a Meta product whose product page ('product') or shop ('store') is advertised on Google too
   };
 }
 
@@ -1030,7 +1090,11 @@ const CSV_COLS = [
   ...[...TRAITS, ...AD_TRAITS].map((t) => [`jev_${t.k}`, (a) => (a.jev ? a.jev.p[t.k] ?? null : null)]),
   ['jev_used', (a) => (a.jev ? a.jev.used : null)],
 ];
-export const toCsv = (ads) => [CSV_COLS.map((c) => c[0]).join(','), ...ads.map((a) => CSV_COLS.map(([, f]) => csvCell(f(a))).join(','))].join('\r\n') + '\r\n';
+// An export that holds Google products gets their columns too (rules exact / approx / unknown, countries, who else shows it).
+export const toCsv = (ads) => {
+  const cols = ads.some((a) => a && a.google) ? CSV_COLS.concat(GOOGLE_CSV_COLS) : CSV_COLS;
+  return [cols.map((c) => c[0]).join(','), ...ads.map((a) => cols.map(([, f]) => csvCell(f(a))).join(','))].join('\r\n') + '\r\n';
+};
 
 // ---------------------------------------------------------------------------
 // Routes
@@ -1083,9 +1147,9 @@ async function login(req, env, now) {
 
 async function ads(url, env, now, viewer) {
   // The products and the run states at the same time: the board waits for one round trip to D1, not five in a row.
-  const [list, states] = await Promise.all([board(env, now), statesJson(env.DB, ['last_run', 'world_run', 'token_expires_at', 'world_check'])]);
+  const [list, states] = await Promise.all([board(env, now), statesJson(env.DB, ['last_run', 'world_run', 'token_expires_at', 'world_check', 'google_run'])]);
   const q = viewOf(url.searchParams, list);
-  const scope = url.searchParams.get('scope') === 'world' ? 'world' : 'eu';
+  const scope = ['world', 'google'].includes(url.searchParams.get('scope')) ? url.searchParams.get('scope') : 'eu';
   const counts = countsOf(list, now, scope);
   const { last_run: run, world_run: worldRun, token_expires_at: token } = states;
   // While a run hunts, the board also shows what the run before it found.
@@ -1101,7 +1165,8 @@ async function ads(url, env, now, viewer) {
     last_run: run,
     prev_run: prev || null,
     world_run: worldRun,
-    alert: scope === 'world' ? worldAlert(worldRun, now, token, states.world_check) : boardAlert(run, token, now),
+    google_run: states.google_run,
+    alert: scope === 'world' ? worldAlert(worldRun, now, token, states.world_check) : scope === 'google' ? googleAlert(states.google_run, now) : boardAlert(run, token, now),
     viewer,
   });
 }
@@ -1329,6 +1394,10 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
         if (url.searchParams.get('scope') === 'world') {
           const open = b.w.filter((r) => r.hid === 0);
           return json({ ...worldMarketsOf(open), jev: jevSummary(open) });
+        }
+        if (url.searchParams.get('scope') === 'google') {
+          const open = b.gl.filter((r) => r.hid === 0);
+          return json({ ...googleMarketsOf(open), jev: jevSummary(open) });
         }
         const open = b.v.filter((r) => r.hid === 0);
         return json({ ...marketsOf(open), jev: jevSummary(open) });

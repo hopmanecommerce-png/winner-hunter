@@ -1,0 +1,58 @@
+{
+  "_source": "The example answer in the vendor docs (https://docs.scrapecreators.com/v1/google/adLibrary/advertisers/search), copied verbatim on 2026-11-01. Real data the vendor published, used only to test the parsing.",
+  "success": true,
+  "credits_remaining": 49998226090,
+  "credits_charged": 1,
+  "advertisers": [
+    {
+      "name": "lululemon HK Limited",
+      "advertiser_id": "AR01382517811867287553",
+      "region": "HK",
+      "number_of_ads_estimate": 5
+    },
+    {
+      "name": "lululemon athletica canada inc.",
+      "advertiser_id": "AR01614014350098432001",
+      "region": "CA",
+      "number_of_ads_estimate": 7000
+    },
+    {
+      "name": "Lululemon Athletica Australia Pty Ltd",
+      "advertiser_id": "AR12317441102226391041",
+      "region": "AU",
+      "number_of_ads_estimate": 4
+    },
+    {
+      "name": "lululemon athletica JP Limited Liability Company",
+      "advertiser_id": "AR12957738211148300289",
+      "region": "JP",
+      "number_of_ads_estimate": 5
+    }
+  ],
+  "websites": [
+    {
+      "domain": "lululemon.de"
+    },
+    {
+      "domain": "lululemon.com"
+    },
+    {
+      "domain": "lululemon.co.uk"
+    },
+    {
+      "domain": "lululemon.co.kr"
+    },
+    {
+      "domain": "lululemon.co.jp"
+    },
+    {
+      "domain": "lululemonss.com"
+    },
+    {
+      "domain": "lululemon.com.hk"
+    },
+    {
+      "domain": "lululemon.com.au"
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "_source": "The example answer in the vendor docs (https://docs.scrapecreators.com/v1/google/ad), copied verbatim on 2026-11-01. Real data the vendor published, used only to test the parsing.",
+  "success": true,
+  "credits_remaining": 1000000,
+  "credits_charged": 1,
+  "advertiserId": "AR07541154843046445057",
+  "creativeId": "CR17778900238552006657",
+  "firstShown": "2026-06-05T21:52:15.000Z",
+  "url": "https://adstransparency.google.com/advertiser/AR07541154843046445057/creative/CR17778900238552006657",
+  "lastShown": "2026-06-24T19:04:54.000Z",
+  "format": "image",
+  "overallImpressions": {
+    "min": "500000",
+    "max": "600000"
+  },
+  "spend": {
+    "currency": "USD",
+    "lower": "5000",
+    "upper": "6000"
+  },
+  "targeting": {
+    "age": {
+      "included": [
+        "25-34",
+        "35-44",
+        "45-54",
+        "55-64",
+        "65+",
+        "unknown"
+      ],
+      "excluded": [
+        "18-24"
+      ]
+    },
+    "gender": {
+      "included": [
+        "female",
+        "male",
+        "unknown"
+      ],
+      "excluded": []
+    },
+    "location": {
+      "included": [
+        {
+          "criterionId": "2840",
+          "name": "United States",
+          "fullName": "United States",
+          "countryCodes": [
+            "US"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "criterionId": "2578",
+          "name": "Norway",
+          "fullName": "Norway",
+          "countryCodes": [
+            "NO"
+          ]
+        },
+        {
+          "criterionId": "2328",
+          "name": "Guyana",
+          "fullName": "Guyana",
+          "countryCodes": [
+            "GY"
+          ]
+        },
+        {
+          "criterionId": "2332",
+          "name": "Haiti",
+          "fullName": "Haiti",
+          "countryCodes": [
+            "HT"
+          ]
+        }
+      ]
+    }
+  },
+  "creativeRegions": [
+    {
+      "regionCode": "US",
+      "regionName": "United States"
+    }
+  ],
+  "regionStats": [
+    {
+      "regionCode": "US",
+      "regionName": "United States",
+      "firstShown": "2026-06-05T00:00:00.000Z",
+      "lastShown": "2026-06-24T00:00:00.000Z",
+      "impressions": {
+        "lower": "500000",
+        "upper": "600000"
+      },
+      "platformImpressions": []
+    }
+  ],
+  "variations": [
+    {
+      "destinationUrl": "shop.gop.com",
+      "headline": "Classic GOP Quarter - Zip Pullover | Shop American ... Classic GOP Moisture Wicking Polo Shirt XL / Red Classic GOP Hat White / White Classic GOP Quarter - Zip Pullover | Shop American ... Official Party Quarter - Zip Pullover M / GOLD Classic GOP Hat Red / White",
+      "description": "FORE MORE Official Party Quarter - Zip Pullover XL / US FLAG Classic GOP Hat White / Red DJT Triple Threat Hat AMERICA America Swings Right T- Shirt XL / White Browse More",
+      "allText": "Official GOP Shop 寬 shop.gop.com Classic GOP Quarter - Zip Pullover | Shop American ... Classic GOP Moisture Wicking Polo Shirt XL / Red Fi Classic GOP Hat White / White Classic GOP Quarter - Zip Pullover | Shop American ... Official Party Quarter - Zip Pullover M / GOLD Classic GOP Hat Red / White D FORE MORE YEARS Official Party Quarter - Zip Pullover XL / US FLAG Classic GOP Hat White / Red DJT Triple Threat Hat AMERICA RIGHT America Swings Right T- Shirt XL / White Browse More",
+      "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/18242167605449878359"
+    }
+  ]
+}
