@@ -1,5 +1,8 @@
 -- The Launch view (worker/src/launch.mjs): one launch card per approved product, its checklist and your decision.
--- product_key: 'eu|<page id>|<title>' (EU), 'world|<store.com/products/handle>' (outside the EU) or 'tiktok|<id>'.
+-- product_key: the product's key on the board when the launch started, never rewritten. 'eu|<store.com/products/handle>'
+-- (EU: its product page; an ad without one: 'eu|<page id>|<title>', the key every EU card had before the board grouped
+-- by product page, still found as its product's card, see cardProducts in launch.mjs), 'world|<store.com/products/handle>'
+-- (outside the EU) or 'tiktok|<id>'.
 -- facts: JSON, the product as the board showed it when the launch started, so the card stays when the product leaves
 -- the board. steps: JSON {"margin": {"done": true, "note": "", "v": {"price": 39.95}}, ...}, one key per checklist step.
 CREATE TABLE IF NOT EXISTS launches (

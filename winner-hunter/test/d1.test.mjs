@@ -102,7 +102,7 @@ test('migration: split into statements, safe to apply twice', () => {
   assert.ok(st.length >= 8 && st.every((s) => /^CREATE (TABLE|INDEX) IF NOT EXISTS/.test(s)));
   const db = memoryDb();
   for (const s of st) db.exec(s);
-  assert.deepStrictEqual(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all().map((r) => r.name), ['ad_views', 'bestseller', 'feedback', 'hidden', 'lasso_stores', 'launches', 'runs', 'sqlite_sequence', 'stars', 'state', 'store_trust', 'tiktok_products', 'winners', 'world_ads', 'world_checks', 'world_items', 'world_pages', 'world_products', 'world_stores'], 'all migrations, ad viewer cache, stars, feedback, store signals, launch cards and Lasso stores included');
+  assert.deepStrictEqual(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all().map((r) => r.name), ['ad_views', 'ai_checks', 'bestseller', 'feedback', 'hidden', 'lasso_stores', 'launches', 'pin_tries', 'product_sourcing', 'product_suppliers', 'runs', 'sqlite_sequence', 'stars', 'state', 'store_trust', 'tiktok_products', 'winners', 'world_ads', 'world_checks', 'world_items', 'world_pages', 'world_products', 'world_stores'], 'all migrations, ad viewer cache, stars, feedback and store signals, launch cards, PIN tries, sourcing, AI reads and Lasso stores included');
 });
 
 test('migrate(): all files over the REST client, twice; the ADD COLUMN already there is skipped, other errors throw', async () => {
@@ -114,7 +114,9 @@ test('migrate(): all files over the REST client, twice; the ADD COLUMN already t
   const first = await migrate(c, texts);
   const calls = rest.calls.length;
   const second = await migrate(c, texts);
-  assert.strictEqual(second, first - 20, 'second time: the 20 ALTER TABLEs are skipped');
+  const alters = texts.flatMap(statements).filter((x) => /^ALTER TABLE/i.test(x)).length;
+  assert.ok(alters >= 14);
+  assert.strictEqual(second, first - alters, 'second time: the ALTER TABLEs are skipped');
   assert.strictEqual(rest.calls.length, calls * 2, 'a duplicate column is not retried');
   assert.ok(rest.db.prepare('PRAGMA table_info(runs)').all().some((r) => r.name === 'status'));
   await assert.rejects(migrate(c, ['CREATE TABLE nope (;']), /Cloudflare D1/);

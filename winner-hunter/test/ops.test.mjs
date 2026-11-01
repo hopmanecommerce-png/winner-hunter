@@ -12,7 +12,7 @@ import { d1Client } from '../lib/d1.mjs';
 import { resetCooling } from '../lib/world.mjs';
 import { hunt, MAX_MINUTES, minutesOf } from '../world.mjs';
 import { main as migrateMain, bookmark } from '../migrate.mjs';
-import { handle, makeToken } from '../worker/src/app.mjs';
+import { handle, tokenFor } from '../worker/src/app.mjs';
 import { d1Binding, d1Rest, memoryDb } from './helpers/sqlite-d1.mjs';
 import { seededEnv, NOW as SEED_NOW } from './helpers/seed.mjs';
 
@@ -214,7 +214,7 @@ test('the board reads its tables again when a hunt wrote the board\'s table, not
   const mem = memoryDb();
   const { client } = setup(mem);
   const env = { DB: d1Binding(mem), BOARD_PIN: '1234' };
-  const cookie = `__Host-wh=${await makeToken('1234', NOW)}`;
+  const cookie = `__Host-wh=${await tokenFor(env, NOW)}`;
   const reads = () => env.DB.log.filter((l) => /FROM winners w$/.test(l.sql.trim())).length;
   const seen = [];
   let last = null;
@@ -261,7 +261,7 @@ test('a Shopify rate-limit storm makes the run yellow and says so; a few 429s do
 test('/api/ad is off unless the Worker has AD_VIEWER = "on", even with a Meta token and a browser', async () => {
   const env = await seededEnv();
   Object.assign(env, { META_TOKEN: 'EAAB tok', BROWSER: { fetch: () => { throw new Error('not in tests'); } } });
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, SEED_NOW)}`;
+  const cookie = `__Host-wh=${await tokenFor(env, SEED_NOW)}`;
   let launched = 0;
   const launch = async () => { launched++; throw new Error('no browser in tests'); };
   const get = (p, e = env) => handle(new Request('https://board.test' + p, { headers: { cookie } }), e, { html: '', now: SEED_NOW, launch });

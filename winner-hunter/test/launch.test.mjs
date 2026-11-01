@@ -6,8 +6,8 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { DatabaseSync } from 'node:sqlite';
-import { handle, makeToken } from '../worker/src/app.mjs';
-import { STEPS, cleanStep, marginInputs, marginOf, summaryOf, LAUNCH_JS, jevRisks } from '../worker/src/launch.mjs';
+import { handle, tokenFor, productKey } from '../worker/src/app.mjs';
+import { STEPS, cleanStep, marginInputs, marginOf, summaryOf, LAUNCH_JS, jevRisks, launchIndex, cardProduct, cardProducts, productFor } from '../worker/src/launch.mjs';
 import { statements } from '../lib/d1.mjs';
 import { UPSERT_SQL as TIKTOK_UPSERT } from '../lib/tiktok.mjs';
 import { memoryDb } from './helpers/sqlite-d1.mjs';
@@ -19,7 +19,7 @@ const plain = (r) => (r ? { ...r } : r);
 const iso = (ms) => new Date(ms).toISOString();
 
 async function session(env) {
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, NOW)}`;
+  const cookie = `__Host-wh=${await tokenFor(env, NOW)}`;
   const call = (path, init = {}, now = NOW) => handle(new Request(ORIGIN + path, { ...init, headers: { cookie, ...init.headers } }), env, { now });
   return {
     get: async (path) => (await call(path)).json(),
@@ -33,7 +33,13 @@ const launch = async (s, body, opts) => {
 };
 
 // Approved products: two on the EU board (✓), one outside the EU and one on the TikTok tab, each a second apart.
+// The EU ones by their key on the board (their product page) and by the key their card had before the board grouped
+// EU products by product page (advertiser + title), as launch cards saved in production still have it.
 const TT_ID = '1700000000000000001';
+const POSTURE = 'eu|shop1.test/products/item-1';
+const POSTURE_OLD = 'eu|501|posture corrector pro';
+const ROLLER = 'eu|shop3.test/products/item-3';
+const ROLLER_OLD = 'eu|503|pet hair remover roller';
 async function approvedEnv() {
   const env = await seededEnv();
   env.db.prepare(`INSERT INTO world_products (product_key, ad_id, active, product_title, price, currency, image_url, store_url, product_url, ad_library_url, advertiser, page_id, keyword, markets, ads, creatives, days, new14, shop_ads, store_products, first_seen, last_seen)
@@ -196,35 +202,39 @@ test('/api/launch and /launch.js need the PIN; /launch.js is the kit as a script
 test('/api/launch: a card only for an approved product, with its facts; the first card is the launch pin; starting again changes nothing', async () => {
   const { env, s } = await approvedEnv();
   const pick = (await s.get('/api/launch?pick=1')).candidates;
-  assert.deepStrictEqual(pick.map((c) => c.key), [`tiktok|${TT_ID}`, 'world|strong.test/products/pod', 'eu|503|pet hair remover roller', 'eu|501|posture corrector pro'], 'the last approved first');
+  assert.deepStrictEqual(pick.map((c) => c.key), [`tiktok|${TT_ID}`, 'world|strong.test/products/pod', ROLLER, POSTURE], 'the last approved first, EU products by product page');
   const [tt, world, , eu] = pick.map((c) => c.facts);
   assert.deepStrictEqual([eu.source, eu.id, eu.title, eu.price, eu.cur, eu.age, eu.shop_ads, eu.rpd, eu.products, eu.approved_at], ['eu', '9001', 'Posture Corrector Pro', 30.95, 'EUR', 11, 81, 8818, null, iso(NOW - 3000)], '97,000 EU reach in 11 days');
   assert.deepStrictEqual([world.source, world.title, world.age, world.products, world.proof.of, world.jev], ['world', 'Pillow Pod', 210, 12, 6, { main: 'Home', sub: 'Bedding' }]);
   assert.deepStrictEqual(world.risks, [{ k: 'electric', text: 'Battery or electric' }, { k: 'brand', text: 'Brand or copy risk' }], "Jev's blockers");
   assert.deepStrictEqual([tt.source, tt.title, tt.sold, tt.price, tt.cur, tt.age, tt.risks], ['tiktok', 'Rhino Straps', 152000, 55.77, 'USD', null, [{ k: 'bulky', text: 'Big or heavy' }]]);
 
-  assert.deepStrictEqual(await launch(s, { start: 'eu|500|linen summer dress' }), { status: 409, error: 'Approve it first' }, 'on the board, not approved');
+  assert.deepStrictEqual(await launch(s, { start: 'eu|500|linen summer dress' }), { status: 409, error: 'Approve it first' }, 'on the board, not approved (no product page: its advertiser + title is its key)');
+  assert.deepStrictEqual(await launch(s, { start: 'eu|shop2.test/products/item-2' }), { status: 409, error: 'Approve it first' });
   assert.deepStrictEqual(await launch(s, { start: 'eu|999|no such product' }), { status: 404, error: 'Unknown product' });
+  assert.deepStrictEqual(await launch(s, { start: 'eu|nope.test/products/x' }), { status: 404, error: 'Unknown product' });
   assert.deepStrictEqual(await launch(s, { start: 'tiktok|42' }), { status: 404, error: 'Unknown product' });
   assert.deepStrictEqual(await launch(s, { start: "tiktok|1' OR '1'='1" }), { status: 400, error: 'Bad product' });
-  for (const bad of ['', 'shop|1', 'eu|', 42, ['eu|501|posture corrector pro'], 'eu|' + 'x'.repeat(1000)]) assert.strictEqual((await launch(s, { start: bad })).status, 400, JSON.stringify(bad).slice(0, 40));
+  for (const bad of ['', 'shop|1', 'eu|', 42, [POSTURE], 'eu|' + 'x'.repeat(1000)]) assert.strictEqual((await launch(s, { start: bad })).status, 400, JSON.stringify(bad).slice(0, 40));
   assert.strictEqual(env.db.prepare('SELECT COUNT(*) AS n FROM launches').get().n, 0, 'nothing made by a refused start');
 
-  const first = await launch(s, { start: 'eu|501|posture corrector pro' }, { now: NOW + 1000 });
+  const first = await launch(s, { start: POSTURE }, { now: NOW + 1000 });
   assert.strictEqual(first.status, 200);
   const l = first.launch;
-  assert.deepStrictEqual([l.key, l.title, l.pinned, l.decision, l.created_at, l.facts.title, l.facts.age], ['eu|501|posture corrector pro', 'Posture Corrector Pro', true, null, iso(NOW + 1000), 'Posture Corrector Pro', 11], 'the first card is the launch pin');
+  assert.deepStrictEqual([l.key, l.title, l.pinned, l.decision, l.created_at, l.facts.title, l.facts.age, l.facts.product], [POSTURE, 'Posture Corrector Pro', true, null, iso(NOW + 1000), 'Posture Corrector Pro', 11, 'https://shop1.test/products/item-1'], 'the first card is the launch pin');
   assert.deepStrictEqual(l.steps, {});
   assert.deepStrictEqual(l.summary.flags.map((f) => f.k), ['margin', 'compliance', 'young']);
-  const again = await launch(s, { start: 'eu|501|posture corrector pro' }, { now: NOW + 5000 });
+  const again = await launch(s, { start: POSTURE }, { now: NOW + 5000 });
   assert.deepStrictEqual(again.launch, l, 'starting again keeps the card as it is');
+  assert.deepStrictEqual((await launch(s, { start: POSTURE_OLD }, { now: NOW + 5000 })).launch, l, 'also through its old key (a board opened before)');
   const w = (await launch(s, { start: 'world|strong.test/products/pod' }, { now: NOW + 2000 })).launch;
   assert.deepStrictEqual([w.pinned, w.facts.source, w.summary.level], [false, 'world', 'red'], 'one launch pin: the second card is not pinned');
   const t = (await launch(s, { start: `tiktok|${TT_ID}` }, { now: NOW + 3000 })).launch;
   assert.deepStrictEqual([t.pinned, t.title, t.facts.meta], [false, 'Rhino Straps', null]);
-  assert.deepStrictEqual((await s.get('/api/launch?pick=1')).candidates.map((c) => c.key), ['eu|503|pet hair remover roller'], 'a product with a card is not offered again');
+  assert.deepStrictEqual((await s.get('/api/launch?pick=1')).candidates.map((c) => c.key), [ROLLER], 'a product with a card is not offered again');
   const list = (await s.get('/api/launch')).launches;
-  assert.deepStrictEqual(list.map((x) => [x.key, x.pinned]), [['eu|501|posture corrector pro', true], [`tiktok|${TT_ID}`, false], ['world|strong.test/products/pod', false]], 'the launch pin first, then the last touched');
+  assert.deepStrictEqual(list.map((x) => [x.key, x.pinned]), [[POSTURE, true], [`tiktok|${TT_ID}`, false], ['world|strong.test/products/pod', false]], 'the launch pin first, then the last touched');
+  assert.strictEqual(env.db.prepare('SELECT COUNT(*) AS n FROM launches').get().n, 3, 'one card per product');
   // An approved product taken off ✓ keeps its card: the launch is yours.
   await s.post('/api/hide', { ad_id: '9001', status: 'none' });
   assert.strictEqual((await s.get('/api/launch')).launches.length, 3);
@@ -232,7 +242,7 @@ test('/api/launch: a card only for an approved product, with its facts; the firs
 
 test('/api/launch: a step saves on its own, cleaned; the pin moves in one batch; a no-go loses the pin; remove', async () => {
   const { env, s } = await approvedEnv();
-  const A = 'eu|501|posture corrector pro';
+  const A = POSTURE;
   const B = 'world|strong.test/products/pod';
   await launch(s, { start: A });
   await launch(s, { start: B });
@@ -284,7 +294,7 @@ test('/api/launch: a step saves on its own, cleaned; the pin moves in one batch;
 
 test('/api/launch: a card removed while a save was on its way is a 404, not a crash', async () => {
   const { env, s } = await approvedEnv();
-  const A = 'eu|501|posture corrector pro';
+  const A = POSTURE;
   await launch(s, { start: A });
   const prepare = env.DB.prepare;
   let n = 0; // the save finds the card, then it is gone when the answer reads it back
@@ -294,19 +304,210 @@ test('/api/launch: a card removed while a save was on its way is a 404, not a cr
 
 test('/api/launch refuses other sites and bad JSON; every value goes in as a bound parameter', async () => {
   const { env, s } = await approvedEnv();
-  await launch(s, { start: 'eu|501|posture corrector pro' });
-  const body = { key: 'eu|501|posture corrector pro', pin: false };
+  await launch(s, { start: POSTURE });
+  const body = { key: POSTURE, pin: false };
   assert.strictEqual((await s.post('/api/launch', body, { headers: { origin: 'https://evil.test' } })).status, 403);
   assert.strictEqual((await s.post('/api/launch', body, { headers: { 'content-type': 'text/plain' } })).status, 415);
   assert.strictEqual((await s.post('/api/launch', 'not json')).status, 400);
   assert.strictEqual((await s.post('/api/launch', '[1,2]')).status, 400);
   assert.strictEqual((await s.post('/api/launch', { ...body, step: 'creatives', note: 'x'.repeat(9000) })).status, 413);
   assert.strictEqual(plain(env.db.prepare('SELECT pinned FROM launches').get()).pinned, 1, 'nothing changed');
-  const evil = "eu|501|posture corrector pro'; DROP TABLE launches; --";
-  assert.strictEqual((await launch(s, { key: evil, decision: 'no' })).status, 404);
-  assert.strictEqual((await launch(s, { start: evil })).status, 404);
+  for (const evil of [`${POSTURE}'; DROP TABLE launches; --`, `${POSTURE_OLD}'; DROP TABLE launches; --`]) {
+    assert.strictEqual((await launch(s, { key: evil, decision: 'no' })).status, 404, evil);
+    assert.strictEqual((await launch(s, { start: evil })).status, 404, evil);
+  }
   const step = await launch(s, { key: body.key, step: 'research', v: { angle: "'); DELETE FROM launches; --" } });
   assert.strictEqual(step.launch.steps.research.v.angle, "'); DELETE FROM launches; --", 'kept as text');
   assert.strictEqual(env.db.prepare('SELECT COUNT(*) AS n FROM launches').get().n, 1);
-  assert.ok(!env.DB.log.some((l) => /DROP|DELETE FROM launches;|posture corrector/.test(l.sql)), 'user text never in the SQL');
+  assert.ok(!env.DB.log.some((l) => /DROP|DELETE FROM launches;|posture corrector|shop1\.test/.test(l.sql)), 'user text never in the SQL');
+});
+
+// ---------------------------------------------------------------------------
+// Cards saved before the board grouped EU products by product page, under 'eu|' + advertiser + title (as in production).
+// They are never rewritten, and stay their product's card under both keys.
+// ---------------------------------------------------------------------------
+
+// A launch card as the board saved it then: facts as the card showed the product (boardFacts), a checklist under way.
+function oldCard(env, { key = POSTURE_OLD, id = '9001', title = 'Posture Corrector Pro', product = 'https://shop1.test/products/item-1', pinned = 1, steps = { margin: { done: true, note: 'Retail 39,95', v: { price: 39.95, cpa: 12 } } }, at = iso(NOW - 864e5) } = {}) {
+  const facts = { source: 'eu', id, title, img: 'https://cdn.shopify.com/s/files/1/p1.jpg', price: 30.95, cur: 'EUR', store: 'https://shop1.test/', product,
+    ad: `https://www.facebook.com/ads/library/?id=${id}`, kw: 'hond', adv: 'Shop 1', age: 11, shop_ads: 81, copies: 3, products: null, rpd: 8818, proof: null, best: null,
+    trust: null, jev: null, risks: [], approved_at: iso(NOW - 2 * 864e5) };
+  env.db.prepare('INSERT INTO launches (product_key, title, facts, steps, pinned, decision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)')
+    .run(key, title, JSON.stringify(facts), JSON.stringify(steps), pinned, at, at);
+}
+// Another ad: a copy of ad `from` with some columns changed (another title, advertiser or product page).
+function copyAd(env, from, id, o) {
+  const cols = ['product_title', 'advertiser_page_id', 'advertiser', 'active_ads', 'ad_age_days', 'ad_start_date', 'reach_eu', 'product_url', 'store_url', 'ad_library_url', 'image_url', 'keyword', 'currency', 'price', 'scaled_count', 'first_seen', 'last_seen', 'data'];
+  env.db.prepare(`INSERT INTO winners (ad_id, ${cols.join(', ')}) SELECT ?, ${cols.map((c) => (c in o ? '?' : c)).join(', ')} FROM winners WHERE ad_id = ?`).run(id, ...cols.filter((c) => c in o).map((c) => o[c]), from);
+}
+const keysIn = (env) => env.db.prepare('SELECT product_key FROM launches ORDER BY product_key').all().map((r) => r.product_key);
+
+const NO_CARD = { status: 404, error: 'No launch card for this product' };
+
+test('launch keys: an old advertiser + title card stands for the product its ad is in now (else the page it saved) and the products of its old key approved when it started; an old key names the product its ads are in now', () => {
+  // The old product "501|yoga mat" is two product pages now, and one of them also runs under another advertiser + title.
+  const rows = [
+    { ad_id: '1', gk: 'shop.test/products/mat', jk: '501|yoga mat' },
+    { ad_id: '2', gk: 'shop.test/products/mat-xl', jk: '501|yoga mat' },
+    { ad_id: '3', gk: 'shop.test/products/mat', jk: '777|best yoga mat' },
+    { ad_id: '4', gk: '500|summer dress', jk: '500|summer dress' }, // no product page: the same key before and now
+    { ad_id: '5', gk: 'shop.test/products/dress', jk: '500|summer dress' }, // the same advertiser + title on a product page
+    { ad_id: '2', gk: 'world|shop.test/products/mat', world: { active: true } }, // outside the EU: never an EU card's ad
+  ];
+  const T = '2026-10-10T00:00:00.000Z';
+  const products = [
+    { gk: 'shop.test/products/mat', hid: 1, hat: T, pass: 1, rpd: 900 },
+    { gk: 'shop.test/products/mat-xl', hid: 0, hat: '', pass: 1, rpd: 5000 },
+    { gk: '500|summer dress', hid: 0, hat: '', pass: 1, rpd: 700 },
+    { gk: 'shop.test/products/dress', hid: 1, hat: T, pass: 1, rpd: 800 },
+    { gk: 'world|shop.test/products/mat', hid: 1, hat: T, world: { active: true } },
+  ];
+  const idx = launchIndex({ products, rows }, productKey);
+  const of = (product_key, facts) => cardProduct({ product_key, facts: JSON.stringify(facts) }, idx);
+  for (const k of ['eu|shop.test/products/mat', 'eu|shop.test/products/a|b', 'world|shop.test/products/mat', 'tiktok|1']) assert.strictEqual(of(k, { id: '2' }), k, `${k}: as it is`);
+  assert.strictEqual(of('eu|501|yoga mat', { id: '1' }), 'eu|shop.test/products/mat', 'the product its own ad is in');
+  assert.strictEqual(of('eu|501|yoga mat', { id: '2' }), 'eu|shop.test/products/mat-xl');
+  assert.strictEqual(of('eu|777|best yoga mat', { id: '3' }), 'eu|shop.test/products/mat', 'two old products, one product page now');
+  assert.strictEqual(of('eu|501|https://shop.test/products/mat', { id: '1' }), 'eu|shop.test/products/mat', 'a title that is a link is still a title');
+  assert.strictEqual(of('eu|500|summer dress', { id: '4' }), 'eu|500|summer dress');
+  assert.strictEqual(of('eu|501|yoga mat', { id: '99', product: 'https://www.Shop.test/products/Mat?variant=1' }), 'eu|shop.test/products/mat', 'its ad gone: the product page it saved, as the board keys it');
+  assert.strictEqual(of('eu|501|yoga mat', { id: '99', product: 'https://shop.test/' }), 'eu|501|yoga mat', 'no product page either: its own key');
+  assert.strictEqual(of('eu||yoga mat', null), 'eu||yoga mat', 'no page id, no facts');
+  assert.strictEqual(cardProduct({ product_key: 'eu|501|yoga mat', facts: 'not json' }, idx), 'eu|501|yoga mat');
+  // Everything a card stands for
+  const all = (product_key, facts, created_at) => cardProducts({ product_key, facts: JSON.stringify(facts), created_at }, idx).sort();
+  assert.deepStrictEqual(all('eu|501|yoga mat', { id: '2' }, '2026-10-11T00:00:00.000Z'), ['eu|shop.test/products/mat', 'eu|shop.test/products/mat-xl'], 'its ad’s product, and the page of its old key approved when it started');
+  assert.deepStrictEqual(all('eu|501|yoga mat', { id: '2' }, '2026-10-09T00:00:00.000Z'), ['eu|shop.test/products/mat-xl'], 'approved after it started: a decision of its own');
+  assert.deepStrictEqual(all('eu|501|yoga mat', { id: '2' }, null), ['eu|shop.test/products/mat-xl'], 'no start time: its own product only');
+  assert.deepStrictEqual(all('eu|500|summer dress', { id: '4' }, '2026-10-11T00:00:00.000Z'), ['eu|500|summer dress'], 'its key is still its product’s key: not the product page with the same title');
+  assert.deepStrictEqual(all('eu|shop.test/products/mat', { id: '1' }, '2026-10-11T00:00:00.000Z'), ['eu|shop.test/products/mat']);
+  // What a key names: its product; an old key, the product its ads are in now (approved first, then passing, then most reach a day)
+  const named = (k) => (productFor(idx, k) || {}).gk;
+  assert.strictEqual(named('eu|shop.test/products/mat-xl'), 'shop.test/products/mat-xl');
+  assert.strictEqual(named('eu|501|yoga mat'), 'shop.test/products/mat', 'approved beats more reach');
+  assert.strictEqual(named('eu|777|best yoga mat'), 'shop.test/products/mat');
+  assert.strictEqual(named('eu|500|summer dress'), '500|summer dress', 'a board key names its own product');
+  assert.strictEqual(named('world|shop.test/products/mat'), 'world|shop.test/products/mat');
+  assert.strictEqual(named('eu|999|unknown'), undefined);
+  products[0].hid = 0;
+  assert.strictEqual(named('eu|501|yoga mat'), 'shop.test/products/mat-xl', 'none approved: most reach a day');
+});
+
+test('/api/launch: a card saved under the old advertiser + title key stays its product’s card: listed as saved, not offered again, started again under either key, changed under its own key; never copied, moved or deleted', async () => {
+  const { env, s } = await approvedEnv();
+  oldCard(env);
+  const [l] = (await s.get('/api/launch')).launches;
+  assert.deepStrictEqual([l.key, l.title, l.pinned, l.facts.id, l.steps.margin.v], [POSTURE_OLD, 'Posture Corrector Pro', true, '9001', { price: 39.95, cpa: 12 }], 'listed as it was saved');
+  assert.deepStrictEqual((await s.get('/api/launch?pick=1')).candidates.map((c) => c.key), [`tiktok|${TT_ID}`, 'world|strong.test/products/pod', ROLLER], 'its product is not offered again');
+  // Started again under its board key, or under its old key (a board opened before): the old card, as it is
+  for (const k of [POSTURE, POSTURE_OLD]) {
+    const again = await launch(s, { start: k }, { now: NOW + 1000 });
+    assert.deepStrictEqual([again.status, again.launch.key, again.launch.created_at, again.launch.updated_at, again.launch.steps.margin.note], [200, POSTURE_OLD, iso(NOW - 864e5), iso(NOW - 864e5), 'Retail 39,95'], k);
+  }
+  assert.deepStrictEqual(keysIn(env), [POSTURE_OLD], 'no second card');
+  // Changed under the key it is saved under, the one the board has from GET and start
+  const src = await launch(s, { key: POSTURE_OLD, step: 'sourcing', v: { unit: 8.5, ship: 4.2 } }, { now: NOW + 2000 });
+  assert.deepStrictEqual([src.status, src.launch.key, Object.keys(src.launch.steps).sort(), src.launch.summary.be_roas], [200, POSTURE_OLD, ['margin', 'sourcing'], 2.09]);
+  assert.strictEqual((await launch(s, { key: POSTURE_OLD, decision: 'go' })).launch.decision, 'go');
+  assert.strictEqual((await launch(s, { key: POSTURE_OLD, pin: false })).launch.pinned, false);
+  // No card is saved under the board key: a change sent there is a 404 and changes nothing
+  for (const body of [{ step: 'store', v: { page: true } }, { pin: true }, { decision: 'no' }, { remove: true }]) assert.deepStrictEqual(await launch(s, { key: POSTURE, ...body }), NO_CARD, JSON.stringify(body));
+  const row = plain(env.db.prepare('SELECT steps, decision, pinned, created_at, updated_at FROM launches WHERE product_key = ?').get(POSTURE_OLD));
+  assert.deepStrictEqual([Object.keys(JSON.parse(row.steps)).sort(), JSON.parse(row.steps).sourcing.v, row.decision, row.pinned, row.created_at, row.updated_at],
+    [['margin', 'sourcing'], { unit: 8.5, ship: 4.2 }, 'go', null, iso(NOW - 864e5), iso(NOW)]);
+  assert.deepStrictEqual(keysIn(env), [POSTURE_OLD], 'never copied or moved to the new key');
+  // A new card goes under the board key, next to it (nothing is pinned now, so it takes the pin)
+  const roller = (await launch(s, { start: ROLLER })).launch;
+  assert.deepStrictEqual([roller.key, roller.pinned], [ROLLER, true]);
+  assert.deepStrictEqual((await s.get('/api/launch')).launches.map((x) => x.key), [ROLLER, POSTURE_OLD]);
+  // Only a remove under its own key takes it away; then its product can be started again, under the board key
+  assert.deepStrictEqual(await launch(s, { key: POSTURE_OLD, remove: true }), { status: 200, ok: true, removed: POSTURE_OLD });
+  assert.deepStrictEqual(keysIn(env), [ROLLER]);
+  assert.ok((await s.get('/api/launch?pick=1')).candidates.some((c) => c.key === POSTURE));
+});
+
+test('/api/launch: two cards of one product (two old products that are one product page now) both stay; start gives the same one each time; a remove sent twice or a stale tab never lands on the other', async () => {
+  const { env, s } = await approvedEnv();
+  // The same posture corrector under a second title and advertiser: one product page, one product on the board now.
+  copyAd(env, '9001', '9150', { product_title: 'Posture Corrector - 2 for 1', advertiser_page_id: '650', advertiser: 'Deals', reach_eu: 60000, ad_library_url: 'https://www.facebook.com/ads/library/?id=9150' });
+  const SALE_OLD = 'eu|650|posture corrector - 2 for 1';
+  oldCard(env, { pinned: null, at: iso(NOW - 3 * 864e5) });
+  oldCard(env, { key: SALE_OLD, id: '9150', title: 'Posture Corrector - 2 for 1', pinned: null, steps: { sourcing: { done: true, note: 'Supplier A', v: { unit: 7.1 } } }, at: iso(NOW - 864e5) });
+  assert.deepStrictEqual((await s.get('/api/launch')).launches.map((l) => l.key), [SALE_OLD, POSTURE_OLD], 'both listed, the last touched first');
+  assert.deepStrictEqual((await s.get('/api/launch?pick=1')).candidates.map((c) => c.key), [`tiktok|${TT_ID}`, 'world|strong.test/products/pod', ROLLER], 'the product is not offered again');
+  // Start under the board key gives the oldest of the two, also after the other one is touched; each old key its own
+  assert.strictEqual((await launch(s, { start: POSTURE })).launch.key, POSTURE_OLD);
+  assert.strictEqual((await launch(s, { key: SALE_OLD, step: 'store', v: { page: true } }, { now: NOW + 5000 })).status, 200);
+  assert.strictEqual((await launch(s, { start: POSTURE })).launch.key, POSTURE_OLD);
+  assert.strictEqual((await launch(s, { start: SALE_OLD })).launch.key, SALE_OLD);
+  // One is removed. The same remove again (its answer lost on the phone) and a tab that still shows it: 404, the other stays as it was
+  const sale = () => plain(env.db.prepare('SELECT steps, pinned, decision, updated_at FROM launches WHERE product_key = ?').get(SALE_OLD));
+  const before = sale();
+  assert.deepStrictEqual(await launch(s, { key: POSTURE_OLD, remove: true }), { status: 200, ok: true, removed: POSTURE_OLD });
+  for (const body of [{ remove: true }, { step: 'sourcing', done: false, note: 'stale tab', v: {} }, { decision: 'no' }, { pin: true }]) {
+    assert.deepStrictEqual(await launch(s, { key: POSTURE_OLD, ...body }), NO_CARD, JSON.stringify(body));
+  }
+  assert.deepStrictEqual(sale(), before);
+  assert.deepStrictEqual(keysIn(env), [SALE_OLD]);
+  // The product still has a card: not offered again, and start under either key gives the one left
+  assert.ok(!(await s.get('/api/launch?pick=1')).candidates.some((c) => c.key === POSTURE));
+  for (const k of [POSTURE, POSTURE_OLD]) assert.strictEqual((await launch(s, { start: k })).launch.key, SALE_OLD, k);
+  // A board opened before the change sends the old key of a product without a card: the card goes under the board key
+  const r = await launch(s, { start: ROLLER_OLD });
+  assert.deepStrictEqual([r.status, r.launch.key, r.launch.title, r.launch.facts.id], [200, ROLLER, 'Pet Hair Remover Roller', '9003']);
+  assert.deepStrictEqual(await launch(s, { start: 'eu|502|heated neck pillow' }), { status: 409, error: 'Approve it first' }, 'an old key of a product not approved');
+  assert.deepStrictEqual(keysIn(env), [SALE_OLD, ROLLER]);
+});
+
+test('/api/launch: an old card whose product is two product pages now: the page approved when it started is not offered again, both keys give the card back; a page approved later gets a card of its own', async () => {
+  const { env, s } = await approvedEnv(); // ✓ on ad 9001 (page item-1)
+  // The same old product (advertiser 501, same title) on two more pages; when its launch started, the bundle ad was its best ad.
+  copyAd(env, '9001', '9101', { product_url: 'https://shop1.test/products/item-1-bundle', reach_eu: 120000, ad_library_url: 'https://www.facebook.com/ads/library/?id=9101' });
+  copyAd(env, '9001', '9102', { product_url: 'https://shop1.test/products/item-1-xl', reach_eu: 50000, ad_library_url: 'https://www.facebook.com/ads/library/?id=9102' });
+  oldCard(env, { id: '9101', product: 'https://shop1.test/products/item-1-bundle', at: iso(NOW) }); // started after the ✓
+  assert.deepStrictEqual((await s.get('/api/launch?pick=1')).candidates.map((c) => c.key), [`tiktok|${TT_ID}`, 'world|strong.test/products/pod', ROLLER], 'the approved page is not offered next to its card');
+  for (const k of [POSTURE_OLD, POSTURE, 'eu|shop1.test/products/item-1-bundle']) {
+    const r = await launch(s, { start: k });
+    assert.deepStrictEqual([r.status, r.launch && r.launch.key], [200, POSTURE_OLD], `${k} (the bundle page is not approved: its card is still given back)`);
+  }
+  assert.deepStrictEqual(keysIn(env), [POSTURE_OLD], 'no second card, also under the exact key it is saved under');
+  // The XL page approved now, after the launch started: a decision of its own, so it gets its own card
+  const XL = 'eu|shop1.test/products/item-1-xl';
+  assert.strictEqual((await s.post('/api/hide', { ad_id: '9102', status: 'seen' }, { now: NOW + 60e3 })).status, 200);
+  assert.ok((await s.get('/api/launch?pick=1')).candidates.some((c) => c.key === XL));
+  assert.deepStrictEqual([(await launch(s, { start: XL })).launch.key, keysIn(env)], [XL, [POSTURE_OLD, XL]]);
+});
+
+test('/api/launch: a product-page card and an old-key card of one product (what a Worker from before the change makes) both stay; each key starts its own; removing one leaves the other', async () => {
+  const { env, s } = await approvedEnv();
+  assert.strictEqual((await launch(s, { start: POSTURE }, { now: NOW + 1000 })).launch.pinned, true); // under the board key, pinned
+  oldCard(env, { pinned: null, at: iso(NOW + 2000) }); // then a Worker from before (a rollback) starts it again under the old key
+  assert.deepStrictEqual(keysIn(env), [POSTURE_OLD, POSTURE]);
+  assert.deepStrictEqual((await s.get('/api/launch')).launches.map((l) => l.key), [POSTURE, POSTURE_OLD]);
+  assert.ok(!(await s.get('/api/launch?pick=1')).candidates.some((c) => c.key === POSTURE));
+  assert.strictEqual((await launch(s, { start: POSTURE })).launch.key, POSTURE, 'the board key: the card saved under it');
+  assert.strictEqual((await launch(s, { start: POSTURE_OLD })).launch.key, POSTURE_OLD, 'the old key: the card saved under it');
+  assert.strictEqual((await launch(s, { key: POSTURE_OLD, decision: 'no' })).launch.decision, 'no');
+  assert.strictEqual(plain(env.db.prepare('SELECT decision FROM launches WHERE product_key = ?').get(POSTURE)).decision, null, 'each card changes on its own');
+  assert.deepStrictEqual(await launch(s, { key: POSTURE, remove: true }), { status: 200, ok: true, removed: POSTURE });
+  assert.deepStrictEqual(await launch(s, { key: POSTURE, remove: true }), NO_CARD, 'sent twice: the old-key card stays');
+  assert.deepStrictEqual(keysIn(env), [POSTURE_OLD]);
+  assert.strictEqual((await launch(s, { start: POSTURE })).launch.key, POSTURE_OLD, 'now the board key gives the one left');
+});
+
+test('/api/launch: a change under the saved key reads nothing of the board, and a key without a card costs one lookup; two starts at once, under the old key and the board key, make one card', async () => {
+  const { env, s } = await approvedEnv();
+  const [a, b] = await Promise.all([launch(s, { start: POSTURE_OLD }), launch(s, { start: POSTURE })]);
+  assert.deepStrictEqual([a.status, a.launch.key, b.status, b.launch.key], [200, POSTURE, 200, POSTURE]);
+  assert.deepStrictEqual(keysIn(env), [POSTURE]);
+  const run = async (body) => {
+    const from = env.DB.log.length;
+    const r = await launch(s, body);
+    const sql = env.DB.log.slice(from).map((l) => l.sql);
+    assert.ok(!sql.some((q) => /FROM (winners|hidden|stars|feedback|world_products|world_checks|bestseller|store_trust)\b/.test(q)), `no board read for ${JSON.stringify(body)}:\n${sql.join('\n')}`);
+    return { status: r.status, launches: sql.filter((q) => /\blaunches\b/.test(q)).length };
+  };
+  assert.deepStrictEqual(await run({ key: POSTURE, step: 'margin', v: { price: 39.95 } }), { status: 200, launches: 3 }, 'find it, save the step, read it back');
+  assert.deepStrictEqual(await run({ key: POSTURE_OLD, step: 'margin', v: { price: 1 } }), { status: 404, launches: 1 });
+  assert.deepStrictEqual(await run({ key: 'eu|nope.test/products/x', remove: true }), { status: 404, launches: 1 });
 });
