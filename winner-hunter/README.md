@@ -54,7 +54,7 @@ After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, o
   No page there: a real Trustpilot widget on the store still counts (a page on another domain); else "Not on
   Trustpilot". "Badge only" / "No Trustpilot on the store": only the store was checked (no token that run).
 - Per product: photo, price/discount, a ✓ per rule (active ads, days live, reach per day), ads for this product,
-  the store's product count, shop. **▶** and a tap on the card open the ad in the Facebook Ad Library (new tab); the shop name links to the product (or the store), **1688 ↗** searches 1688. The in-board ad viewer (`/api/ad/:id`, `ad-prefetch.yml`) is off: the board no longer uses it, the Worker only answers it with `AD_VIEWER = "on"` (wrangler.toml), and the deploy no longer gives the Worker a Meta token. A token an older deploy left there is never used; remove it once: `cd winner-hunter/worker && npx wrangler secret delete META_TOKEN`.
+  the store's product count, shop. **▶** and a tap on the card open the ad in the Facebook Ad Library (new tab); the shop name links to the product (or the store). The in-board ad viewer (`/api/ad/:id`, `ad-prefetch.yml`) is off: the board no longer uses it, the Worker only answers it with `AD_VIEWER = "on"` (wrangler.toml), and the deploy no longer gives the Worker a Meta token. A token an older deploy left there is never used; remove it once: `cd winner-hunter/worker && npx wrangler secret delete META_TOKEN`.
 - **✓ Approved** moves a product to **✓**; **✗ Reject** (not for me) hides it; **Undo** brings it back.
 - **CSV** downloads what you are looking at.
 - A "store photo" label means: photo from the shop's page, not the product photo of the ad.
