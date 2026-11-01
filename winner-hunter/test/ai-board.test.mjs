@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
-import { handle, makeToken } from '../worker/src/app.mjs';
+import { handle, tokenFor } from '../worker/src/app.mjs';
 import { AI_JS, aiBoard, readOut, evalOut, keyOfRow } from '../worker/src/ai.mjs';
 import { MAX_WAIT_MINUTES } from '../ai-check.mjs';
 import { READ, readEnv } from './helpers/ai-reads.mjs';
@@ -15,7 +15,7 @@ const HTML = fs.readFileSync(new URL('../worker/src/board.html', import.meta.url
 const iso = (ms) => new Date(ms).toISOString();
 
 async function session(env) {
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, NOW)}`;
+  const cookie = `__Host-wh=${await tokenFor(env, NOW)}`;
   const call = (p, init = {}, now = NOW) => handle(new Request(ORIGIN + p, { ...init, headers: { cookie, ...init.headers } }), env, { html: HTML, now });
   return {
     get: async (p) => (await call(p)).json(),
@@ -30,7 +30,7 @@ test('GET /api/ai: behind the PIN; the reads of the cards asked for, by ad id, o
   const s = await session(env);
   const j = await s.get('/api/ai?ids=' + ['9000', '9100', '9001', '1001', '9002', '9003', '9004', '9005', 'nope', 'bad id!', '<x>', '9001'].join(','));
   assert.deepStrictEqual(Object.keys(j.reads).sort(), ['1001', '9000', '9001', '9002', '9100']);
-  assert.deepStrictEqual(j.reads['9001'], { ...READ, flags: [], model: 'claude-haiku-5-5', at: iso(NOW - 3600e3), updating: false, key: 'eu|501|posture corrector pro' });
+  assert.deepStrictEqual(j.reads['9001'], { ...READ, flags: [], model: 'claude-haiku-5-5', at: iso(NOW - 3600e3), updating: false, key: 'eu|shop1.test/products/item-1' });
   assert.deepStrictEqual(j.reads['9000'], j.reads['9100'], 'two ads of one product: one read');
   assert.strictEqual(j.reads['9000'].product, 'Linen summer dress');
   assert.strictEqual(j.reads['1001'].key, 'world|pod.test/products/pillow');
@@ -63,14 +63,15 @@ test('readOut and evalOut: a row that does not pass the schema, or broken JSON, 
   assert.strictEqual(evalOut(null), null);
   assert.strictEqual(evalOut({ value: 'oops' }), null);
   assert.strictEqual(evalOut({ value: '{"n":"x"}' }), null);
-  assert.strictEqual(keyOfRow({ gk: '501|posture corrector pro' }), 'eu|501|posture corrector pro');
+  assert.strictEqual(keyOfRow({ gk: 'shop1.test/products/item-1' }), 'eu|shop1.test/products/item-1', 'a product page');
+  assert.strictEqual(keyOfRow({ gk: '504|led sunset lamp' }), 'eu|504|led sunset lamp', 'no product page: advertiser + title');
   assert.strictEqual(keyOfRow({ gk: 'world|pod.test/products/pillow', world: {} }), 'world|pod.test/products/pillow');
 });
 
 test('POST /api/ai {id, opened}: the first time you open a read is kept; origin, JSON and id are checked', async () => {
   const env = await readEnv();
   const s = await session(env);
-  const opened = () => env.db.prepare("SELECT opened_at FROM ai_checks WHERE product_key = 'eu|501|posture corrector pro'").get().opened_at;
+  const opened = () => env.db.prepare("SELECT opened_at FROM ai_checks WHERE product_key = 'eu|shop1.test/products/item-1'").get().opened_at;
   assert.strictEqual((await s.post('/api/ai', { id: '9001', opened: true }, { headers: { origin: 'https://evil.test' } })).status, 403);
   assert.strictEqual((await s.post('/api/ai', 'id=9001', { headers: { 'content-type': 'application/x-www-form-urlencoded' } })).status, 415);
   assert.strictEqual((await s.post('/api/ai', '{bad')).status, 400);
@@ -81,7 +82,7 @@ test('POST /api/ai {id, opened}: the first time you open a read is kept; origin,
   assert.strictEqual(opened(), null);
   const res = await s.post('/api/ai', { id: '9001', opened: true });
   assert.strictEqual(res.status, 200);
-  assert.deepStrictEqual(await res.json(), { ok: true, key: 'eu|501|posture corrector pro' });
+  assert.deepStrictEqual(await res.json(), { ok: true, key: 'eu|shop1.test/products/item-1' });
   assert.strictEqual(opened(), iso(NOW));
   assert.strictEqual((await s.post('/api/ai', { id: '9001', opened: true }, { now: NOW + 864e5 })).status, 200);
   assert.strictEqual(opened(), iso(NOW), 'the first time stays: ai-eval.mjs counts decisions after it as not blind');

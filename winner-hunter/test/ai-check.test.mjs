@@ -138,10 +138,10 @@ test('localFlags: clear injection attempts are caught; ordinary ad copy in any l
 });
 
 test('requestOf: one product a request, schema output at low effort, the photo only from Shopify\'s image server, no sampling settings', () => {
-  const p = { key: 'eu|501|posture corrector pro', source: 'eu', title: 'Posture Corrector Pro', price: 29.95, currency: 'EUR', store_url: 'https://shop1.test/', image_url: 'https://cdn.shopify.com/s/files/1/p1.jpg?v=3&width=2048&height=2048&crop=center' };
+  const p = { key: 'eu|shop1.test/products/item-1', source: 'eu', title: 'Posture Corrector Pro', price: 29.95, currency: 'EUR', store_url: 'https://shop1.test/', image_url: 'https://cdn.shopify.com/s/files/1/p1.jpg?v=3&width=2048&height=2048&crop=center' };
   const r = requestOf(p);
   assert.match(r.custom_id, /^p_[0-9a-f]{40}$/);
-  assert.strictEqual(r.custom_id, customIdOf('eu|501|posture corrector pro'), 'the same product, the same id');
+  assert.strictEqual(r.custom_id, customIdOf('eu|shop1.test/products/item-1'), 'the same product, the same id');
   assert.notStrictEqual(r.custom_id, customIdOf('eu|501|posture corrector'));
   assert.deepStrictEqual(Object.keys(r.params).sort(), ['max_tokens', 'messages', 'model', 'output_config', 'system']);
   assert.strictEqual(r.params.model, MODEL);
@@ -266,9 +266,9 @@ test('the AI read\'s product keys are the board\'s: launch cards, decisions and 
   for (const k of board) assert.ok(keys.has(k), `${k}: on the board, so the AI may read it`);
   const all = new Set(list.k.map(keyOf));
   for (const c of cands) assert.ok(all.has(c.key), `${c.key}: a key the board knows`);
-  assert.ok(keys.has('eu|501|posture corrector pro'));
+  assert.ok(keys.has('eu|shop1.test/products/item-1'));
   assert.ok(keys.has('world|pod.test/products/pillow'));
-  assert.ok(!keys.has('eu|700|tiny promising lamp'), 'fails the rules and undecided: not read');
+  assert.ok(!keys.has('eu|shop1.test/products/tiny-promising-lamp'), 'fails the rules and undecided: not read');
 });
 
 test('candidates: undecided outside the EU first (newest first), then the EU by reach a day, then decided products (the last decision first)', async () => {
@@ -277,12 +277,12 @@ test('candidates: undecided outside the EU first (newest first), then the EU by 
   decide(w.env, '9200', 'rejected', iso(NOW - 864e5)); // fails the rules now, but you decided it: the eval needs its read
   const c = await candidates(w.db, NOW);
   assert.deepStrictEqual(c.slice(0, 2).map((x) => x.key), ['world|glow.test/products/lamp', 'world|pod.test/products/pillow']);
-  assert.deepStrictEqual(c.slice(2, 5).map((x) => x.key), ['eu|703|stale old winner', 'eu|707|aged out gadget', 'eu|500|linen summer dress'], 'the most reach a day first');
-  assert.deepStrictEqual(c.slice(-2).map((x) => [x.key, x.hid]), [['eu|700|tiny promising lamp', 2], ['eu|501|posture corrector pro', 1]]);
+  assert.deepStrictEqual(c.slice(2, 5).map((x) => x.key), ['eu|shop1.test/products/stale-old-winner', 'eu|shop1.test/products/aged-out-gadget', 'eu|500|linen summer dress'], 'the most reach a day first');
+  assert.deepStrictEqual(c.slice(-2).map((x) => [x.key, x.hid]), [['eu|shop1.test/products/tiny-promising-lamp', 2], ['eu|shop1.test/products/item-1', 1]]);
   const pod = c.find((x) => x.key === 'world|pod.test/products/pillow');
   assert.deepStrictEqual([pod.has_text, pod.type, pod.markets], [true, 'Pillows', ['AU', 'NZ']]);
   assert.strictEqual(c.find((x) => x.key === 'world|glow.test/products/lamp').has_text, false);
-  assert.deepStrictEqual(c.find((x) => x.key === 'eu|501|posture corrector pro').ad_texts, ['Nu 50% korting! Gratis verzending.']);
+  assert.deepStrictEqual(c.find((x) => x.key === 'eu|shop1.test/products/item-1').ad_texts, ['Nu 50% korting! Gratis verzending.']);
 });
 
 test('ai-check.mjs without a key: off, nothing sent, and D1 says so', async () => {
@@ -340,7 +340,7 @@ test('ai-check.mjs: every product without a read goes in one batch; the answers 
     assert.strictEqual(r.tries, 1);
     assert.strictEqual(r.checked_at, iso(w.now()));
   }
-  assert.strictEqual(JSON.parse(saved.find((r) => r.product_key === 'eu|501|posture corrector pro').verdict).product, 'Posture Corrector Pro');
+  assert.strictEqual(JSON.parse(saved.find((r) => r.product_key === 'eu|shop1.test/products/item-1').verdict).product, 'Posture Corrector Pro');
   const spend = JSON.parse(w.env.db.prepare("SELECT value FROM state WHERE key = 'ai_spend'").get().value);
   assert.strictEqual(spend.month, '2026-10');
   assert.ok(Math.abs(spend.usd - t.cost_usd) < 1e-6, 'the month holds what the answers cost');
@@ -404,7 +404,7 @@ test('ai-check.mjs: failures are saved as errors and asked again, 3 tries at mos
   const run = () => (round++, aiCheck({ db: w.db, api, env: { AI_WAIT_MINUTES: '1' }, now: w.now, sleep: w.sleep, log: w.log }));
   const first = await run();
   assert.strictEqual(first.errors, 6);
-  const byTitle = (title) => rows(w.env).find((r) => r.product_key === 'eu|' + { 'Posture Corrector Pro': '501|posture corrector pro', 'Heated Neck Pillow': '502|heated neck pillow', 'Pet Hair Remover Roller': '503|pet hair remover roller', 'LED Sunset Lamp': '504|led sunset lamp', 'Cooling Dog Mat': '505|cooling dog mat', 'Silk Sleep Mask': '506|silk sleep mask' }[title]);
+  const byTitle = (title) => rows(w.env).find((r) => r.product_key === 'eu|' + { 'Posture Corrector Pro': 'shop1.test/products/item-1', 'Heated Neck Pillow': 'shop2.test/products/item-2', 'Pet Hair Remover Roller': 'shop3.test/products/item-3', 'LED Sunset Lamp': '504|led sunset lamp', 'Cooling Dog Mat': 'shop5.test/products/item-5', 'Silk Sleep Mask': 'shop6.test/products/item-6' }[title]);
   assert.deepStrictEqual(Object.keys(failing).map((k) => [byTitle(k).status, byTitle(k).error]), [['error', 'refusal'], ['error', 'bad_json'], ['error', 'schema'], ['error', 'api_invalid_request_error'], ['error', 'api_overloaded_error'], ['error', 'expired']]);
   assert.strictEqual(byTitle('LED Sunset Lamp').no_image, 1);
   assert.strictEqual(byTitle('Posture Corrector Pro').verdict, null, 'no read saved from a failure');
@@ -461,10 +461,10 @@ test('ai-check.mjs: a refused key or request stops with the reason; a rate limit
   }
   // A batch from an earlier run that the API no longer has: its products are asked again in this run.
   const w = await world();
-  w.env.db.prepare("INSERT INTO ai_checks (product_key, status, batch_id, custom_id, tries, est) VALUES ('eu|501|posture corrector pro', 'pending', 'msgbatch_gone', 'p_x', 1, 0.001)").run();
+  w.env.db.prepare("INSERT INTO ai_checks (product_key, status, batch_id, custom_id, tries, est) VALUES ('eu|shop1.test/products/item-1', 'pending', 'msgbatch_gone', 'p_x', 1, 0.001)").run();
   const fake = fakeAnthropic();
   const t = await aiCheck({ db: w.db, api: await apiOf(fake), now: w.now, sleep: w.sleep, log: w.log });
-  assert.ok(fake.creates()[0].body.requests.some((r) => r.custom_id === customIdOf('eu|501|posture corrector pro')));
+  assert.ok(fake.creates()[0].body.requests.some((r) => r.custom_id === customIdOf('eu|shop1.test/products/item-1')));
   assert.match(w.logs.join('\n'), /a batch from an earlier run is gone/);
   assert.strictEqual(t.stopped, '');
   // D1 fails while saving a new batch: the batch is cancelled, the run fails.

@@ -17,13 +17,15 @@ import { fileURLToPath } from 'node:url';
 import { d1Client, d1Settings } from './lib/d1.mjs';
 import { KEY } from './ai-check.mjs';
 import { flagsOf } from './worker/src/ai-schema.mjs';
-import { REASONS } from './worker/src/app.mjs';
+import { REASONS, groupKey } from './worker/src/app.mjs';
 
 export const THRESHOLD = 50;
 export const MIN_N = 20; // fewer decisions than this say little
-/** Every approve (seen) and reject on the board, with the product key the AI read uses ('eu|…' or 'world|…'). */
-export const DECISIONS_SQL = `SELECT 'eu|' || ${KEY} AS k, h.ad_id, h.status, h.at, w.product_title AS title FROM hidden h JOIN winners w ON w.ad_id = h.ad_id WHERE h.status IN ('seen', 'rejected')
-UNION ALL SELECT 'world|' || p.product_key, h.ad_id, h.status, h.at, p.product_title FROM hidden h JOIN world_products p ON p.ad_id = h.ad_id WHERE h.status IN ('seen', 'rejected')`;
+/** Every approve (seen) and reject on the board. keyOf() gives each the product key the AI read uses. */
+export const DECISIONS_SQL = `SELECT 'eu' AS src, ${KEY} AS jk, w.product_url, h.ad_id, h.status, h.at, w.product_title AS title FROM hidden h JOIN winners w ON w.ad_id = h.ad_id WHERE h.status IN ('seen', 'rejected')
+UNION ALL SELECT 'world', p.product_key, NULL, h.ad_id, h.status, h.at, p.product_title FROM hidden h JOIN world_products p ON p.ad_id = h.ad_id WHERE h.status IN ('seen', 'rejected')`;
+/** A decision's product key: 'eu|' + the board's group (product page, else advertiser + title), or 'world|' + its product. */
+export const keyOf = (d) => (d.src === 'world' ? 'world|' + d.jk : 'eu|' + groupKey(d));
 const AI_SQL = 'SELECT product_key, fit, confidence, verdict, flags, checked_at, opened_at FROM ai_checks WHERE fit IS NOT NULL';
 const FEEDBACK_SQL = "SELECT ad_id, action, reasons FROM feedback WHERE action IN ('seen', 'rejected') AND ad_id IS NOT NULL";
 
@@ -177,7 +179,7 @@ export function textOf(r) {
   if (!r.n) return 'AI read vs your decisions: no decided product has an AI read yet. Run the AI check, decide some products, then run this again.';
   const lines = [
     `AI read vs your decisions (a fit of ${r.threshold} or more counts as approve)`,
-    `Decisions with an AI read: ${r.n} (${r.approved} approved, ${r.rejected} rejected)`,
+    `Decisions with an AI read${r.since ? ` since ${r.since}` : ''}: ${r.n} (${r.approved} approved, ${r.rejected} rejected)`,
     `Agreement: ${pct(r.accuracy)}${r.ci ? ` (95% CI ${pct(r.ci[0])}–${pct(r.ci[1])})` : ''}; always picking your most common decision would score ${pct(r.base)}`,
     `Balanced accuracy ${pct(r.balanced)} · Cohen's kappa ${dec(r.kappa)} · AUC ${dec(r.auc)} (0.5 is a coin, 1 a perfect order)`,
     `Blind (decided before opening its AI read): ${r.blind.n} decisions, agreement ${pct(r.blind.accuracy)}, kappa ${dec(r.blind.kappa)}, AUC ${dec(r.blind.auc)}`,
@@ -193,19 +195,24 @@ export function textOf(r) {
   return lines.join('\n');
 }
 
-/** Reads D1 and builds the report: { report, pairs }. */
-export async function evaluate(db, { threshold = THRESHOLD, now = Date.now } = {}) {
-  const [decisions, ai, fb] = await Promise.all([db.query(DECISIONS_SQL), db.query(AI_SQL).catch(() => []), db.query(FEEDBACK_SQL).catch(() => [])]);
+/**
+ * Reads D1 and builds the report: { report, pairs }. since (YYYY-MM-DD): only decisions from that day on, for example
+ * after you cleaned up old approvals (2026-11-01's review found 21 of 36 were restricted or needed sizing).
+ */
+export async function evaluate(db, { threshold = THRESHOLD, since = '', now = Date.now } = {}) {
+  const [rows, ai, fb] = await Promise.all([db.query(DECISIONS_SQL), db.query(AI_SQL).catch(() => []), db.query(FEEDBACK_SQL).catch(() => [])]);
+  const decisions = rows.filter((d) => !since || String(d.at || '') >= since).map((d) => ({ ...d, k: keyOf(d) }));
   const pairs = pairsOf(decisions, ai, fb);
-  return { report: { at: new Date(now()).toISOString(), ai_reads: ai.length, ...report(pairs, { threshold }) }, pairs };
+  return { report: { at: new Date(now()).toISOString(), since: since || null, ai_reads: ai.length, ...report(pairs, { threshold }) }, pairs };
 }
 
 export function argsOf(argv) {
-  const a = { threshold: THRESHOLD, details: false, json: false };
+  const a = { threshold: THRESHOLD, details: false, json: false, since: '' };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--details') a.details = true;
     else if (argv[i] === '--json') a.json = true;
     else if (argv[i] === '--threshold') a.threshold = Math.min(Math.max(Math.round(Number(argv[++i])) || THRESHOLD, 1), 100);
+    else if (argv[i] === '--since') a.since = /^\d{4}-\d{2}-\d{2}$/.test(String(argv[i + 1] || '')) ? argv[++i] : (i++, '');
   }
   return a;
 }
@@ -218,7 +225,7 @@ export async function main({ argv = process.argv.slice(2), env = process.env, db
     if (!s) throw new Error('No CF_API_TOKEN / CF_ACCOUNT_ID');
     db = d1Client(s);
   }
-  const { report: r, pairs } = await evaluate(db, { threshold: args.threshold, now });
+  const { report: r, pairs } = await evaluate(db, { threshold: args.threshold, since: args.since, now });
   const details = args.details && env.GITHUB_ACTIONS !== 'true';
   await db.setState('ai_eval', { ...r, misses: misses(pairs, args.threshold) }, new Date(now()));
   if (args.json) out(JSON.stringify(details ? { ...r, misses: misses(pairs, args.threshold) } : r, null, 2));

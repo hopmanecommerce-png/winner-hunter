@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { d1Client } from '../lib/d1.mjs';
-import { agreement, auc, wilson, bestThreshold, pairsOf, report, misses, textOf, argsOf, main, MIN_N } from '../ai-eval.mjs';
+import { agreement, auc, wilson, bestThreshold, pairsOf, report, misses, textOf, argsOf, main, keyOf, MIN_N } from '../ai-eval.mjs';
 import { d1Rest } from './helpers/sqlite-d1.mjs';
 import { seededEnv, NOW } from './helpers/seed.mjs';
 
@@ -81,9 +81,10 @@ test('report and textOf: rates and counts by blind or seen, confidence, market a
   assert.deepStrictEqual(m.approved_low.map((x) => x.fit), [40]);
   assert.deepStrictEqual(m.rejected_high.map((x) => [x.fit, x.title]), [[70, 'Secret product 3']]);
   assert.strictEqual(MIN_N, 20);
-  assert.deepStrictEqual(argsOf(['--threshold', '65', '--details', '--json']), { threshold: 65, details: true, json: true });
+  assert.deepStrictEqual(argsOf(['--threshold', '65', '--details', '--json', '--since', '2026-11-02']), { threshold: 65, details: true, json: true, since: '2026-11-02' });
   assert.strictEqual(argsOf(['--threshold', 'abc']).threshold, 50);
   assert.strictEqual(argsOf(['--threshold', '500']).threshold, 100);
+  assert.deepStrictEqual(argsOf(['--since', "2026-11-02'; DROP TABLE x", '--json']), { threshold: 50, details: false, json: true, since: '' }, 'only a plain date');
 });
 
 /** Four decided products with an AI read on the seeded board, and two things that do not count. */
@@ -101,9 +102,9 @@ async function decided() {
   decide('9005', 'rejected', NOW - DAY); // no AI read: does not count
   const read = (key, fit, opened, saturation = 'medium') => env.db.prepare("INSERT INTO ai_checks (product_key, status, fit, confidence, verdict, flags, checked_at, opened_at) VALUES (?, 'ok', ?, 'medium', ?, '[]', ?, ?)")
     .run(key, fit, JSON.stringify({ saturation }), iso(NOW - 4 * DAY), opened == null ? null : iso(opened));
-  read('eu|501|posture corrector pro', 80, null);
-  read('eu|502|heated neck pillow', 30, NOW - 3 * DAY, 'high'); // opened before you decided: not blind
-  read('eu|503|pet hair remover roller', 70, NOW); // opened after you decided: blind
+  read('eu|shop1.test/products/item-1', 80, null);
+  read('eu|shop2.test/products/item-2', 30, NOW - 3 * DAY, 'high'); // opened before you decided: not blind
+  read('eu|shop3.test/products/item-3', 70, NOW); // opened after you decided: blind
   read('world|pod.test/products/pillow', 40, null);
   read('eu|504|led sunset lamp', 90, null); // undecided: does not count
   const db = d1Client({ accountId: 'a', databaseId: 'd', token: 't' }, { doFetch: d1Rest(env.db).doFetch, retryMs: 0 });
@@ -150,6 +151,18 @@ test('ai-eval.mjs on D1: the report from your decisions, saved for the board; in
   assert.strictEqual(j.threshold, 35);
   assert.deepStrictEqual([j.tp, j.fp, j.fn, j.tn], [2, 1, 0, 1]);
   assert.strictEqual(j.misses, undefined, 'no product names without --details');
+  // --since: only the decisions from that day on (old approvals are noisy: the 2026-11-01 review).
+  const since = [];
+  const s = await main({ argv: ['--since', iso(NOW - DAY).slice(0, 10)], env: {}, db, out: (x) => since.push(x), now: () => NOW });
+  assert.strictEqual(s.since, iso(NOW - DAY).slice(0, 10));
+  assert.strictEqual(s.n, 3, 'the decision of two days ago is left out');
+  assert.match(since.join('\n'), /Decisions with an AI read since \d{4}-\d{2}-\d{2}: 3 /);
+});
+
+test('keyOf: a decision\'s product key is the board\'s: its product page, else advertiser + title; outside the EU its product', () => {
+  assert.strictEqual(keyOf({ src: 'eu', jk: '501|posture corrector pro', product_url: 'https://www.Shop1.test/en/products/Item-1?variant=2' }), 'eu|shop1.test/products/item-1');
+  assert.strictEqual(keyOf({ src: 'eu', jk: '504|led sunset lamp', product_url: 'https://shop4.test/' }), 'eu|504|led sunset lamp');
+  assert.strictEqual(keyOf({ src: 'world', jk: 'pod.test/products/pillow', product_url: null }), 'world|pod.test/products/pillow');
 });
 
 test('ai-eval.mjs: no AI reads yet (or no table) is no failure; it says so', async () => {

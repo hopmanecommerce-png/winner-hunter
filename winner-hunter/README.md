@@ -25,11 +25,14 @@ rejected. Per product: what it is (a plain name), niche, the ads' hook, the buye
 - **How good is it?** `ai-eval.mjs` compares the fit (50 or more counts as approve) with your ✓ / ✗ decisions: agreement, Cohen's
   kappa (agreement beyond chance) and AUC (does a higher fit go with your approvals), blind decisions apart, by confidence and by
   your reasons. It runs after every AI check, its result shows at the bottom of each AI read, and on your own computer
-  `node winner-hunter/ai-eval.mjs --details` also lists where you and the AI disagree (never in the public Actions log). Rule of
-  thumb: worth a look once it agrees on 50+ blind decisions with a kappa of 0.4 or more.
-- **Set up:** add the GitHub secret `ANTHROPIC_API_KEY` (console.anthropic.com → API keys). Without it the AI check is off and the
-  board shows no AI read. Run it by hand: Actions → AI check → Run workflow. It goes through the Message Batches API (half price):
-  a batch usually ends within minutes, and one still running is collected by the next run.
+  `node winner-hunter/ai-eval.mjs --details` also lists where you and the AI disagree (never in the public Actions log): the
+  products you approved and it scored low are the first ones to look at again. Your approvals are the yardstick, not proof of a
+  winner, and old ones are noisy (the 1 Nov 2026 review found 21 of 36 restricted or sized): `--since 2026-11-02` counts only the
+  decisions from that day on. Rule of thumb: worth a look once it agrees on 50+ blind decisions with a kappa of 0.4 or more.
+- **Set up:** add the GitHub secret `ANTHROPIC_API_KEY` (console.anthropic.com → API keys), and set a monthly spend limit for that
+  key's workspace in the Anthropic Console as a hard backstop. Without the secret the AI check is off and the board shows no AI
+  read. Run it by hand: Actions → AI check → Run workflow. It goes through the Message Batches API (half price): a batch usually
+  ends within minutes, and one still running is collected by the next run.
 - **Cost:** about 0.02 cents a product. A run spends at most `max_usd` (default $0.50, counted at the worst case of every request)
   and a month at most the repository variable `AI_MONTH_USD` (default $5). Another model: repository variable `AI_MODEL`
   (for example `claude-sonnet-5-5`: more careful, 20 times the price; the caps hold either way).

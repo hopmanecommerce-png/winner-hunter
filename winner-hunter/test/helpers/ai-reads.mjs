@@ -18,10 +18,10 @@ export async function readEnv() {
     VALUES ('pod.test/products/pillow', '1001', 1, 'Pod Pillow', 49, 'AUD', 'https://cdn.shopify.com/pod.jpg', 'https://pod.test/', 'https://pod.test/products/pillow', 'https://www.facebook.com/ads/library/?id=1001', 'Pod', '77', 'pillow',
     '{"AU":{"ads":3,"days":40,"new14":1}}', 4, 2, 40, 1, 80, 12, ?, ?)`).run(iso(NOW - 2 * 864e5), iso(NOW - 3600e3));
   addRead(env.db, 'eu|500|linen summer dress', 'ok', { ...READ, product: 'Linen summer dress', niche: 'Clothing', fit: 34 });
-  addRead(env.db, 'eu|501|posture corrector pro', 'ok', READ);
+  addRead(env.db, 'eu|shop1.test/products/item-1', 'ok', READ);
   addRead(env.db, 'world|pod.test/products/pillow', 'ok', { ...READ, product: 'Memory foam pod pillow', niche: 'Sleep and comfort', fit: 77, confidence: 'high' }, '["injection"]');
-  addRead(env.db, 'eu|502|heated neck pillow', 'pending', { ...READ, product: 'Heated neck pillow', fit: 61 });
-  addRead(env.db, 'eu|503|pet hair remover roller', 'ok', { ...READ, approve: true, fit: 99 }); // not the schema: never shown
+  addRead(env.db, 'eu|shop2.test/products/item-2', 'pending', { ...READ, product: 'Heated neck pillow', fit: 61 });
+  addRead(env.db, 'eu|shop3.test/products/item-3', 'ok', { ...READ, approve: true, fit: 99 }); // not the schema: never shown
   env.db.prepare("INSERT INTO ai_checks (product_key, status, tries) VALUES ('eu|504|led sunset lamp', 'error', 3)").run(); // never answered
   return env;
 }

@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { d1Client, d1Settings, STRICT, chunks } from './lib/d1.mjs';
 import { MODEL, VERSION, priceOf, requestOf, inputHash, worstCase, costOf, readAnswer, anthropicApi, problemOf, AiError } from './lib/ai-check.mjs';
 import { flagsOf } from './worker/src/ai-schema.mjs';
+import { groupKey } from './worker/src/app.mjs';
 
 export const MAX_TRIES = 3;
 export const MAX_WAIT_MINUTES = 30; // the job's 45 minutes leave room for the eval after the wait
@@ -25,20 +26,19 @@ const LIVE_DAYS = 45; // an EU product last seen longer ago than this is off the
 const POLL_MS = 30000;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// One product = one advertiser + one product title: the same key as app.mjs (KEY) and launches ('eu|' + this).
+// An advertiser + product title, as app.mjs KEY: the board's product key when an ad has no product page (groupKey).
 export const KEY = `COALESCE(w.advertiser_page_id, '') || '|' || lower(trim(COALESCE(NULLIF(w.product_title, ''), w.ad_id)))`;
 const RPD = `CAST(COALESCE(w.reach_eu, 0) AS REAL) / MAX(COALESCE(w.ad_age_days, 0), 1)`;
 const DATA = (path) => `CASE WHEN json_valid(w.data) THEN json_extract(w.data, '${path}') END`;
-/** EU products on the board (the rules, seen in the last 45 days: ?1) or decided, one row per product (its ad with a photo and the most reach a day). */
-export const EU_SQL = `SELECT gk, title, price, was, currency, store_url, product_url, image_url, keyword, copy, store_products, rpd, hid, hat FROM (
-  SELECT ${KEY} AS gk, w.product_title AS title, w.price, w.compare_at_price AS was, w.currency, w.store_url, w.product_url, w.image_url, w.keyword,
-    ${DATA('$.ad_copy')} AS copy, ${DATA('$.store_products')} AS store_products, ${RPD} AS rpd,
-    MAX(CASE h.status WHEN 'rejected' THEN 2 WHEN 'seen' THEN 1 ELSE 0 END) OVER (PARTITION BY ${KEY}) AS hid,
-    MAX(COALESCE(h.at, '')) OVER (PARTITION BY ${KEY}) AS hat,
-    MAX(CASE WHEN ${STRICT} AND w.last_seen >= ?1 THEN 1 ELSE 0 END) OVER (PARTITION BY ${KEY}) AS live,
-    ROW_NUMBER() OVER (PARTITION BY ${KEY} ORDER BY (COALESCE(w.image_url, '') != '') DESC, ${RPD} DESC, w.ad_id) AS rn
-  FROM winners w LEFT JOIN hidden h ON h.ad_id = w.ad_id
-) WHERE rn = 1 AND (live = 1 OR hid > 0)`;
+/**
+ * The EU ads on the board (the rules, seen in the last 45 days: ?1) and those you decided on. candidates() groups them
+ * into products as the board does: by product page, else advertiser + title (app.mjs groupKey, launches 'eu|' + it).
+ */
+export const EU_SQL = `SELECT w.ad_id, ${KEY} AS jk, w.product_title AS title, w.price, w.compare_at_price AS was, w.currency, w.store_url, w.product_url, w.image_url, w.keyword,
+  ${DATA('$.ad_copy')} AS copy, ${DATA('$.store_products')} AS store_products, ${RPD} AS rpd, CASE WHEN ${STRICT} AND w.last_seen >= ?1 THEN 1 ELSE 0 END AS live,
+  CASE h.status WHEN 'rejected' THEN 2 WHEN 'seen' THEN 1 ELSE 0 END AS hid, COALESCE(h.at, '') AS hat
+FROM winners w LEFT JOIN hidden h ON h.ad_id = w.ad_id
+WHERE (${STRICT} AND w.last_seen >= ?1) OR h.status IN ('seen', 'rejected')`;
 /** Products outside the EU still running, or decided. has_text: its ad's words are known. */
 export const WORLD_SQL = `SELECT p.product_key, p.product_title AS title, p.price, p.compare_at_price AS was, p.currency, p.image_url, p.store_url, p.product_url,
   p.keyword, p.store_products, p.markets, p.first_seen, COALESCE(i.product_type, '') AS type,
@@ -82,14 +82,28 @@ const usd = (x) => `$${(Number(x) || 0).toFixed(x >= 1 ? 2 : 4)}`;
  * reach a day first), then decided (the last decision first). Each: { key, source, title, …, has_text, hid, hat }.
  */
 export async function candidates(db, now) {
-  const [eu, world] = await Promise.all([db.query(EU_SQL, [new Date(now - LIVE_DAYS * 864e5).toISOString()]), db.query(WORLD_SQL)]);
+  const [ads, world] = await Promise.all([db.query(EU_SQL, [new Date(now - LIVE_DAYS * 864e5).toISOString()]), db.query(WORLD_SQL)]);
+  // EU ads into products, as the board groups them: decided if any of its ads is (rejected over approved), on the board if
+  // any of its ads is; shown by its ad with a photo and the most reach a day.
+  const groups = new Map();
+  const ahead = (a, b) => (!!a.image_url !== !!b.image_url ? !!a.image_url : Number(a.rpd) !== Number(b.rpd) ? Number(a.rpd) > Number(b.rpd) : a.ad_id < b.ad_id);
+  for (const w of ads) {
+    const gk = groupKey(w);
+    const g = groups.get(gk) || { gk, hid: 0, hat: '', live: 0, rpd: 0, best: null };
+    g.hid = Math.max(g.hid, Number(w.hid) || 0);
+    if (String(w.hat || '') > g.hat) g.hat = String(w.hat);
+    g.live = Math.max(g.live, Number(w.live) || 0);
+    if (Number(w.live)) g.rpd = Math.max(g.rpd, Number(w.rpd) || 0);
+    if (!g.best || ahead(w, g.best)) g.best = w;
+    groups.set(gk, g);
+  }
   const list = [
     ...world.map((w) => ({ key: 'world|' + w.product_key, pk: w.product_key, source: 'world', title: w.title, type: w.type, price: w.price, was: w.was, currency: w.currency,
       image_url: w.image_url, store_url: w.store_url, product_url: w.product_url, keyword: w.keyword, store_products: w.store_products, markets: Object.keys(jsonOf(w.markets, {})),
       has_text: Number(w.has_text) === 1, hid: Number(w.hid) || 0, hat: w.hat || '', order: w.first_seen || '' })),
-    ...eu.map((w) => ({ key: 'eu|' + w.gk, source: 'eu', title: w.title, price: w.price, was: w.was, currency: w.currency, image_url: w.image_url, store_url: w.store_url,
-      product_url: w.product_url, keyword: w.keyword, store_products: w.store_products, ad_texts: w.copy ? [String(w.copy)] : [], has_text: !!w.copy,
-      hid: Number(w.hid) || 0, hat: w.hat || '', order: Number(w.rpd) || 0 })),
+    ...[...groups.values()].filter((g) => g.live || g.hid).map(({ gk, hid, hat, rpd, best: w }) => ({ key: 'eu|' + gk, source: 'eu', title: w.title, price: w.price, was: w.was,
+      currency: w.currency, image_url: w.image_url, store_url: w.store_url, product_url: w.product_url, keyword: w.keyword, store_products: w.store_products,
+      ad_texts: w.copy ? [String(w.copy)] : [], has_text: !!w.copy, hid, hat, order: rpd })),
   ];
   const group = (c) => (c.hid ? 2 : c.source === 'world' ? 0 : 1);
   const cmp = (a, b) => (a < b ? 1 : a > b ? -1 : 0); // larger first

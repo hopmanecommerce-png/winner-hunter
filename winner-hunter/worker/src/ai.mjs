@@ -95,6 +95,7 @@ export function aiBoard() {
   .airead > summary::-webkit-details-marker { display: none; }
   .airead > summary::before { content: '▸'; color: var(--faint); transition: transform .2s; }
   .airead[open] > summary::before { transform: rotate(90deg); }
+  @media (prefers-reduced-motion: reduce) { .airead > summary::before { transition: none; } }
   .airead .ait { white-space: nowrap; }
   .airead .aix { margin-left: auto; padding: 2px 6px; border-radius: 6px; border: 1px solid rgba(217, 164, 65, .45); color: var(--acc); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
   .airead .aib { padding: 0 10px 10px; display: grid; gap: 8px; font-size: 12px; line-height: 1.4; color: var(--muted); }

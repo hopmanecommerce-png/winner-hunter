@@ -8,7 +8,7 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import http from 'node:http';
 import { createRequire } from 'node:module';
-import { handle, makeToken } from '../worker/src/app.mjs';
+import { handle, tokenFor } from '../worker/src/app.mjs';
 import { READ, readEnv, addRead } from './helpers/ai-reads.mjs';
 import { NOW } from './helpers/seed.mjs';
 
@@ -49,8 +49,8 @@ test('AI read on an iPhone: closed until you open it, saved once when opened, te
   if (!browser) return t.skip('Chromium not available');
   const env = await readEnv();
   // The Inbox's first product (the most reach a day): a read whose text tries HTML, from data that tried to instruct the AI.
-  addRead(env.db, 'eu|703|stale old winner', 'ok', { ...READ, product: '<img src=x onerror="window.__xss=1">Neck brace', fit: 81, pros: ['Solves a felt problem', 'Light to ship'], cons: ['<b>bold</b> claims'] }, '["injection"]');
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, NOW)}`;
+  addRead(env.db, 'eu|shop1.test/products/stale-old-winner', 'ok', { ...READ, product: '<img src=x onerror="window.__xss=1">Neck brace', fit: 81, pros: ['Solves a felt problem', 'Light to ship'], cons: ['<b>bold</b> claims'] }, '["injection"]');
+  const cookie = `__Host-wh=${await tokenFor(env, NOW)}`;
   const server = await serve(env);
   const base = `http://127.0.0.1:${server.address().port}`;
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
@@ -79,7 +79,7 @@ test('AI read on an iPhone: closed until you open it, saved once when opened, te
     assert.strictEqual(await read.evaluate((d) => d.open), false, 'closed: you decide on your own first');
     assert.match((await read.locator('summary').innerText()).trim(), /^AI read\s+experimental$/i, 'labelled experimental');
     assert.strictEqual(await read.locator('.aifit').isVisible(), false);
-    assert.strictEqual(opened('eu|703|stale old winner'), null);
+    assert.strictEqual(opened('eu|shop1.test/products/stale-old-winner'), null);
     await noSideScroll('the Inbox with a closed AI read');
     await shot('1-inbox-closed');
 
@@ -97,8 +97,8 @@ test('AI read on an iPhone: closed until you open it, saved once when opened, te
     assert.match(await read.locator('dl').innerText(), /Claims risk\s+medium: “relieves back pain”/);
     assert.match(await read.locator('.ainote').innerText(), /^Claude Haiku 5\.5 · \d+ Oct · Not measured against your decisions yet\. Experimental: it can be wrong, and nothing is sorted or hidden by it\.$/);
     await page.waitForFunction(() => window.AI_READ && window.AI_READ.sent.size === 1);
-    for (let i = 0; i < 200 && !opened('eu|703|stale old winner'); i++) await new Promise((r) => setTimeout(r, 25)); // the POST on its way
-    assert.strictEqual(opened('eu|703|stale old winner'), new Date(NOW).toISOString(), 'opening it is saved, for the blind eval');
+    for (let i = 0; i < 200 && !opened('eu|shop1.test/products/stale-old-winner'); i++) await new Promise((r) => setTimeout(r, 25)); // the POST on its way
+    assert.strictEqual(opened('eu|shop1.test/products/stale-old-winner'), new Date(NOW).toISOString(), 'opening it is saved, for the blind eval');
     await noSideScroll('the Inbox with the AI read open');
     await shot('2-inbox-open');
     // Closing and opening again sends nothing new.
