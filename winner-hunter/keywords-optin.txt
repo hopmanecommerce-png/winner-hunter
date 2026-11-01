@@ -1,0 +1,77 @@
+# Opt-in keywords for the EU hunt: searched only with KEYWORDS_OPTIN=1 (run.mjs), after keywords.txt.
+# Most of what they find is off the EU board anyway (lib/world.mjs screenEU: cosmetics, perfume, medical claims), or is
+# clothing and sale-angle stores. One per line, # = comment. To hunt one now: type it in the workflow's keywords box.
+# Pain (medical claims)
+pijn
+rugpijn
+nekpijn
+schmerzen
+rückenschmerzen
+douleur
+mal de dos
+pain relief
+# Beauty & care
+serum
+crème
+creme
+huid
+haut
+peau
+skincare
+haar
+haare
+cheveux
+haarverwijdering
+haarentfernung
+épilation
+tanden
+zähne
+dents
+nagels
+nägel
+make-up
+parfum
+# Sale angles (§6)
+50% korting
+70% korting
+uitverkoop
+magazijn uitverkoop
+gratis verzending
+50% rabatt
+70% rabatt
+ausverkauf
+lagerverkauf
+kostenloser versand
+50% de réduction
+soldes
+livraison gratuite
+50% off
+sale
+# Clothing & shoes
+jurk
+kleid
+robe
+dress
+broek
+hose
+pantalon
+trui
+pullover
+pull
+jas
+jacke
+manteau
+rok
+rock
+jupe
+blouse
+vest
+pyjama
+lingerie
+sneakers
+schoenen
+schuhe
+chaussures
+laarzen
+stiefel
+bottes

@@ -155,6 +155,68 @@ export function classify(title, labels = '') {
   return { out: '' };
 }
 
+// The EU board (lib/meta.mjs) leaves out more: selling these in the EU takes paperwork a dropshipper does not have (a safety
+// report and a responsible person for cosmetics and perfume, medical-device rules once a product promises to treat pain or a
+// condition, veterinary rules for pet medicine), on top of the supplements, food and drink above. Read as above: the name,
+// for perfume and pet health also the type and tags, never the description. Narrow on purpose; Reject handles the rest.
+const COSMETICS = words([
+  'serums?|sérums?|moisturi[sz]ers?|bodylotions?|body\\s+lotions?|körperlotion|lait\\s+corporel|shampoos?|shampoings?|(?<!air[\\s-]?)conditioners?',
+  '(?:face|facial|eye|night|day|hand|foot|body|neck|lip|skin|anti[\\s-]?(?:aging|ageing|wrinkle)|moisturi[sz]ing|hydrating|whitening|retinol|collagen|vitamin\\s?c)\\s+(?:creams?|lotions?|balms?|butters?)',
+  '(?:dag|nacht|hand|voet|gezichts|huid|oog|anti[\\s-]?rimpel)cr[eè]mes?|(?:tages|nacht|hand|fuß|fuss|gesichts|augen|haut|anti[\\s-]?falten)cremes?',
+  'crèmes?\\s+(?:visage|de\\s+jour|de\\s+nuit|hydratantes?|anti[\\s-]?(?:âge|rides)|mains|corps)|(?:face|body|hand)\\s?wash(?:es)?|shower\\s?gels?|douchegel|duschgel|gels?\\s+douche',
+  'tooth\\s?paste|tandpasta|zahnpasta|dentifrices?|(?:teeth|tooth)\\s+whitening|whitening\\s+(?:strips|gel|kit|pen|powder|foam)|tandenbleek\\p{L}*|zahnaufhellung|blanchiment\\s+(?:des\\s+dents|dentaire)',
+  'lipsticks?|lip\\s?gloss(?:es)?|lippenstift\\p{L}*|rouges?\\s+à\\s+lèvres|mascaras?|eye\\s?liners?|eye\\s?shadows?|concealers?|bronzers?|nail\\s+(?:polish|varnish|lacquer)|gel\\s+polish|nagellak|nagellack|vernis\\s+à\\s+ongles',
+  'hair\\s+(?:dyes?|colou?rs?|bleach|oils?|serums?|masks?|tonics?|growth)|beard\\s+(?:oils?|balms?)|haarverf|haarfarbe\\p{L}*|coloration\\s+(?:capillaire|cheveux)|eyelash\\s+serums?|lash\\s+serums?|wimpernserum',
+  'sunscreens?|sun\\s?creams?|sun\\s?blocks?|zonnebrand\\p{L}*|sonnencreme\\p{L}*|crèmes?\\s+solaires?|écran\\s+solaire|deodorants?|déodorants?|deos?',
+  '(?:sheet|clay|peel[\\s-]?off|mud|charcoal|collagen|hydrogel|face|facial)\\s+masks?|gezichtsmaskers?|gesichtsmasken?|masques?\\s+(?:visage|faciale?s?)',
+  'cosmetics?|cosmétiques?|kosmetik\\p{L}*|cosmetica|make[\\s-]?up|maquillage|schminke|self[\\s-]?tan(?:ner|ning)?|zelfbruiner|selbstbräuner|autobronzant|retinol|hyaluron\\p{L}*|niacinamide',
+].join('|'));
+// A tool or a holder for them is no cosmetic: "makeup brush", "LED face mask", "lotion dispenser".
+const NOT_COSMETIC = words('brush(?:es)?|combs?|rollers?|mirrors?|bags?|cases?|organi[sz]ers?|holders?|applicators?|sponges?|dispensers?|machines?|devices?|tools?|stands?|storage|pouch(?:es)?|led|fridge|removers?|pads?|towels?|cloths?');
+const MEDICAL = words([
+  'pain\\s+relie(?:f|vers?|ving)|relie(?:f|ves?|ving)\\s+(?:\\p{L}+\\s+){0,2}pain|painkillers?|pain\\s+(?:patch(?:es)?|cream|gel|spray)',
+  '(?:back|neck|knee|joint|nerve|period|menstrual|muscle|shoulder|hip|foot|heel|sciatic|tooth)\\s+pain',
+  '(?:rug|nek|knie|gewrichts|spier|menstruatie|hiel|voet|schouder|tand)pijn|pijnverlichting|pijnstill\\p{L}*|pijnbestrijding',
+  '(?:rücken|nacken|knie|gelenk|muskel|regel|perioden|fersen|fuß|schulter|zahn|kopf)schmerz\\p{L}*|schmerzlinder\\p{L}*|schmerzmittel|schmerztherapie',
+  'mal\\s+de\\s+dos|douleurs?\\s+(?:articulaires?|dorsales?|lombaires?|musculaires?|cervicales?|menstruelles?)|anti[\\s-]?douleurs?|antidouleurs?|analgésiques?',
+  'sciatica|ischias|sciatique|arthritis|artritis|arthrite|arthrose|artrose|fasciitis|fasciite|fersensporn|hielspoor|neuropath\\p{L}*|tinnitus|acouphènes?|oorsuizen|migraines?|migräne',
+  'hemorrhoids?|haemorrhoids?|aambeien|hämorrhoiden|hémorroïdes|varicose|spataderen|krampfadern|varices|scoliosis|scoliose|skoliose|incontinen\\p{L}*|inkontinenz',
+  'eczema|eczeem|ekzem|eczéma|psoriasis|acne|acné|diabet\\p{L}*|insomnia|slapeloosheid|schlaflosigkeit|insomnie|bunions?|hallux\\s+valgus|carpal\\s+tunnel|karpaltunnel|tendinitis|tendonitis',
+  'tens\\s+(?:units?|devices?|machines?|massagers?|apparaat|gerät|geräte|appareils?)|tens[\\s/-]+ems|electrotherap\\p{L}*|elektrotherap\\p{L}*|électrothérap\\p{L}*|muscle\\s+stimulators?',
+  'blood\\s+(?:pressure|sugar|glucose)|bloeddruk\\p{L}*|blutdruck\\p{L}*|tension\\s+artérielle|tensiomètres?|glucose\\s+(?:meters?|monitors?)|bloedsuiker\\p{L}*|blutzucker\\p{L}*',
+  'hearing\\s+aids?|hoortoestel\\p{L}*|hörgerät\\p{L}*|appareils?\\s+auditifs?|(?:pulse\\s+)?oximeters?|oxymètres?|pulsoximeter|fever\\s+thermometers?|koortsthermometers?|fieberthermometer\\p{L}*',
+  'weight\\s+loss|fat\\s+burn(?:ers?|ing)|anti[\\s-]?snor\\p{L}*|snoring|snurk\\p{L}*|schnarch\\p{L}*|ronflement|medical\\s+devices?|medizinprodukt\\p{L}*',
+].join('|'));
+const PERFUME = words('perfumes?|parfums?|parfüms?|eaux?\\s+de\\s+(?:parfum|toilette|cologne)|colognes?|body\\s+mists?');
+// A bottle for it or a scent for the house or the car is no perfume.
+const NOT_PERFUME = words('bottles?|atomi[sz]ers?|cases?|holders?|organi[sz]ers?|stands?|display|car|auto|voiture|home|room|maison|intérieur|diffusers?|diffuseurs?|candles?|bougies?|kerzen?|kaarsen?');
+const PET_HEALTH = words([
+  'fleas?|vlooien(?:band|middel|druppels|shampoo|spray)?|flöhe|floh(?:halsband|mittel|schutz|tropfen|shampoo|spray)\\p{L}*|anti[\\s-]?(?:puces?|vlooien|tiques?)',
+  'ticks?\\s+(?:collars?|drops|treatments?|sprays?|repellents?|prevention|protection)|teken(?:band|druppels|middel)|zecken(?:halsband|schutz|mittel|tropfen|spray)\\p{L}*',
+  '(?:de)?wormers?|worming|ontworm\\p{L}*|wurmkur\\p{L}*|entwurm\\p{L}*|vermifuges?',
+  '(?:dogs?|cats?|pets?|puppy|kittens?|hond(?:en)?|katten|hunde?|katzen?|chiens?|chats?)\\s+(?:supplements?|vitamins?|probiotics?|medicines?|medications?|meds|painkillers?)',
+  '(?:supplements?|vitamins?|probiotics?|medicines?|medications?|meds)\\s+for\\s+(?:dogs?|cats?|pets?|puppies|kittens?)|calming\\s+(?:chews|treats|drops|tablets)',
+].join('|'));
+// A tool against fleas or ticks is no medicine: a comb, tweezers, a trap.
+const NOT_PET_MEDICINE = words('combs?|brush(?:es)?|removers?|tweezers?|twisters?|hooks?|traps?|lamps?|markets?');
+
+/**
+ * The EU board's screen: { out: '' | why it is off the EU board }. title: the product's name (and the ad's title), labels:
+ * its type and tags. Supplements, food or drink and what is not a product as classify() above (gymwear stays on: it was
+ * a call for the markets outside the EU), plus cosmetics, perfume, medical claims and pet health.
+ */
+export function screenEU(title, labels = '') {
+  const name = String(title || '');
+  const all = `${name}\n${labels || ''}`;
+  const c = classify(name, labels);
+  if (c.out && c.out !== 'gymwear') return c;
+  if (!NOT_COSMETIC.test(name) && COSMETICS.test(name)) return { out: 'cosmetics' };
+  if (!NOT_PERFUME.test(name) && PERFUME.test(all)) return { out: 'perfume' };
+  if (MEDICAL.test(name)) return { out: 'medical claim' };
+  if (!NOT_PET_MEDICINE.test(name) && PET_HEALTH.test(all)) return { out: 'pet health' };
+  return { out: '' };
+}
+
 // ---------------------------------------------------------------------------
 // Stores and products (Shopify's open endpoints, no Meta requests)
 // ---------------------------------------------------------------------------
@@ -186,13 +248,17 @@ async function getText(doFetch, url, { timeout = 15000, tries = 3, coolMs = COOL
   }
 }
 
-/** Is the store on Shopify? { shopify, host, currency, products, myshopify }. shopify null: it did not answer. */
+/**
+ * Is the store on Shopify? { shopify, host, currency, products, myshopify }. shopify null: it did not answer (also used by
+ * the EU hunt, lib/meta.mjs).
+ */
 export async function checkStore(store, doFetch = globalThis.fetch, opts = {}) {
   let answered = false;
   for (const host of [store, 'www.' + store]) {
     const r = await getText(doFetch, `https://${host}/meta.json`, opts);
     if (r.status === 429) return { shopify: null, host: store, currency: '', products: null, myshopify: '' }; // still limited: asked again next run
-    if (r.status) answered = true;
+    // A 403 (a bot wall) or a 5xx (down for a moment) says nothing either: only a real answer means "not on Shopify".
+    if (r.status && r.status !== 403 && r.status < 500) answered = true;
     let j = null;
     try {
       j = JSON.parse(r.text);

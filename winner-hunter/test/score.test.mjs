@@ -37,6 +37,9 @@ test('75+ active ads is required; an unknown count stays pending (not saved unti
   assert.strictEqual(v({ count: 74 }).skip, 'Only 74 active ads (needs 75+)');
   for (const unknown of [null, undefined, 'pending']) assert.strictEqual(v(unknown).verdict, 'pending', String(unknown));
   assert.strictEqual(scoreAd(ad(), Object.assign({}, winnerInputs, { shop: 'pending' }), {}, NOW).verdict, 'pending', 'Shopify check still running');
+  const quiet = scoreAd(ad(), Object.assign({}, winnerInputs, { shop: { shopify: null, error: 'no answer' } }), {}, NOW);
+  assert.strictEqual(quiet.verdict, 'pending', 'a store that did not answer is unknown, not "not a Shopify store"');
+  assert.deepStrictEqual(quiet.items[0], { key: 'shopify', label: 'Shopify store', state: 'pending', text: 'annaboutique.com did not answer (no answer)' });
   assert.strictEqual(scoreAd(ad({ start: daysAgo(60) }), Object.assign({}, winnerInputs, { cnt: null }), {}, NOW).verdict, 'skip', 'a failed rule beats pending');
 });
 
@@ -97,6 +100,8 @@ test('stored record: only known fields, https URLs, sized Shopify photos, 1688 w
   assert.strictEqual(r.seen_at, '2026-10-15T00:00:00.000Z');
   assert.ok(!('thumb' in r));
   assert.deepStrictEqual(Object.keys(r.checklist[0]), ['key', 'label', 'state', 'text'], 'no points stored');
+  assert.strictEqual(r.active_ads_capped, false);
+  assert.strictEqual(slimRecord({ id: 1, active_ads: 500, active_ads_capped: true }).active_ads_capped, true, 'counted up to the cap: the board can show 500+');
   assert.strictEqual(zhTerm({ product_title: 'Pammy Corset' }), '性感 束身胸衣');
   assert.strictEqual(zhTerm({ product_title: 'Bamboo pillow', keyword: 'kussen' }), 'Bamboo pillow');
 });

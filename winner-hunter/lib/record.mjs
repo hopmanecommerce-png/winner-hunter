@@ -35,6 +35,7 @@ export function slimRecord(r, { seenAt } = {}) {
     advertiser: cut(r.advertiser || '', 200),
     advertiser_page_id: String(r.advertiser_page_id || ''),
     active_ads: int(r.active_ads),
+    active_ads_capped: !!r.active_ads_capped, // the count stopped at its cap (500): "500+" (in data, for the board)
     ad_age_days: int(r.ad_age_days),
     ad_start_date: cut(r.ad_start_date || '', 10),
     reach_eu: int(r.reach_eu),

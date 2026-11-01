@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import { d1Client, migrate } from '../lib/d1.mjs';
-import { MARKETS, LANGS, euFacts, sameThing, resetCooling, parseWorldKeywords, searchesOf, libraryUrl, readLibrary, toRow, classify, checkStore, fetchProduct, suggestProduct, addUp, MIN_DAYS } from '../lib/world.mjs';
+import { MARKETS, LANGS, euFacts, sameThing, resetCooling, parseWorldKeywords, searchesOf, libraryUrl, readLibrary, toRow, classify, screenEU, checkStore, fetchProduct, suggestProduct, addUp, MIN_DAYS } from '../lib/world.mjs';
 import { hunt, ADS_SQL, saveTokenCheck } from '../world.mjs';
 import { openLibrary } from '../lib/adlibrary.mjs';
 import { handle, makeToken, products, proofOf, worldRow, worldMarketsOf, worldAlert, PROOF, WORLD_MARKETS } from '../worker/src/app.mjs';
@@ -137,6 +137,44 @@ test('Shopify says too many requests: wait and ask again; still no: the store is
   resetCooling();
 });
 
+test('a bot wall (403) or a store that is down (5xx) is unknown too, on both addresses; a real answer is "not on Shopify"', async () => {
+  for (const status of [403, 500, 502, 503]) {
+    const asked = [];
+    const f = async (url) => { asked.push(new URL(url).hostname); return new Response('<html>busy</html>', { status }); };
+    assert.strictEqual((await checkStore('pod.test', f)).shopify, null, String(status));
+    assert.deepStrictEqual(asked, ['pod.test', 'www.pod.test'], `${status}: www. asked too`);
+  }
+  const wwwFine = async (url) => (new URL(url).hostname === 'www.pod.test' ? json({ myshopify_domain: 'pod.myshopify.com', currency: 'AUD' }) : new Response('down', { status: 503 }));
+  assert.deepStrictEqual(await checkStore('pod.test', wwwFine), { shopify: 1, host: 'www.pod.test', currency: 'AUD', products: null, myshopify: 'pod.myshopify.com' });
+  const wall = async (url) => new Response('', { status: 403, headers: { 'x-shopid': '42' } });
+  assert.strictEqual((await checkStore('pod.test', wall)).shopify, 1, "Shopify's own 403 still says Shopify");
+  const halfDown = async (url) => (new URL(url).hostname === 'pod.test' ? new Response('<h1>Not found</h1>', { status: 404 }) : new Response('down', { status: 503 }));
+  assert.strictEqual((await checkStore('pod.test', halfDown)).shopify, 0, 'one real answer without Shopify is enough');
+});
+
+test('the EU screen: cosmetics, perfume, medical claims and pet health off as well; the tools for them stay', () => {
+  for (const [t, why] of [['Vitamin C Face Serum', 'cosmetics'], ['Retinol Night Cream', 'cosmetics'], ['Teeth Whitening Strips', 'cosmetics'], ['Purple Toothpaste', 'cosmetics'], ['Hair Growth Oil', 'cosmetics'],
+    ['Collagen face mask', 'cosmetics'], ['Gel Polish Kit', 'cosmetics'], ['Gezichtscrème met SPF', 'cosmetics'], ['Nachtcreme mit Retinol', 'cosmetics'], ['Crème de nuit anti-rides', 'cosmetics'], ['Zonnebrandcrème SPF50', 'cosmetics'],
+    ['Eau de Parfum Oud 100ml', 'perfume'], ['Parfum Homme Intense', 'perfume'],
+    ['TENS Unit Pain Relief', 'medical claim'], ['Knee Pain Brace', 'medical claim'], ['Sciatica Cushion', 'medical claim'], ['Plantar Fasciitis Insoles', 'medical claim'], ['Rugpijn kussen', 'medical claim'],
+    ['Rückenschmerzen Gürtel', 'medical claim'], ['Ceinture mal de dos', 'medical claim'], ['Blood Pressure Monitor', 'medical claim'], ['Anti-Snoring Mouthpiece', 'medical claim'], ['Acne Patches 72pcs', 'medical claim'],
+    ['Flea and Tick Collar for Dogs', 'pet health'], ['Flohhalsband für Katzen', 'pet health'], ['Dog Dewormer Tablets', 'pet health'], ['Collier anti-puces chien', 'pet health'], ['Calming Chews for Dogs', 'pet health'],
+    ['Collagen Capsules', 'supplement'], ['Protein bar box', 'food or drink'], ['Gift Card', 'not a product']]) {
+    assert.strictEqual(screenEU(t).out, why, t);
+  }
+  assert.strictEqual(screenEU('Oud Intense', 'Perfume').out, 'perfume', 'perfume and pet health: the type and tags count');
+  assert.strictEqual(screenEU('Cat Spot-On 3 pipettes', 'Flea & Tick').out, 'pet health');
+  // On the board as before: the seeded winners, tools and holders for those things, words that only look alike.
+  for (const t of ['Posture Corrector Pro', 'Heated Neck Pillow', 'Pet Hair Remover Roller', 'Silk Sleep Mask', 'Shiatsu Foot Massager', 'Orthopedic Dog Bed', 'Facial Ice Roller', 'Back Stretcher',
+    'Wrinkle Release Spray', 'Cordless Hair Straightener', 'Portable Air Conditioner', 'Makeup Brush Set', 'LED Face Mask', 'Lotion Dispenser', 'Perfume Atomizer Bottle', 'Car Perfume Diffuser',
+    'Flea Comb for Cats', 'Tick Remover Tool', 'Ice Cream Maker', 'Electric Toothbrush', 'Foot Gel Pads', 'Stress Relief Toy', 'Pain-free hair removal IPL', 'Sonnenschutz Auto Frontscheibe',
+    'Abnehmbarer Griff Pfanne', 'Blush Pink Dress', 'Calming Dog Bed', 'Massagegerät', 'Grain free dog food', 'Gym Leggings']) {
+    assert.deepStrictEqual(screenEU(t), { out: '' }, t);
+  }
+  assert.strictEqual(screenEU('Flea comb', 'Flea & Tick').out, '', 'a comb tagged for fleas is still a comb');
+  assert.strictEqual(classify('Vitamin C face serum').out, '', 'the tab outside the EU is unchanged');
+});
+
 const row = (id, cc, o = {}) => ({ ad_id: id, cc, page_id: '11', page_name: 'Pod Shop', likes: 10, collation_id: 'c' + id, copies: 1, start_at: sec(40), title: 'T', image_url: '', keyword: 'pillow',
   store: 'pod.test', product_key: 'pod.test/products/pillow', first_seen: '2026-10-20T00:00:00Z', last_seen: '2026-10-31T00:00:00Z', ...o });
 const ctx = (o = {}) => ({ items: new Map([['pod.test/products/pillow', { title: 'Pod Pillow', price: 89, currency: 'AUD', out: 0 }]]), stores: new Map([['pod.test', { shopify: 1, host: 'pod.test', currency: 'AUD', products: 9 }]]),
@@ -240,7 +278,10 @@ test('a night: searched in every market, saved, products on the board, EU check,
   assert.deepStrictEqual(Object.keys(JSON.parse(p.markets)).sort(), ['AU', 'NZ']);
   assert.strictEqual(mem.prepare("SELECT out FROM world_items WHERE product_key = 'pod.test/products/gums'").get().out, 1);
   assert.strictEqual(mem.prepare("SELECT shopify FROM world_stores WHERE store = 'other.test'").get().shopify, 0);
-  assert.strictEqual(mem.prepare("SELECT COUNT(*) AS n FROM world_ads WHERE store = 'ebay.com.au' OR ad_id = '9'").get().n, 0 + mem.prepare("SELECT COUNT(*) AS n FROM world_ads WHERE ad_id = '9'").get().n);
+  // (This was one count compared with a part of itself, so it could never fail.)
+  assert.strictEqual(mem.prepare("SELECT COUNT(*) AS n FROM world_ads WHERE ad_id = '9'").get().n, 0, 'a stopped ad is not saved');
+  assert.deepStrictEqual(mem.prepare("SELECT DISTINCT store FROM world_ads WHERE ad_id = '4'").all().map((r) => r.store), [''], 'a marketplace ad is kept without a store');
+  assert.strictEqual(mem.prepare("SELECT COUNT(*) AS n FROM world_stores WHERE store LIKE '%ebay%'").get().n, 0, 'so it is never checked as a store');
   const eu = calls.find((c) => c.eu);
   assert.strictEqual(eu.token, 'tok');
   assert.ok(eu.countries.includes('NL') && eu.countries.length === 27 && !eu.countries.includes('GB'));
@@ -548,18 +589,29 @@ test('a problem with the scan shows on its tab only', async () => {
   assert.strictEqual(worldAlert({ health: 'failed', alert: 'x', finished_at: iso(NOW) }, NOW, { at: iso(NOW - 864e5) }).text, 'x · Meta token verlopen / Meta token expired');
   assert.strictEqual(worldAlert({ health: 'warning', alert: 'y', finished_at: iso(NOW) }, NOW, { at: iso(NOW - 864e5) }).text, 'Meta token verlopen / Meta token expired', 'red wins over yellow');
   const saved = [];
-  const db = { setState: async (k, v) => { saved.push([k, v]); } };
+  const db = { setState: async (k, v) => { saved.push([k, v]); }, getState: async () => (saved.length ? JSON.stringify(saved.at(-1)[1]) : null) };
+  const one = (o) => ({ n: 1, secret: 'META_TOKEN', checked_at: iso(NOW), ...o });
   assert.strictEqual(await saveTokenCheck(db, 't', { check: async () => [{ n: 1, error: 'network' }] }), '');
   assert.strictEqual(await saveTokenCheck(db, 't', { check: async () => { throw new Error('down'); } }), '');
   assert.deepStrictEqual(saved, [], 'no answer: what is known stays');
   assert.match(await saveTokenCheck(db, 't', { check: async () => [{ n: 1, valid: true, expiresAt: NOW + 864e5 }], now: () => NOW }), /expires on/);
-  assert.deepStrictEqual(saved.pop(), ['token_expires_at', { at: iso(NOW + 864e5), valid: true, checked_at: iso(NOW) }]);
+  assert.deepStrictEqual(saved.at(-1), ['token_expires_at', { at: iso(NOW + 864e5), valid: true, checked_at: iso(NOW), tokens: [one({ valid: true, expires_at: iso(NOW + 864e5) })] }]);
   assert.strictEqual(await saveTokenCheck(db, 't', { check: async () => [{ n: 1, valid: true, expiresAt: NOW + 30 * 864e5 }], now: () => NOW }), '');
   assert.strictEqual(await saveTokenCheck(db, 't', { check: async () => [{ n: 1, valid: true, expiresAt: 0 }], now: () => NOW }), '', 'never expires');
   assert.match(await saveTokenCheck(db, 't', { check: async () => [{ n: 1, valid: false }], now: () => NOW }), /invalid or expired/);
-  assert.deepStrictEqual(saved.pop(), ['token_expires_at', { at: null, valid: false, checked_at: iso(NOW) }]);
+  assert.deepStrictEqual(saved.at(-1), ['token_expires_at', { at: null, valid: false, checked_at: iso(NOW), tokens: [one({ valid: false, expires_at: null })] }]);
   assert.strictEqual(await saveTokenCheck(db, '', { check: async () => { throw new Error('asked'); }, now: () => NOW }), '');
-  assert.deepStrictEqual(saved.pop(), ['token_expires_at', { at: null, checked_at: iso(NOW) }], 'no token: an old banner goes away');
+  assert.deepStrictEqual(saved.at(-1), ['token_expires_at', { at: null, valid: true, checked_at: iso(NOW), tokens: [] }], 'no token: an old banner goes away');
+  // What the EU run found for META_TOKEN_2 is not this run's to change: it stays, and so does its banner.
+  saved.push(['token_expires_at', { at: iso(NOW + 2 * 864e5), valid: true, tokens: [one({ valid: true, expires_at: 'never' }), { n: 2, secret: 'META_TOKEN_2', valid: true, expires_at: iso(NOW + 2 * 864e5) }] }]);
+  assert.strictEqual(await saveTokenCheck(db, 't', { check: async () => [{ n: 1, valid: true, expiresAt: 0 }], now: () => NOW }), '');
+  assert.strictEqual(saved.at(-1)[1].at, iso(NOW + 2 * 864e5));
+  assert.strictEqual(worldAlert(null, NOW, saved.at(-1)[1]).text, 'Meta token verloopt over 2 dagen / Meta token expires in 2 days');
+  assert.strictEqual(await saveTokenCheck(db, '', { now: () => NOW }), '');
+  assert.deepStrictEqual(saved.at(-1)[1].tokens.map((k) => k.secret), ['META_TOKEN_2'], 'no META_TOKEN: only its own answer goes');
+  const n = saved.length;
+  assert.strictEqual(await saveTokenCheck({ ...db, getState: async () => { throw new Error('D1 down'); } }, 't', { check: async () => [{ n: 1, valid: true, expiresAt: 0 }], now: () => NOW }), '');
+  assert.strictEqual(saved.length, n, 'the old state could not be read: nothing written over it');
   assert.strictEqual(worldAlert({ health: 'ok', finished_at: new Date(NOW - 3600e3).toISOString() }, NOW), null);
   assert.strictEqual(worldAlert({ health: 'failed', alert: 'x', finished_at: new Date(NOW).toISOString() }, NOW).level, 'red');
   assert.strictEqual(worldAlert({ health: 'warning', finished_at: new Date(NOW).toISOString() }, NOW).level, 'yellow');

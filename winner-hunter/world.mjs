@@ -11,7 +11,7 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { d1Client, d1Settings, chunks } from './lib/d1.mjs';
-import { pool, checkTokens } from './lib/meta.mjs';
+import { pool, checkTokens, metaTokens, tokenState } from './lib/meta.mjs';
 import { EU_CODES } from './lib/eu.mjs';
 import { openLibrary } from './lib/adlibrary.mjs';
 import { MARKETS, KEEP_DAYS, parseWorldKeywords, searchesOf, toRow, checkStore, fetchProduct, suggestProduct, addUp, euFacts } from './lib/world.mjs';
@@ -350,17 +350,25 @@ async function night({ db, lib, keywords, doFetch = globalThis.fetch, now = Date
 
 /**
  * Saves when the Meta token expires, for the board's banner, and returns what is wrong with it ('' = nothing): this run
- * then ends red, so GitHub sends its push. No token: nothing to warn about. A failed check changes nothing.
+ * then ends red, so GitHub sends its push. No token: nothing to warn about, its old answer goes. A failed check changes
+ * nothing. Only META_TOKEN's answer changes (lib/meta.mjs tokenState): what the EU run found for META_TOKEN_2 and _3 stays.
  */
 export async function saveTokenCheck(db, token, { check = checkTokens, now = Date.now } = {}) {
-  const save = (v) => db.setState('token_expires_at', { ...v, checked_at: new Date(now()).toISOString() }).catch(() => {});
+  const save = async (checked, drop) => {
+    try {
+      const old = await db.getState('token_expires_at'); // not readable: nothing is written, so nothing is lost
+      await db.setState('token_expires_at', tokenState(old, checked, { now: now(), drop }));
+    } catch (e) {
+      // D1 down: what is known stays
+    }
+  };
   if (!token) {
-    await save({ at: null });
+    await save([], (s) => s === 'META_TOKEN');
     return '';
   }
   const [k] = await Promise.resolve().then(() => check([token])).catch(() => []);
   if (!k || k.error) return '';
-  await save({ at: k.expiresAt ? new Date(k.expiresAt).toISOString() : null, valid: !!k.valid });
+  await save([{ ...k, secret: 'META_TOKEN' }]);
   if (!k.valid) return 'Meta token META_TOKEN is invalid or expired: make a new one and update the GitHub secret';
   if (k.expiresAt && k.expiresAt - now() < 7 * DAY) return `Meta token META_TOKEN expires on ${new Date(k.expiresAt).toISOString().slice(0, 10)}: make a new one now and update the GitHub secret`;
   return '';
@@ -373,7 +381,7 @@ async function main() {
   const keywords = parseWorldKeywords(fs.readFileSync(new URL('./keywords-world.txt', import.meta.url), 'utf8'));
   const minutes = Math.min(Math.max(Number(env.WORLD_MINUTES) || 120, 1), 300);
   const db = d1Client(s);
-  const metaToken = String(env.META_TOKEN || '').replace(/\s+/g, '');
+  const metaToken = (metaTokens(env).find((k) => k.secret === 'META_TOKEN') || { token: '' }).token; // only META_TOKEN reaches this workflow
   const tokenTrouble = await saveTokenCheck(db, metaToken);
   if (tokenTrouble) {
     console.log(`::error::${tokenTrouble}`);

@@ -36,10 +36,15 @@ const post = (env, cookie, body, headers = { 'content-type': 'application/json' 
 test('validateRows stops on a row the board cannot show, instead of dropping it', () => {
   assert.strictEqual(validateRows(SAMPLE), SAMPLE);
   assert.throws(() => validateRows([]), /No rows/);
-  for (const [extra, why] of [[{ id: 'abc' }, /bad id/], [{ title: ' ' }, /no title/], [{ url: 'https://evil.test/' }, /TikTok page/], [{ url: 'javascript:alert(1)' }, /TikTok page/],
+  for (const [extra, why] of [[{ id: 'abc' }, /bad id/], [{ id: 12345 }, /bad id/], [{ title: ' ' }, /no title/], [{ url: 'https://evil.test/' }, /TikTok page/], [{ url: 'javascript:alert(1)' }, /TikTok page/],
     [{ image_url: 'http://x.test/a.jpg' }, /image_url/], [{ meta_url: 'javascript:alert(1)' }, /meta_url/], [{ sold_us: null }, /sold count/], [{ price_min: -1 }, /price_min/], [{ meta_status: 'maybe' }, /meta_status/]]) {
     assert.throws(() => validateRows([row(1, extra)]), why);
   }
+  // Ids as numbers in rows.json are rounded before anything can check them: two products would become one row.
+  const parsed = JSON.parse(`[${JSON.stringify(row(1)).replace(/"id":"\d+"/, '"id":1729384756102938475')},${JSON.stringify(row(2)).replace(/"id":"\d+"/, '"id":1729384756102938476')}]`);
+  assert.strictEqual(String(parsed[0].id), String(parsed[1].id), 'JSON.parse rounds them to the same number');
+  assert.throws(() => validateRows(parsed), /Row 0 .*bad id \(must be a string of digits, in quotes\)/);
+  assert.throws(() => validateRows([row(1), row(2), row(1, { title: 'Again' })]), /Row 2 .*duplicate id/);
 });
 
 test('/api/tiktok: login needed, biggest sellers first, decisions persist and survive a new import', async () => {

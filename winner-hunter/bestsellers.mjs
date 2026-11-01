@@ -44,8 +44,8 @@ ON CONFLICT(store) DO UPDATE SET status = excluded.status, score = excluded.scor
 
 /**
  * deps: { db, doFetch, now, log, deadline (ms), cookie: async () => Trustpilot token or '' (trustCookie; asked again
- * once when Trustpilot stops taking it) }. Returns { products, stores, ranked, noList, saved,
- * trust: { page, nopage, widget, badge, none, failed } }. Throws only when D1 cannot be read or written.
+ * once when Trustpilot stops taking it) }. Returns { products, stores, ranked, noList, later (stores that did not
+ * answer: their ranks stay), saved, trust: { page, nopage, widget, badge, none, failed } }. Throws only when D1 cannot be read or written.
  */
 export async function refresh({ db, doFetch = globalThis.fetch, now = Date.now, log = console.log, deadline = Infinity, cookie = async () => '' }) {
   const start = now();
@@ -93,7 +93,7 @@ export async function refresh({ db, doFetch = globalThis.fetch, now = Date.now, 
 
   const rows = [];
   const trustRows = [];
-  const t = { products: 0, stores: [...byStore.values()].filter((p) => p.size).length, ranked: 0, noList: 0, saved: 0,
+  const t = { products: 0, stores: [...byStore.values()].filter((p) => p.size).length, ranked: 0, noList: 0, later: 0, saved: 0,
     trust: { page: 0, nopage: 0, widget: 0, badge: 0, none: 0, failed: 0 } };
   // Stores with product pages first: their best-seller ranks must not wait behind the Trustpilot-only stores.
   const order = [...byStore].sort(([, a], [, b]) => (b.size > 0) - (a.size > 0));
@@ -110,8 +110,12 @@ export async function refresh({ db, doFetch = globalThis.fetch, now = Date.now, 
     if (!products.size) return; // no product page: no best-seller rank to look up
     // The hunt runs four times a day and a rank is kept per day: a store done today leaves the time to the next ones.
     if ([...products.keys()].every((k) => String((known.get(k) || {}).checked_at || '').startsWith(day))) return;
-    const { top, error, limited } = await storeTop(store, { doFetch });
-    if (limited) return; // Shopify says too many requests: yesterday's ranks stay, it is asked again next run
+    const { top, error, retry } = await storeTop(store, { doFetch });
+    // Too many requests, a timeout or a 5xx: the last ranks stay and nothing is marked checked, so it is asked again next run.
+    if (retry) {
+      t.later++;
+      return;
+    }
     if (!top) t.noList++;
     for (const [key, url] of products) {
       const old = known.get(key);
@@ -149,7 +153,7 @@ export async function refresh({ db, doFetch = globalThis.fetch, now = Date.now, 
   const old = new Date(start - KEEP_DAYS * DAY).toISOString();
   await db.query('DELETE FROM bestseller WHERE checked_at < ?1', [old]);
   await db.query('DELETE FROM store_trust WHERE checked_at < ?1', [old]);
-  log(`Store best sellers: ${t.products} products in ${t.stores} stores · ${t.ranked} in their store's top 50 · ${t.noList} stores give no list`);
+  log(`Store best sellers: ${t.products} products in ${t.stores} stores · ${t.ranked} in their store's top 50 · ${t.noList} stores give no list${t.later ? ` · ${t.later} did not answer (asked again next run)` : ''}`);
   const tt = t.trust;
   log(`Trustpilot: ${Object.values(tt).reduce((a, b) => a + b, 0)} stores checked · ${tt.page} on Trustpilot · ${tt.nopage} not on Trustpilot · ${tt.widget} by their widget · ${tt.badge + tt.none} store only (no token) · ${tt.failed} not reachable`);
   return t;

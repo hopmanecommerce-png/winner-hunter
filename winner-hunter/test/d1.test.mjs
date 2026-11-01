@@ -122,3 +122,13 @@ test('migrate(): all files over the REST client, twice; the ADD COLUMN already t
   await c.saveRun({ id: 'r1', started_at: 'a', finished_at: 'b', note: 'x', status: 'failed' });
   assert.strictEqual(rest.db.prepare('SELECT status FROM runs').get().status, 'failed');
 });
+
+test('the fake D1 refuses more than 100 bound parameters, as D1 does (binding and REST)', async () => {
+  const { d1Binding } = await import('./helpers/sqlite-d1.mjs');
+  const ids = Array.from({ length: 101 }, (_, i) => String(i));
+  const sql = `SELECT COUNT(*) AS n FROM winners WHERE ad_id IN (${ids.map(() => '?').join(', ')})`;
+  await assert.rejects(d1Binding().prepare(sql).bind(...ids).all(), /too many SQL variables/);
+  assert.strictEqual((await d1Binding().prepare(sql.replace(/, \?\)$/, ')')).bind(...ids.slice(1)).first()).n, 0, '100 is fine');
+  const c = d1Client(CFG, { doFetch: d1Rest().doFetch, retryMs: 0 });
+  await assert.rejects(c.query(sql, ids), /Cloudflare D1: D1_ERROR: too many SQL variables/);
+});
