@@ -9,6 +9,7 @@
  * All SQL is parameterized; sort orders come from a fixed list.
  */
 
+import { tiktokDecide, tiktokList } from './tiktok.mjs';
 import { adView } from './adview.mjs';
 import { TRAITS, AD_TRAITS, CHOICES, AD_CHOICES, SEP, YES_AT, VERSION } from './jev-questions.mjs';
 import { MARKET_RULES } from './market-rules.mjs';
@@ -1114,6 +1115,15 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       if (path === '/api/note' && (method === 'GET' || method === 'POST')) return await note(req, url, env, now);
       if (path === '/export.csv' && method === 'GET') return await csv(url, env, now);
       return json({ error: 'Method not allowed' }, 405);
+    }
+    if (path === '/api/tiktok') {
+      if (!ok) return json({ error: 'Log in first' }, 401);
+      if (method === 'GET') return json(await tiktokList(env));
+      if (method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+      const { j, err } = await readJson(req, url);
+      if (err) return err;
+      const out = await tiktokDecide(env, j, now);
+      return json(out.body, out.status);
     }
     if (path.startsWith('/api/ad/')) {
       if (!ok) return json({ error: 'Log in first' }, 401);
