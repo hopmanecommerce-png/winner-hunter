@@ -6,7 +6,7 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { DatabaseSync } from 'node:sqlite';
-import { handle, makeToken } from '../worker/src/app.mjs';
+import { handle, tokenFor } from '../worker/src/app.mjs';
 import { STEPS, cleanStep, marginInputs, marginOf, summaryOf, LAUNCH_JS, jevRisks } from '../worker/src/launch.mjs';
 import { statements } from '../lib/d1.mjs';
 import { UPSERT_SQL as TIKTOK_UPSERT } from '../lib/tiktok.mjs';
@@ -19,7 +19,7 @@ const plain = (r) => (r ? { ...r } : r);
 const iso = (ms) => new Date(ms).toISOString();
 
 async function session(env) {
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, NOW)}`;
+  const cookie = `__Host-wh=${await tokenFor(env, NOW)}`;
   const call = (path, init = {}, now = NOW) => handle(new Request(ORIGIN + path, { ...init, headers: { cookie, ...init.headers } }), env, { now });
   return {
     get: async (path) => (await call(path)).json(),

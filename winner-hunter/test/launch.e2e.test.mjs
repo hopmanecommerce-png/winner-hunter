@@ -7,7 +7,7 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import http from 'node:http';
 import { createRequire } from 'node:module';
-import { handle, makeToken } from '../worker/src/app.mjs';
+import { handle, tokenFor } from '../worker/src/app.mjs';
 import { UPSERT_SQL as TIKTOK_UPSERT } from '../lib/tiktok.mjs';
 import { seededEnv, NOW } from './helpers/seed.mjs';
 
@@ -53,7 +53,7 @@ test('🚀 Launch on an iPhone: start from an approved product, the margin as yo
   // Approved: two products on the EU board (✓) and one on the TikTok tab, a second apart (the last one first).
   await env.DB.prepare(TIKTOK_UPSERT).bind(JSON.stringify([{ id: TT_ID, title: '【Hot】 Rhino Straps', shop: 'Rhino Shop', url: 'https://www.tiktok.com/shop/pdp/1', image_url: 'https://cdn.shopify.com/tt1.jpg', price_min: 55.77, price_max: 55.77, rating: 4.6,
     reviews: 120, sold_us: 152000, creators: 5, plays: 1000000, category: 'Car', blockers: 'bulky', meta_status: 'none', meta_url: null, meta_unsure: 0, meta_us: null, meta_au: null, meta_nz: null, updated_at: '2026-10-16T10:00:00Z' }])).run();
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, NOW)}`;
+  const cookie = `__Host-wh=${await tokenFor(env, NOW)}`;
   const api = (path, body, now) => handle(new Request('https://board.test' + path, { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify(body) }), env, { now });
   assert.strictEqual((await api('/api/hide', { ad_id: '9001', status: 'seen' }, NOW - 2000)).status, 200);
   assert.strictEqual((await api('/api/hide', { ad_id: '9003', status: 'seen' }, NOW - 1000)).status, 200);
