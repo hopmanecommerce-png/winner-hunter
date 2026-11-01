@@ -578,6 +578,7 @@
   .ttads a { color: var(--ink); font-weight: 600; text-decoration: none; }
   .ttads a:hover { text-decoration: underline; }
   #ttgrid .t a { color: inherit; text-decoration: none; }
+  #ttcat { max-width: 136px; }
 </style>
 </head>
 <body>
@@ -682,8 +683,9 @@
             <option value="high">Highest price</option>
             <option value="low">Lowest price</option>
           </select></span>
-          <button class="chip" data-tf="clean" aria-pressed="true" title="Jev flagged no blocker">No blocker</button>
-          <button class="chip" data-tf="p25" aria-pressed="false" title="The lowest price is $25 or more">$25+</button>
+          <span class="selw"><select id="ttcat" class="chip" aria-label="Category"><option value="">All categories</option></select></span>
+          <button class="chip" data-tf="clean" aria-pressed="true" title="Jev read it and flagged no blocker. Products it never read stay out.">No blocker</button>
+          <button class="chip" data-tf="p25" aria-pressed="false" title="The lowest price is $25 or more. Placeholder prices stay out.">$25+</button>
           <button class="chip" data-tf="gap" aria-pressed="false" title="The shop's Meta page runs US ads, none in Australia or New Zealand">US ads, not AU/NZ</button>
           <button class="chip" data-tf="done" aria-pressed="false" title="Products you approved or rejected">Approved &amp; rejected</button>
         </div>
@@ -1733,13 +1735,14 @@ const TT_SORT = {
 };
 const TT_PAGE = 60;
 const TT_BLOCK = { electric: 'Battery or electric', skin: 'Cosmetics', medical: 'Medical claim', brand: 'Brand or copy risk', sizing: 'Sizing returns', fragile: 'Fragile', bulky: 'Big or heavy', restricted: 'Hard to ship', kids: 'For children', foodcontact: 'Touches food', hardsource: 'Hard to source' };
-const tt = { q: '', sort: 'sold', clean: true, p25: false, gap: false, done: false, shown: TT_PAGE };
+const tt = { q: '', cat: '', sort: 'sold', clean: true, p25: false, gap: false, done: false, shown: TT_PAGE };
 let TT = null;
 const ttList = () => {
   const q = tt.q.toLowerCase();
   return TT.filter((a) => (tt.done ? a.d : !a.d)
-    && (!tt.clean || !a.blockers)
-    && (!tt.p25 || a.p >= 25)
+    && (!tt.clean || a.blockers === '')
+    && (!tt.cat || a.cat === tt.cat)
+    && (!tt.p25 || (a.p >= 25 && !a.ps))
     && (!tt.gap || (a.ms === 'matched' && a.us > 0 && !a.au && !a.nz))
     && (!q || `${a.title} ${a.shop || ''} ${a.cat || ''}`.toLowerCase().includes(q))).sort(TT_SORT[tt.sort][1]);
 };
@@ -1747,23 +1750,28 @@ const ttTitle = (t) => String(t || '').replace(/^\s*【[^】]*】\s*/, ''); // s
 const ttBig = (n) => (n >= 1e8 ? Math.round(n / 1e6) + 'M' : fmt(n)); // 3 digits fit a phone's column, 264.9M does not
 function ttCard(a) {
   const url = safe(a.url);
-  const tags = String(a.blockers || '').split(/\s+/).filter(Boolean).map((b) => `<span class="tag">${esc(TT_BLOCK[b] || b)}</span>`).join('')
+  const tags = String(a.blockers || '').split(/[\s,]+/).filter(Boolean).map((b) => `<span class="tag">${esc(TT_BLOCK[b] || b)}</span>`).join('')
+    + (a.blockers == null ? '<span class="tag" title="Jev has not read this product">Not checked</span>' : '')
     + (a.d === 'approved' ? '<span class="tag made">✓ Approved</span>' : a.d ? '<span class="tag">Rejected</span>' : '');
   const photo = safe(a.img)
     ? `<img src="${safe(a.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
     : `<div class="dom">${esc(a.shop)}</div>`;
-  const price = a.p == null ? '' : `<div class="price"><span>${esc(money(a.p, 'USD'))}${a.pm > a.p ? '–' + esc(money(a.pm, 'USD')) : ''}</span></div>`;
-  const counts = `Meta ads: US ${esc(fmt(a.us || 0))} · AU ${esc(fmt(a.au || 0))} · NZ ${esc(fmt(a.nz || 0))}`;
-  const ads = a.ms !== 'matched' ? 'No Meta page found'
-    : (safe(a.mu) ? `<a href="${safe(a.mu)}" target="_blank" rel="noopener noreferrer">${counts}</a>` : counts) + (a.mn ? ' · match unsure' : '');
+  const price = a.p == null ? '' : `<div class="price"><span>${esc(money(a.p, 'USD'))}${a.pm > a.p ? '–' + esc(money(a.pm, 'USD')) : ''}${a.ps ? ' <small>placeholder?</small>' : ''}</span></div>`;
+  const counts = `Shop's Meta ads: US ${esc(fmt(a.us || 0))} · AU ${esc(fmt(a.au || 0))} · NZ ${esc(fmt(a.nz || 0))}`;
+  const seen = a.ao ? ` · ${esc(a.an)} of ${esc(a.ao)} sampled mention this product` : '';
+  const to = a.ad ? ` · ads go to ${esc(a.ad)}` : '';
+  const ads = a.ms !== 'matched' ? esc(a.ml || 'No Meta page found')
+    : (safe(a.mu) ? `<a href="${safe(a.mu)}" target="_blank" rel="noopener noreferrer">${a.ml ? esc(a.ml) : counts}</a>` : a.ml ? esc(a.ml) : counts) + seen + to + (a.mn ? ' · match unsure' : '');
+  const videos = safe(a.vid) || esc('https://www.tiktok.com/search/video?q=' + encodeURIComponent(ttTitle(a.title).split(/\s+/).slice(0, 6).join(' ')));
+  const sold = a.mix ? 'sold, may include non-US' : 'sold';
   const acts = a.d === 'approved' ? '<button class="un" data-td="">Remove from ✓</button>'
     : a.d ? '<button class="un" data-td="">Unhide</button>'
     : `<button class="ok" data-td="approved">${ICON.check}Approved</button><button class="no" data-td="rejected">${ICON.x}Reject</button>`;
   return `<article class="card" data-id="${esc(a.id)}">
     <div class="ph">${photo}
       <div class="badges">${tags}</div>
-      <div class="hero" title="Lifetime units sold on TikTok Shop US"><b>${esc(fmt(a.sold))}</b><span>sold US</span></div>
-      <a class="view" href="${url}" target="_blank" rel="noopener noreferrer" aria-label="Open on TikTok">${ICON.play}</a>
+      <div class="hero" title="TikTok's own lifetime count"><b>${esc(fmt(a.sold))}</b><span>${sold}</span></div>
+      <a class="view" href="${videos}" target="_blank" rel="noopener noreferrer" aria-label="Watch videos on TikTok">${ICON.play}</a>
     </div>
     <div class="bd">
       <h2 class="t"><a href="${url}" target="_blank" rel="noopener noreferrer">${esc(ttTitle(a.title))}</a></h2>
@@ -1773,7 +1781,7 @@ function ttCard(a) {
         <div class="m" title="Creators with videos on this product, of the videos in the answer"><b>${esc(fmt(a.creators))}</b><span>creators</span></div>
         <div class="m" title="Plays on those videos"><b>${esc(ttBig(a.plays))}</b><span>plays</span></div>
       </div>
-      <div class="who ln"><span class="shop">${esc(a.shop)}</span><a href="${url}" target="_blank" rel="noopener noreferrer">TikTok ↗</a><a class="src" href="${esc(src1688(a.title))}" target="_blank" rel="noopener noreferrer" title="Search 1688">1688 ↗</a></div>
+      <div class="who ln"><span class="shop">${esc(a.shop)}</span><a href="${videos}" target="_blank" rel="noopener noreferrer">Videos ↗</a><a href="${url}" target="_blank" rel="noopener noreferrer" title="US listing: may not open outside the US">Listing ↗</a><a class="src" href="${esc(src1688(a.title))}" target="_blank" rel="noopener noreferrer" title="Search 1688">1688 ↗</a></div>
       <div class="ttads">${ads}</div>
     </div>
     <div class="acts">${acts}</div>
@@ -1786,7 +1794,7 @@ function ttRender() {
   $('ttgrid').setAttribute('aria-busy', 'false');
   $('ttcount').textContent = `${list.length.toLocaleString('en-US')} of ${TT.length.toLocaleString('en-US')} · ${TT_SORT[tt.sort][0]}`;
   const at = TT.reduce((m, a) => (a.at > m ? a.at : m), '');
-  $('ttnote').textContent = at ? `Sold counts are lifetime US totals, read ${new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}. Meta ads are counted per shop, matched by name: other shops can sell the same item.` : '';
+  $('ttnote').textContent = at ? `Sold is TikTok's own lifetime count, read ${new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}. Listings are US pages and may not open from your country, so use Videos. Meta ads are counted per shop, not per product.` : '';
   $('ttempty').hidden = list.length > 0;
   $('ttempty').innerHTML = `${EMPTY_ICON}<div>${TT.length ? 'No products match.' : 'No TikTok products loaded yet.'}</div>`;
   $('ttmore').hidden = tt.shown >= list.length;
@@ -1807,6 +1815,8 @@ async function ttLoad() {
     const j = await res.json();
     if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
     TT = j.products;
+    const cats = [...new Set(TT.map((a) => a.cat).filter(Boolean))].sort();
+    $('ttcat').insertAdjacentHTML('beforeend', cats.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join(''));
     $('ntt').textContent = TT.length ? fmt(TT.length) : '';
     ttRender();
   } catch (e) {
@@ -1841,6 +1851,7 @@ $('ttgrid').addEventListener('error', (e) => {
 }, true);
 let ttTimer = 0;
 $('ttq').addEventListener('input', (e) => { clearTimeout(ttTimer); ttTimer = setTimeout(() => { tt.q = e.target.value.trim(); tt.shown = TT_PAGE; if (TT) ttRender(); }, 150); });
+$('ttcat').addEventListener('change', (e) => { tt.cat = e.target.value; tt.shown = TT_PAGE; if (TT) ttRender(); });
 $('ttsort').addEventListener('change', (e) => { tt.sort = e.target.value; tt.shown = TT_PAGE; if (TT) ttRender(); });
 for (const b of document.querySelectorAll('[data-tf]')) b.addEventListener('click', () => { tt[b.dataset.tf] = !tt[b.dataset.tf]; tt.shown = TT_PAGE; if (TT) ttRender(); });
 $('ttmore').addEventListener('click', ttMore);
