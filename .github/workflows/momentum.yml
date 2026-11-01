@@ -1,0 +1,54 @@
+# Momentum, once a day after the last hunt of the day (winner-hunter/momentum.mjs): where each product on the board is
+# heading. It saves the day's numbers (ads, store ads, best-seller rank, TikTok sales, price, rivals) in D1 table
+# momentum_daily, one row a day, and a summary per product for the board (table momentum): rising, steady or falling,
+# how long its ads survived, other stores selling the same item, and how crowded that makes it.
+# Run it by hand: Actions → Momentum → Run workflow (a second run on a day replaces that day's numbers).
+# Secrets: CF_API_TOKEN, CF_ACCOUNT_ID (CF_D1_TOKEN, a D1-only Cloudflare token, is used instead of CF_API_TOKEN when it is
+# there). Optional: SERPAPI_KEY, Google Trends through SerpApi for shortlisted products only (a launch card, approved,
+# starred), at most TRENDS_MAX a run (repository variable, default 5; SerpApi's free plan has 100 searches a month).
+name: Momentum
+
+on:
+  workflow_dispatch:
+  schedule:
+    # After the World Hunter's last run of the day (19:17 UTC, up to 3 hours) and before midnight UTC, so a late start
+    # still counts for the same day.
+    - cron: '43 22 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: momentum
+  cancel-in-progress: false
+
+jobs:
+  momentum:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CF_API_TOKEN: ${{ secrets.CF_D1_TOKEN || secrets.CF_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID || '8934aca9-51d3-4f87-9c62-e897843149a1' }}
+      SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+      TRENDS_MAX: ${{ vars.TRENDS_MAX || '5' }}
+      TRENDS_DAYS: ${{ vars.TRENDS_DAYS || '14' }}
+      MOMENTUM_MINUTES: '20'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+
+      - name: Database tables
+        run: node winner-hunter/migrate.mjs
+
+      # Photo fingerprints (the same item in other stores, also across languages) are made in the runner's own Google
+      # Chrome. Without it the job still runs: rivals are then found by their words and supplier photos only.
+      - name: Install Playwright
+        continue-on-error: true
+        working-directory: winner-hunter
+        run: npm install --no-save --no-package-lock playwright-core@1.56.1
+
+      - name: Momentum
+        run: node winner-hunter/momentum.mjs
