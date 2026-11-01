@@ -92,6 +92,7 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
   };
   try {
     await page.addInitScript(() => localStorage.setItem('wh-scope', 'eu')); // this test is about the EU tabs
+    await page.addInitScript(() => localStorage.setItem('wh-risk', 'all')); // the board as before: risk.e2e.test.mjs has Block hidden
     await page.goto(base + '/');
     await noSideScroll('PIN screen');
     await shot('1-pin');

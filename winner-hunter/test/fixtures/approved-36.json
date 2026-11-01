@@ -1,0 +1,1075 @@
+{
+ "about": "A test set in the shape of 36 products approved on the board (EU tab, Outside EU tab, TikTok tab): 9 are restricted in the EU and must be Block, the other 27 sell (Docs or OK). The list of Connor's real approvals was not in the repository: replace these rows with them (same fields) and test/risk.test.mjs checks them. Titles in English, Dutch and German; Jev's answers in the shape world-check.mjs saves them (null: Jev never read it). why: the reasons that must be among the radar's block or docs reasons.",
+ "products": [
+  {
+   "n": 1,
+   "source": "world",
+   "title": "Ashwagandha Sleep Gummies – 60 Count",
+   "expect": "block",
+   "why": [
+    "eat"
+   ],
+   "restricted": true,
+   "pay": "Pseudo pharmaceuticals",
+   "price": 39.95,
+   "cur": "AUD",
+   "store": "https://calmroots.test/",
+   "product": "https://calmroots.test/products/ashwagandha-sleep-gummies",
+   "jev": {
+    "main": "Food and supplements",
+    "sub": "Supplements and vitamins",
+    "p": {
+     "people": 0.97,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.02,
+     "skin": 0.02,
+     "medical": 0.64,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   },
+   "note": "supplement: Jev says people take it, and 'gummies'"
+  },
+  {
+   "n": 2,
+   "source": "world",
+   "title": "Snail Mucin Repair Essence 100ml",
+   "expect": "block",
+   "why": [
+    "cosmetics"
+   ],
+   "restricted": true,
+   "price": 34,
+   "cur": "USD",
+   "store": "https://glowlab.test/",
+   "product": "https://glowlab.test/products/snail-mucin-essence",
+   "jev": {
+    "main": "Beauty and personal care",
+    "sub": "Skincare",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.93,
+     "electric": 0.02,
+     "skin": 0.96,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   },
+   "note": "cosmetic: Jev (on the skin, on the face), and 'snail mucin'"
+  },
+  {
+   "n": 3,
+   "source": "eu",
+   "title": "Zahnaufhellungsstreifen – Weiße Zähne in 14 Tagen",
+   "expect": "block",
+   "why": [
+    "cosmetics"
+   ],
+   "restricted": true,
+   "price": 29.95,
+   "cur": "EUR",
+   "store": "https://strahlend.test/",
+   "product": "https://strahlend.test/products/zahnaufhellung-streifen",
+   "jev": null,
+   "copy": "Weiße Zähne ohne Zahnarzt. Jetzt 50% Rabatt!",
+   "note": "German teeth whitening strips, no Jev answer: the word list alone"
+  },
+  {
+   "n": 4,
+   "source": "eu",
+   "title": "TENS Pain Relief Device for Back and Neck",
+   "expect": "block",
+   "why": [
+    "medical"
+   ],
+   "restricted": true,
+   "price": 49.95,
+   "cur": "EUR",
+   "store": "https://reliefpro.test/",
+   "product": "https://reliefpro.test/products/tens-pain-relief",
+   "jev": {
+    "main": "Health and pain relief",
+    "sub": "Massagers",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.97,
+     "skin": 0.02,
+     "medical": 0.95,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   },
+   "copy": "Relieves back pain in 15 minutes. Doctor recommended.",
+   "note": "medical device: TENS and pain relief in its name"
+  },
+  {
+   "n": 5,
+   "source": "world",
+   "title": "Vlooien- en tekenband voor honden",
+   "expect": "block",
+   "why": [
+    "pet_med"
+   ],
+   "restricted": true,
+   "price": 24.95,
+   "cur": "EUR",
+   "store": "https://hondenhuis.test/",
+   "product": "https://hondenhuis.test/products/vlooienband",
+   "jev": {
+    "main": "Pets",
+    "sub": "Harnesses, leashes and collars",
+    "p": {
+     "people": 0.01,
+     "animals": 0.2,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.02,
+     "skin": 0.02,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.3,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   },
+   "note": "Dutch flea and tick collar: veterinary and biocide rules"
+  },
+  {
+   "n": 6,
+   "source": "eu",
+   "title": "Pfefferspray Schlüsselanhänger zur Selbstverteidigung",
+   "expect": "block",
+   "why": [
+    "weapon"
+   ],
+   "restricted": true,
+   "pay": "Regulated or illegal products",
+   "price": 19.95,
+   "cur": "EUR",
+   "store": "https://sicherheim.test/",
+   "product": "https://sicherheim.test/products/pfefferspray-schlusselanhanger",
+   "jev": null,
+   "note": "German pepper spray keychain: a weapon in NL and DE"
+  },
+  {
+   "n": 7,
+   "source": "tiktok",
+   "title": "Lilo & Stitch Plush Toy 30cm",
+   "expect": "block",
+   "why": [
+    "brand"
+   ],
+   "restricted": true,
+   "pay": "Counterfeit products",
+   "price": 18.99,
+   "cur": "USD",
+   "id": "1729000000000000007",
+   "blockers": "brand kids",
+   "cat": "Baby and kids",
+   "note": "a Disney character: counterfeit risk"
+  },
+  {
+   "n": 8,
+   "source": "world",
+   "title": "IPL Laser Hair Removal Handset 999,999 Flashes",
+   "expect": "block",
+   "why": [
+    "device"
+   ],
+   "restricted": true,
+   "price": 89,
+   "cur": "GBP",
+   "store": "https://smoothskin.test/",
+   "product": "https://smoothskin.test/products/ipl-hair-removal",
+   "jev": {
+    "main": "Beauty and personal care",
+    "sub": "Hair removal for people",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.98,
+     "skin": 0.3,
+     "medical": 0.42,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   },
+   "note": "IPL: EU medical device rules (MDR Annex XVI)"
+  },
+  {
+   "n": 9,
+   "source": "eu",
+   "title": "Lymphatic Drainage Ginger Oil 30ml",
+   "expect": "block",
+   "why": [
+    "pseudo",
+    "cosmetics"
+   ],
+   "restricted": true,
+   "pay": "Pseudo pharmaceuticals",
+   "price": 24.95,
+   "cur": "EUR",
+   "store": "https://gingerglow.test/",
+   "product": "https://gingerglow.test/products/lymphatic-ginger-oil",
+   "jev": {
+    "main": "Beauty and personal care",
+    "sub": "Skincare",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.02,
+     "skin": 0.95,
+     "medical": 0.81,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.6,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   },
+   "copy": "Drains your belly fat and toxins in 7 days.",
+   "note": "a health promise on a skin oil"
+  },
+  {
+   "n": 10,
+   "source": "eu",
+   "title": "Oplaadbare nekverwarmer met 3 standen",
+   "expect": "docs",
+   "why": [
+    "ce",
+    "battery"
+   ],
+   "price": 34.95,
+   "cur": "EUR",
+   "store": "https://warmtewinkel.test/",
+   "product": "https://warmtewinkel.test/products/oplaadbare-nekverwarmer",
+   "jev": null,
+   "note": "Dutch: rechargeable, heated"
+  },
+  {
+   "n": 11,
+   "source": "world",
+   "title": "Portable Blender USB Rechargeable 380ml",
+   "expect": "docs",
+   "why": [
+    "ce",
+    "battery",
+    "food"
+   ],
+   "price": 39,
+   "cur": "AUD",
+   "store": "https://blendgo.test/",
+   "product": "https://blendgo.test/products/portable-blender",
+   "jev": {
+    "main": "Kitchen",
+    "sub": "Gadgets",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.98,
+     "skin": 0.02,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.95,
+     "hardsource": 0.1
+    }
+   }
+  },
+  {
+   "n": 12,
+   "source": "world",
+   "title": "Mini Projector 4K WiFi Bluetooth",
+   "expect": "docs",
+   "why": [
+    "ce",
+    "radio"
+   ],
+   "price": 129,
+   "cur": "AUD",
+   "store": "https://beamr.test/",
+   "product": "https://beamr.test/products/mini-projector",
+   "jev": {
+    "main": "Tech",
+    "sub": "Projectors and screens",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.99,
+     "skin": 0.02,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.4,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   }
+  },
+  {
+   "n": 13,
+   "source": "eu",
+   "title": "Kinder Zeichentablett LCD 10 Zoll",
+   "expect": "docs",
+   "why": [
+    "kids",
+    "ce"
+   ],
+   "price": 19.95,
+   "cur": "EUR",
+   "store": "https://kinderwelt.test/",
+   "product": "https://kinderwelt.test/products/zeichentablett",
+   "jev": {
+    "main": "Baby and kids",
+    "sub": "Learning toys",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.95,
+     "skin": 0.02,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.97,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   },
+   "note": "German: a kids' toy with a battery"
+  },
+  {
+   "n": 14,
+   "source": "eu",
+   "title": "Baby Sleep Sack 2.5 TOG",
+   "expect": "docs",
+   "why": [
+    "kids"
+   ],
+   "price": 39.95,
+   "cur": "EUR",
+   "store": "https://slaapzak.test/",
+   "product": "https://slaapzak.test/products/baby-sleep-sack",
+   "jev": {
+    "main": "Baby and kids",
+    "sub": "Baby sleep and monitors",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.02,
+     "skin": 0.02,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.7,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.98,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   }
+  },
+  {
+   "n": 15,
+   "source": "eu",
+   "title": "Drinkfles RVS 1 liter",
+   "expect": "docs",
+   "why": [
+    "food"
+   ],
+   "price": 22.95,
+   "cur": "EUR",
+   "store": "https://drinkfit.test/",
+   "product": "https://drinkfit.test/products/drinkfles-rvs",
+   "jev": null,
+   "note": "Dutch water bottle: food contact"
+  },
+  {
+   "n": 16,
+   "source": "world",
+   "title": "Damascus Chef Knife 8 inch",
+   "expect": "docs",
+   "why": [
+    "blade",
+    "food"
+   ],
+   "price": 79,
+   "cur": "USD",
+   "store": "https://bladeworks.test/",
+   "product": "https://bladeworks.test/products/damascus-chef-knife",
+   "jev": {
+    "main": "Kitchen",
+    "sub": "Cookware and knives",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.02,
+     "skin": 0.02,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.55,
+     "kids": 0.03,
+     "foodcontact": 0.9,
+     "hardsource": 0.1
+    }
+   }
+  },
+  {
+   "n": 17,
+   "source": "eu",
+   "title": "Shiatsu Foot Massager",
+   "expect": "docs",
+   "why": [
+    "ce",
+    "claims"
+   ],
+   "price": 59.95,
+   "cur": "EUR",
+   "store": "https://footbliss.test/",
+   "product": "https://footbliss.test/products/shiatsu-foot-massager",
+   "jev": null,
+   "copy": "Relieves foot pain and improves circulation in 10 minutes.",
+   "note": "the claim is in the ad, not in its name: docs, not a block"
+  },
+  {
+   "n": 18,
+   "source": "world",
+   "title": "Cordless Hair Straightener Mini",
+   "expect": "docs",
+   "why": [
+    "ce",
+    "battery"
+   ],
+   "price": 49,
+   "cur": "USD",
+   "store": "https://sleekgo.test/",
+   "product": "https://sleekgo.test/products/cordless-straightener",
+   "jev": {
+    "main": "Beauty and personal care",
+    "sub": "Hair care and styling",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.97,
+     "skin": 0.12,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   }
+  },
+  {
+   "n": 19,
+   "source": "tiktok",
+   "title": "Montessori Busy Board for Toddlers",
+   "expect": "docs",
+   "why": [
+    "kids"
+   ],
+   "price": 24.99,
+   "cur": "USD",
+   "id": "1729000000000000020",
+   "blockers": "kids",
+   "cat": "Baby and kids"
+  },
+  {
+   "n": 20,
+   "source": "eu",
+   "title": "Wrinkle Release Spray 500ml",
+   "expect": "docs",
+   "why": [
+    "ship"
+   ],
+   "price": 14.95,
+   "cur": "EUR",
+   "store": "https://freshfold.test/",
+   "product": "https://freshfold.test/products/wrinkle-release-spray",
+   "jev": {
+    "main": "Home",
+    "sub": "Laundry",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.02,
+     "skin": 0.02,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.7,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   }
+  },
+  {
+   "n": 21,
+   "source": "tiktok",
+   "title": "Glass Spice Jars Set of 12",
+   "expect": "docs",
+   "why": [
+    "food"
+   ],
+   "price": 21.99,
+   "cur": "USD",
+   "id": "1729000000000000022",
+   "blockers": "fragile foodcontact",
+   "cat": "Kitchen"
+  },
+  {
+   "n": 22,
+   "source": "world",
+   "title": "Posture Corrector for Men and Women",
+   "expect": "docs",
+   "why": [
+    "claims"
+   ],
+   "price": 29,
+   "cur": "USD",
+   "store": "https://uprightly.test/",
+   "product": "https://uprightly.test/products/posture-corrector",
+   "jev": {
+    "main": "Health and pain relief",
+    "sub": "Posture and back",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.02,
+     "skin": 0.02,
+     "medical": 0.35,
+     "brand": 0.04,
+     "sizing": 0.6,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   },
+   "note": "sells, without pain or cure claims"
+  },
+  {
+   "n": 23,
+   "source": "eu",
+   "title": "Pet Hair Remover Roller",
+   "expect": "ok",
+   "why": [],
+   "price": 19.95,
+   "cur": "EUR",
+   "store": "https://furfree.test/",
+   "product": "https://furfree.test/products/pet-hair-remover",
+   "jev": {
+    "main": "Pets",
+    "sub": "Grooming",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.02,
+     "skin": 0.02,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   }
+  },
+  {
+   "n": 24,
+   "source": "eu",
+   "title": "Self-Cleaning Cat Brush",
+   "expect": "ok",
+   "why": [],
+   "price": 17.95,
+   "cur": "EUR",
+   "store": "https://purrfect.test/",
+   "product": "https://purrfect.test/products/self-cleaning-brush",
+   "jev": {
+    "main": "Pets",
+    "sub": "Grooming",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.02,
+     "skin": 0.02,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   }
+  },
+  {
+   "n": 25,
+   "source": "world",
+   "title": "Waterproof Car Seat Cover",
+   "expect": "ok",
+   "why": [],
+   "price": 59,
+   "cur": "AUD",
+   "store": "https://pawride.test/",
+   "product": "https://pawride.test/products/car-seat-cover",
+   "jev": {
+    "main": "Car",
+    "sub": "Seat covers",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.02,
+     "skin": 0.02,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   }
+  },
+  {
+   "n": 26,
+   "source": "world",
+   "title": "Linen Summer Dress",
+   "expect": "ok",
+   "why": [],
+   "price": 59,
+   "cur": "USD",
+   "store": "https://linenlane.test/",
+   "product": "https://linenlane.test/products/linen-summer-dress",
+   "jev": {
+    "main": "Clothing",
+    "sub": "Women",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.02,
+     "skin": 0.02,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.95,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   },
+   "note": "a size to pick: a return risk, no compliance block"
+  },
+  {
+   "n": 27,
+   "source": "eu",
+   "title": "Weighted Blanket 7kg",
+   "expect": "ok",
+   "why": [],
+   "price": 69.95,
+   "cur": "EUR",
+   "store": "https://heavysleep.test/",
+   "product": "https://heavysleep.test/products/weighted-blanket-7kg",
+   "jev": {
+    "main": "Sleep and comfort",
+    "sub": "Blankets and weighted blankets",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.02,
+     "skin": 0.02,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.85,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   }
+  },
+  {
+   "n": 28,
+   "source": "eu",
+   "title": "Ergonomic Knee Pillow",
+   "expect": "ok",
+   "why": [],
+   "price": 24.95,
+   "cur": "EUR",
+   "store": "https://sleepwell.test/",
+   "product": "https://sleepwell.test/products/knee-pillow",
+   "jev": {
+    "main": "Sleep and comfort",
+    "sub": "Pillows",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.02,
+     "skin": 0.02,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   }
+  },
+  {
+   "n": 29,
+   "source": "world",
+   "title": "Silk Sleep Mask",
+   "expect": "ok",
+   "why": [],
+   "price": 25,
+   "cur": "USD",
+   "store": "https://silkdream.test/",
+   "product": "https://silkdream.test/products/silk-sleep-mask",
+   "jev": {
+    "main": "Sleep and comfort",
+    "sub": "Sleep masks and sound",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.3,
+     "electric": 0.02,
+     "skin": 0.02,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   },
+   "note": "a mask, not a face mask"
+  },
+  {
+   "n": 30,
+   "source": "eu",
+   "title": "Facial Ice Roller",
+   "expect": "ok",
+   "why": [],
+   "price": 14.95,
+   "cur": "EUR",
+   "store": "https://coolface.test/",
+   "product": "https://coolface.test/products/ice-roller",
+   "jev": {
+    "main": "Beauty and personal care",
+    "sub": "Face tools",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.3,
+     "electric": 0.02,
+     "skin": 0.08,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   },
+   "note": "a tool, nothing goes on the skin"
+  },
+  {
+   "n": 31,
+   "source": "world",
+   "title": "Makeup Brush Set 14 pcs",
+   "expect": "ok",
+   "why": [],
+   "price": 29,
+   "cur": "USD",
+   "store": "https://brushbar.test/",
+   "product": "https://brushbar.test/products/makeup-brush-set",
+   "jev": {
+    "main": "Beauty and personal care",
+    "sub": "Makeup",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.2,
+     "electric": 0.02,
+     "skin": 0.1,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   },
+   "note": "brushes, no makeup in it"
+  },
+  {
+   "n": 32,
+   "source": "tiktok",
+   "title": "Knife Sharpener 3-Stage",
+   "expect": "ok",
+   "why": [],
+   "price": 12.99,
+   "cur": "USD",
+   "id": "1729000000000000032",
+   "blockers": "",
+   "cat": "Kitchen",
+   "note": "a sharpener, not a knife"
+  },
+  {
+   "n": 33,
+   "source": "world",
+   "title": "Indestructible Dog Chew Toy",
+   "expect": "ok",
+   "why": [],
+   "price": 19,
+   "cur": "USD",
+   "store": "https://toughpup.test/",
+   "product": "https://toughpup.test/products/dog-chew-toy",
+   "jev": {
+    "main": "Pets",
+    "sub": "Dog toys",
+    "p": {
+     "people": 0.01,
+     "animals": 0.12,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.02,
+     "skin": 0.02,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   },
+   "note": "a toy for a dog, not a toy for a child"
+  },
+  {
+   "n": 34,
+   "source": "eu",
+   "title": "Bamboo Charcoal Shoe Deodorizer",
+   "expect": "ok",
+   "why": [],
+   "price": 12.95,
+   "cur": "EUR",
+   "store": "https://freshstep.test/",
+   "product": "https://freshstep.test/products/shoe-deodorizer",
+   "jev": {
+    "main": "Home",
+    "sub": "Air quality and scent",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.02,
+     "skin": 0.02,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   },
+   "note": "for shoes, not a deodorant"
+  },
+  {
+   "n": 35,
+   "source": "world",
+   "title": "Magnetic Car Phone Holder",
+   "expect": "ok",
+   "why": [],
+   "price": 25,
+   "cur": "AUD",
+   "store": "https://dashgrip.test/",
+   "product": "https://dashgrip.test/products/magnetic-phone-holder",
+   "jev": {
+    "main": "Car",
+    "sub": "Phone holders",
+    "p": {
+     "people": 0.01,
+     "animals": 0.01,
+     "gymwear": 0.01,
+     "physical": 0.99,
+     "face": 0.02,
+     "electric": 0.02,
+     "skin": 0.02,
+     "medical": 0.03,
+     "brand": 0.04,
+     "sizing": 0.03,
+     "fragile": 0.05,
+     "bulky": 0.04,
+     "restricted": 0.03,
+     "kids": 0.03,
+     "foodcontact": 0.04,
+     "hardsource": 0.1
+    }
+   }
+  },
+  {
+   "n": 36,
+   "source": "tiktok",
+   "title": "Silicone Case for AirPods Pro 2",
+   "expect": "ok",
+   "why": [],
+   "price": 9.99,
+   "cur": "USD",
+   "id": "1729000000000000036",
+   "blockers": "",
+   "cat": "Tech",
+   "note": "fits AirPods: no counterfeit"
+  }
+ ]
+}
