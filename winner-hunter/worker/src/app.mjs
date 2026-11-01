@@ -86,6 +86,10 @@ const VERSION_SQL = `SELECT (SELECT MAX(rowid) FROM winners) AS r, (SELECT updat
 const SNAP_MS = 15 * 60000; // read again after this long anyway
 const SNAPS = new WeakMap(); // per D1 binding
 let LAST = null; // on Cloudflare (one database): shared by the requests this isolate serves
+// A read of the tables on its way. The board asks /api/ads and /api/markets at the same moment: on a fresh isolate
+// both need the tables, and one read serves both (half the D1 rows read, no second wait).
+const READING = new WeakMap(); // per D1 binding
+let READ = null; // on Cloudflare, as LAST
 
 /** All winners rows, read again only when a run saved something (or after 15 minutes). */
 export async function snapshot(DB, now = Date.now()) {
@@ -94,28 +98,43 @@ export async function snapshot(DB, now = Date.now()) {
   const shared = typeof navigator !== 'undefined' && navigator.userAgent === 'Cloudflare-Workers';
   let s = SNAPS.get(DB) || (shared ? LAST : null);
   if (!s || s.ver !== ver || now - s.at > SNAP_MS || now < s.at) {
-    const optional = (sql) => DB.prepare(sql).all().then((r) => r.results || [], () => []); // no table yet: the board still works
-    const [{ results: eu }, bs, tp, world, jev] = await Promise.all([DB.prepare(SNAP_SQL).all(), optional(BS_SQL), optional(TRUST_SQL), optional(WORLD_SQL), optional(CHECK_SQL)]);
-    const checks = new Map(jev.map((c) => [c.product_key, c]));
-    for (const w of eu) {
-      const c = checks.get('eu|' + w.gk);
-      w.jev = c ? checkOf(c) : null;
+    let r = READING.get(DB) || (shared ? READ : null);
+    if (!r || r.ver !== ver) {
+      r = { ver, rows: readTables(DB) };
+      READING.set(DB, r);
+      if (shared) READ = r;
+      const done = () => {
+        if (READING.get(DB) === r) READING.delete(DB);
+        if (READ === r) READ = null;
+      };
+      r.rows.then(done, done); // a failed read is not kept: the next request reads again
     }
-    const results = eu.concat(world.map((w) => worldRow(w, checks.get(w.product_key))));
-    const best = new Map(bs.map((b) => [b.product_key, b]));
-    const trust = new Map(tp.map((t) => [t.store, t]));
-    for (const w of results) {
-      const key = productKey(w.product_url);
-      const b = best.get(key);
-      if (b) w.bs = b;
-      const t = trust.get(key.split('/')[0] || storeOf(w.store_url));
-      if (t) w.tp = t;
-    }
-    s = { ver, at: now, rows: results };
+    s = { ver, at: now, rows: await r.rows };
     SNAPS.set(DB, s);
     if (shared) LAST = s;
   }
   return s.rows;
+}
+
+async function readTables(DB) {
+  const optional = (sql) => DB.prepare(sql).all().then((r) => r.results || [], () => []); // no table yet: the board still works
+  const [{ results: eu }, bs, tp, world, jev] = await Promise.all([DB.prepare(SNAP_SQL).all(), optional(BS_SQL), optional(TRUST_SQL), optional(WORLD_SQL), optional(CHECK_SQL)]);
+  const checks = new Map(jev.map((c) => [c.product_key, c]));
+  for (const w of eu) {
+    const c = checks.get('eu|' + w.gk);
+    w.jev = c ? checkOf(c) : null;
+  }
+  const results = eu.concat(world.map((w) => worldRow(w, checks.get(w.product_key))));
+  const best = new Map(bs.map((b) => [b.product_key, b]));
+  const trust = new Map(tp.map((t) => [t.store, t]));
+  for (const w of results) {
+    const key = productKey(w.product_url);
+    const b = best.get(key);
+    if (b) w.bs = b;
+    const t = trust.get(key.split('/')[0] || storeOf(w.store_url));
+    if (t) w.tp = t;
+  }
+  return results;
 }
 
 // ---------------------------------------------------------------------------
@@ -655,14 +674,22 @@ ${msg ? `<p class="err" role="alert">${esc(msg)}</p>` : ''}<button type="submit"
 const nonceOf = () => b64url(crypto.getRandomValues(new Uint8Array(16)));
 const ipOf = (req) => (req.headers.get('cf-connecting-ip') || 'unknown').slice(0, 64);
 
-async function stateJson(DB, key) {
-  const row = await DB.prepare('SELECT value, updated_at FROM state WHERE key = ?').bind(key).first();
+const stateOf = (row) => {
   if (!row) return null;
   try {
     return Object.assign(JSON.parse(row.value), { updated_at: row.updated_at });
   } catch (e) {
     return null;
   }
+};
+async function stateJson(DB, key) {
+  return stateOf(await DB.prepare('SELECT value, updated_at FROM state WHERE key = ?').bind(key).first());
+}
+/** Several state keys in one query (one D1 round trip): { key: value or null }. */
+async function statesJson(DB, keys) {
+  const { results } = await DB.prepare(`SELECT key, value, updated_at FROM state WHERE key IN (${keys.map(() => '?').join(', ')})`).bind(...keys).all();
+  const rows = new Map((results || []).map((r) => [r.key, r]));
+  return Object.fromEntries(keys.map((k) => [k, stateOf(rows.get(k))]));
 }
 
 /**
@@ -848,13 +875,12 @@ async function login(req, env, now) {
 }
 
 async function ads(url, env, now, viewer) {
-  const list = await board(env, now);
+  // The products and the run states at the same time: the board waits for one round trip to D1, not five in a row.
+  const [list, states] = await Promise.all([board(env, now), statesJson(env.DB, ['last_run', 'world_run', 'token_expires_at', 'world_check'])]);
   const q = viewOf(url.searchParams, list);
   const scope = url.searchParams.get('scope') === 'world' ? 'world' : 'eu';
   const counts = countsOf(list, now, scope);
-  const run = await stateJson(env.DB, 'last_run');
-  const worldRun = await stateJson(env.DB, 'world_run');
-  const token = await stateJson(env.DB, 'token_expires_at');
+  const { last_run: run, world_run: worldRun, token_expires_at: token } = states;
   // While a run hunts, the board also shows what the run before it found.
   const prev = run && run.status === 'running'
     ? await env.DB.prepare('SELECT started_at, finished_at, ads_checked, winners FROM runs WHERE finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 1').first()
@@ -868,7 +894,7 @@ async function ads(url, env, now, viewer) {
     last_run: run,
     prev_run: prev || null,
     world_run: worldRun,
-    alert: scope === 'world' ? worldAlert(worldRun, now, token, await stateJson(env.DB, 'world_check')) : boardAlert(run, token, now),
+    alert: scope === 'world' ? worldAlert(worldRun, now, token, states.world_check) : boardAlert(run, token, now),
     viewer,
   });
 }
