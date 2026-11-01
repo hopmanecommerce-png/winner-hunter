@@ -13,6 +13,7 @@ import { tiktokDecide, tiktokList } from './tiktok.mjs';
 import { adView } from './adview.mjs';
 import { TRAITS, AD_TRAITS, CHOICES, AD_CHOICES, SEP, YES_AT, VERSION } from './jev-questions.mjs';
 import { MARKET_RULES } from './market-rules.mjs';
+import { LAUNCH_JS, launchList, launchPost } from './launch.mjs';
 
 const COOKIE = '__Host-wh';
 const MAX_AGE = 90 * 864e2; // seconds
@@ -1124,6 +1125,19 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       const { j, err } = await readJson(req, url);
       if (err) return err;
       const out = await tiktokDecide(env, j, now);
+      return json(out.body, out.status);
+    }
+    // ---- Launch view (launch.mjs): an approved product's launch card, checklist and decision. A block of its own, so the
+    // routes above stay as they are. /launch.js: the margin and decision code the board runs while you type.
+    if (path === '/api/launch' || path === '/launch.js') {
+      if (!ok) return json({ error: 'Log in first' }, 401);
+      if (path === '/launch.js') return method === 'GET' ? text(LAUNCH_JS, 200, { 'Content-Type': 'text/javascript; charset=utf-8' }) : json({ error: 'Method not allowed' }, 405);
+      const deps = { products: async () => (await board(env, now)).k, toAd };
+      if (method === 'GET') return json(await launchList(env, url.searchParams.get('pick') === '1', deps));
+      if (method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+      const { j, err } = await readJson(req, url, 8000);
+      if (err) return err;
+      const out = await launchPost(env, j, now, deps);
       return json(out.body, out.status);
     }
     // Off unless the Worker has AD_VIEWER = "on": the board no longer uses it, and a Meta token left in the Worker by an
