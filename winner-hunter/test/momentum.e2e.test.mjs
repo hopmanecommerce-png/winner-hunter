@@ -107,7 +107,9 @@ test('📈 Momentum on an iPhone: rows and sparklines on the cards, the Momentum
     const block = await page.locator('#grid .card.open .mob').innerText();
     assert.match(block, /^↑ Rising \+0\.87\s+ads 3 → 11 in 8d/);
     assert.match(block, /Momentum \+0\.87: Ads \+1\.00 × 0\.35 · Best-seller rank \+0\.90 × 0\.25 · New ads \+1\.00 × 0\.15/);
-    assert.match(block, /Ranks it × 1\.135 in the Inbox: Rising \+0\.87 × 1\.261 · Getting crowded × 0\.9/);
+    // How it ranks: in the Inbox's own rank line (app.mjs ranked()), once, not again in the block.
+    assert.match(await page.locator('#grid .card.open .jevl.rk').innerText(), /^Inbox rank × 1\.1[34]: Rising \+0\.87 × 1\.26 · Getting crowded × 0\.9$/);
+    assert.doesNotMatch(block, /Ranks it/);
     assert.match(block, /Ads survived 69 days: its longest-running ad, from its start to the last time it was seen · 2 of its ads ran 30\+ days/);
     assert.match(block, /Getting crowded: 3 other stores sell the same or a similar item \(1 new in 14d\): rival-one\.test, rival-three\.test, rival-two\.test/);
     assert.match(block, /Tracking since 9 Oct \(4 days of numbers\)/);

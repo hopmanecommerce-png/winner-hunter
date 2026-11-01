@@ -72,8 +72,8 @@ for (const [name, viewport] of [['phone', { width: 390, height: 844 }], ['deskto
     page.on('console', (m) => { if (m.type() === 'error' && !/ERR_|Failed to load/.test(m.text())) errors.push(m.text()); });
     page.on('pageerror', (e) => errors.push(e.message));
     await page.route('https://cdn.shopify.com/**', (r) => r.fulfill({ contentType: 'image/png', body: PIXEL }));
-    const { makeToken } = await import('../worker/src/app.mjs');
-    await page.setExtraHTTPHeaders({ cookie: `__Host-wh=${await makeToken(env.BOARD_PIN, NOW)}` });
+    const { tokenFor } = await import('../worker/src/app.mjs');
+    await page.setExtraHTTPHeaders({ cookie: `__Host-wh=${await tokenFor(env, NOW)}` });
     try {
       await page.goto(base + '/');
       await page.waitForSelector('.card');

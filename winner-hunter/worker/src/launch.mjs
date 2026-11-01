@@ -11,7 +11,12 @@
  *   POST /api/launch {key, decision: 'go' | 'no' | ''}  your launch decision; a no-go loses the pin
  *   POST /api/launch {key, remove: true}            the card is deleted
  *   GET  /launch.js                                 launchKit as a script: the board works the numbers out as you type
- * key: 'eu|<page id>|<title>' (an EU product), 'world|<store.com/products/handle>' (outside the EU) or 'tiktok|<id>'.
+ * key: the product's key on the board. 'eu|<store.com/products/handle>' (an EU product: its product page, as the board
+ * groups it; an ad without a product page: 'eu|<page id>|<title>', its advertiser + title), 'world|<store.com/products/handle>'
+ * (outside the EU) or 'tiktok|<id>'. A card keeps the key it was saved under: one saved before the board grouped EU
+ * products by product page has its advertiser + title key and is still its product's card (cardProducts). Start and the
+ * pick list find it under either key. A change (step, pin, decision, remove) names the card by the key it is saved under,
+ * as GET and start give it: a key with no card is a 404, never another card of the same product.
  * app.mjs checks the PIN cookie, the origin and the JSON before any of this runs. All SQL is parameterized.
  */
 import { TRAITS, YES_AT } from './jev-questions.mjs';
@@ -218,9 +223,90 @@ export const LAUNCH_JS = `'use strict';\nwindow.LAUNCH = (${launchKit})();\n`;
 // The product behind a card: its facts when the launch started
 // ---------------------------------------------------------------------------
 
-/** The card's key of a board product (a row of products().k in app.mjs): 'eu|' + its group key, or 'world|…' as it is. */
+/**
+ * The card's key of a board product (a row of products().k in app.mjs): 'eu|' + its group key (groupKey in app.mjs: its
+ * product page, else its advertiser + title), or 'world|…' as it is.
+ */
 export const keyOf = (r) => (r.world ? String(r.gk) : 'eu|' + r.gk);
 const keyIn = (k) => (typeof k === 'string' && k.length <= 1000 && /^(eu|world|tiktok)\|./s.test(k) ? k : '');
+// An EU key of a product page ('eu|store.com/products/handle'). A host never holds '|' or '/', and an advertiser +
+// title key always has a '|' right after its page id, so the two kinds never look alike.
+const PAGE_KEY = /^eu\|[^|/]+\/products\//;
+
+/**
+ * The board's products by their launch key, and what finds the card of one. Until the board grouped EU products by
+ * product page, an EU card was saved under 'eu|' + the advertiser + title of the product's ads, and such a row is never
+ * rewritten. b: deps.board() ({ products: products().k, rows: every ad, each with gk and, in the EU, jk: its advertiser
+ * + title }). byKey: board key → product. ofAd: EU ad id → the board key of its product. ofOld: an old key ('eu|' +
+ * advertiser + title) → the board keys of the products its ads are in now (more than one when the old product is now
+ * several product pages). pageKey: productKey in app.mjs.
+ */
+export function launchIndex(b, pageKey = () => '') {
+  const byKey = new Map();
+  const ofAd = new Map();
+  const ofOld = new Map();
+  for (const r of b.products || []) byKey.set(keyOf(r), r);
+  for (const w of b.rows || []) {
+    if (w.world || w.jk == null || w.gk == null) continue;
+    const key = 'eu|' + w.gk;
+    ofAd.set(String(w.ad_id), key);
+    const old = 'eu|' + w.jk;
+    if (!ofOld.has(old)) ofOld.set(old, new Set());
+    ofOld.get(old).add(key);
+  }
+  return { byKey, ofAd, ofOld, pageKey };
+}
+
+/**
+ * The board key of a card's product. A card under a product page, outside the EU or from TikTok: its own key. An EU card
+ * under an advertiser + title (saved before the board grouped by product page, or a product without a product page):
+ * the product its ad (facts.id) is in now; that ad gone, the product page in its facts; else its own key.
+ */
+export function cardProduct(row, idx) {
+  const k = String(row.product_key);
+  if (!k.startsWith('eu|') || PAGE_KEY.test(k)) return k;
+  const f = parse(row.facts, {});
+  const ofAd = f.id == null ? undefined : idx.ofAd.get(String(f.id));
+  if (ofAd) return ofAd;
+  const page = idx.pageKey(f.product);
+  return page ? 'eu|' + page : k;
+}
+
+/**
+ * The board keys of every product a card stands for: its own product (cardProduct). A card under an advertiser + title
+ * key whose own product is now another key (its ad is on a product page: it was saved before the board grouped by
+ * product page) also stands for the products that share that old key and were approved by the time it was started:
+ * they were one product then, so the approved one is not offered again when the card's ad is on another product page.
+ * A product of that old key approved later is a new decision, and can have a card of its own.
+ */
+export function cardProducts(row, idx) {
+  const own = cardProduct(row, idx);
+  const k = String(row.product_key);
+  const at = String(row.created_at || '');
+  if (own === k || !at) return [own]; // its key is still its product's key: no older grouping to make up for
+  const out = new Set([own]);
+  for (const key of idx.ofOld.get(k) || []) {
+    const p = idx.byKey.get(key);
+    if (p && p.hid === 1 && p.hat && String(p.hat) <= at) out.add(key);
+  }
+  return [...out];
+}
+
+/**
+ * The board product a launch key names: the product with that key, or, for an old EU key (advertiser + title; a board
+ * opened before the board grouped by product page still sends one), the product its ads are in now. When the old
+ * product is now several product pages: the approved one, then the one that passes the rules, then most reach a day.
+ */
+export function productFor(idx, key) {
+  const r = idx.byKey.get(key);
+  if (r || !idx.ofOld.has(key)) return r;
+  const rank = (p) => [p.hid === 1 ? 1 : 0, Number(p.pass) || 0, Number(p.rpd) || 0];
+  return [...idx.ofOld.get(key)].map((k) => idx.byKey.get(k)).filter(Boolean).sort((a, b) => {
+    const x = rank(a);
+    const y = rank(b);
+    return y[0] - x[0] || y[1] - x[1] || y[2] - x[2] || cmp(keyOf(a), keyOf(b));
+  })[0];
+}
 const numOr = (x) => (x == null || x === '' || !Number.isFinite(Number(x)) ? null : Number(x));
 const https = (u) => (typeof u === 'string' && /^https:\/\//i.test(u) ? u : '');
 const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -289,6 +375,9 @@ export function tiktokFacts(t) {
 const COLS = 'product_key, title, facts, steps, pinned, decision, created_at, updated_at';
 export const LIST_SQL = `SELECT ${COLS} FROM launches ORDER BY COALESCE(pinned, 0) DESC, updated_at DESC LIMIT 200`;
 const ROW_SQL = `SELECT ${COLS} FROM launches WHERE product_key = ?`;
+// Every card's key, facts and start: which products have a card, and the card saved under another key than the one
+// asked for. Oldest first, so the same card answers every time when two stand for one product.
+const KEYS_SQL = 'SELECT product_key, facts, created_at FROM launches ORDER BY created_at, product_key';
 // A new card is the launch pin when nothing else is pinned. A card that is already there stays as it is.
 export const START_SQL = `INSERT INTO launches (${COLS})
 VALUES (?1, ?2, ?3, '{}', CASE WHEN EXISTS (SELECT 1 FROM launches WHERE pinned = 1) THEN NULL ELSE 1 END, NULL, ?4, ?4)
@@ -313,27 +402,46 @@ export function launchOut(row) {
 }
 
 /**
- * GET /api/launch. deps.products(): every board product once (products().k in app.mjs, hid 1 = approved); deps.toAd:
- * the board's card data. With pick: the approved products that have no card yet, the last approved first.
+ * GET /api/launch. deps.board(): { products: every board product once (products().k in app.mjs, hid 1 = approved),
+ * rows: every ad (launchIndex) }; deps.toAd: the board's card data; deps.pageKey: productKey. With pick: the approved
+ * products that have no card yet (under their key, or under the old key of a card saved before), the last approved first.
  */
 export async function launchList(env, pick, deps) {
   if (!pick) {
     const { results } = await env.DB.prepare(LIST_SQL).all();
     return { launches: (results || []).map(launchOut) };
   }
-  const [have, rows, tt] = await Promise.all([
-    env.DB.prepare('SELECT product_key FROM launches').all().then((r) => new Set((r.results || []).map((x) => x.product_key))),
-    deps.products(),
+  const [cards, b, tt] = await Promise.all([
+    env.DB.prepare(KEYS_SQL).all().then((r) => r.results || []),
+    deps.board(),
     env.DB.prepare(`${TT_SQL} WHERE decision = 'approved' ORDER BY decided_at DESC LIMIT ${PICK_MAX}`).all().then((r) => r.results || [], () => []), // no TikTok table: none
   ]);
-  const board = rows.filter((r) => r.hid === 1 && !have.has(keyOf(r))).map((r) => ({ key: keyOf(r), facts: boardFacts(r, deps.toAd) }));
+  const idx = launchIndex(b, deps.pageKey);
+  const have = new Set(cards.flatMap((c) => [c.product_key, ...cardProducts(c, idx)]));
+  const board = (b.products || []).filter((r) => r.hid === 1 && !have.has(keyOf(r))).map((r) => ({ key: keyOf(r), facts: boardFacts(r, deps.toAd) }));
   const tiktok = tt.filter((t) => !have.has('tiktok|' + t.id)).map((t) => ({ key: 'tiktok|' + t.id, facts: tiktokFacts(t) }));
   return { candidates: board.concat(tiktok).sort((a, b) => cmp(b.facts.approved_at, a.facts.approved_at)).slice(0, PICK_MAX) };
 }
 
 const bad = (error, status = 400) => ({ status, body: { error } });
 
-/** POST /api/launch: start a card, save a step, pin, decide or remove. Returns { status, body } (body.launch: the card now). */
+/**
+ * The key of the card of the product with board key `want`: the one saved under it, else the oldest one saved under an
+ * older key that stands for it (cardProducts); or null.
+ */
+async function cardKeyOf(env, want, idx) {
+  const rows = (await env.DB.prepare(KEYS_SQL).all()).results || [];
+  const hit = rows.find((r) => r.product_key === want) || rows.find((r) => cardProducts(r, idx).includes(want));
+  return hit ? hit.product_key : null;
+}
+
+/**
+ * POST /api/launch: start a card, save a step, pin, decide or remove. Returns { status, body } (body.launch: the card now).
+ * Start finds a product's card under its board key or an old key, and only makes one when there is none. A change names
+ * its card by the key it is saved under: no card under that key (removed in another tab, a remove sent twice) is a 404,
+ * so it never lands on another card of the same product. A launch row is only written under the key it was saved
+ * under, and deleted only by { remove: true } under that key.
+ */
 export async function launchPost(env, j, now, deps) {
   if (!j || typeof j !== 'object' || Array.isArray(j)) return bad('Bad JSON');
   const at = new Date(now).toISOString();
@@ -342,8 +450,11 @@ export async function launchPost(env, j, now, deps) {
     return row ? { status: 200, body: { ok: true, launch: launchOut(row) } } : bad('No launch card for this product', 404); // removed meanwhile
   };
   if (j.start != null) {
-    const key = keyIn(j.start);
+    let key = keyIn(j.start);
     if (!key) return bad('Bad product');
+    // A card saved under exactly this key (also an old key sent by a board opened before the change): as it is.
+    const exact = await env.DB.prepare(ROW_SQL).bind(key).first();
+    if (exact) return { status: 200, body: { ok: true, launch: launchOut(exact) } };
     let facts;
     if (key.startsWith('tiktok|')) {
       const id = key.slice('tiktok|'.length);
@@ -353,8 +464,13 @@ export async function launchPost(env, j, now, deps) {
       if (t.decision !== 'approved') return bad('Approve it first', 409);
       facts = tiktokFacts(t);
     } else {
-      const r = (await deps.products()).find((p) => keyOf(p) === key);
+      const idx = launchIndex(await deps.board(), deps.pageKey);
+      const r = productFor(idx, key);
       if (!r) return bad('Unknown product', 404);
+      key = keyOf(r); // the board's key, also when an old key was sent
+      // Its card already there, under the board key or saved under an old key: it stays as it is. Only a new one needs ✓.
+      const have = await cardKeyOf(env, key, idx);
+      if (have != null) return card(have);
       if (r.hid !== 1) return bad('Approve it first', 409);
       facts = boardFacts(r, deps.toAd);
     }

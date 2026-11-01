@@ -12,19 +12,21 @@
 import { tiktokDecide, tiktokList } from './tiktok.mjs';
 import { adView } from './adview.mjs';
 import { TRAITS, AD_TRAITS, CHOICES, AD_CHOICES, SEP, YES_AT, VERSION } from './jev-questions.mjs';
+import { MOMENTUM_JS, readMomentum, attachMomentum, momentumFactor, byMomentum, momentumCard, momentumApi } from './momentum.mjs';
 import { MARKET_RULES } from './market-rules.mjs';
 import { LAUNCH_JS, launchList, launchPost } from './launch.mjs';
-import { MOMENTUM_JS, readMomentum, attachMomentum, momentumX, byMomentum, timesMomentum, momentumCard, momentumApi } from './momentum.mjs';
+import { SOURCING_JS, sourcingGet, sourcingPost } from './sourcing.mjs';
 
 const COOKIE = '__Host-wh';
 const MAX_AGE = 90 * 864e2; // seconds
 // The hard rules (same as lib/score.mjs): rows that fail any of them are never shown, counted or exported.
 // Shopify is checked before a row is ever saved, so every row in D1 passed it.
 export const MIN_ACTIVE_ADS = 75;
-export const MIN_AGE_DAYS = 7;
-export const MAX_AGE_DAYS = 42; // ad age today: the age when last seen + the whole days since
+export const MIN_AGE_DAYS = 7; // measured when last seen, and today
+export const MAX_AGE_DAYS = 42; // ad age today: the whole days since it started (ad_start_date)
 export const MIN_REACH_PER_DAY = 500;
-const PIN_TRIES = 10; // wrong PINs per IP per 15 minutes
+const PIN_TRIES = 10; // PIN tries per IP (IPv6: per /64) per 15 minutes, counted before the PIN is compared
+const NET_TRIES = 30; // and per network around it (IPv6: /48, IPv4: /24)
 const PIN_WINDOW = 15 * 60000;
 const STALE_HOURS = 36; // the EU hunt only runs by hand: a run older than this no longer shows a banner, unless it hangs
 const WORLD_STALE_HOURS = 24; // the hunt outside the EU runs every 6 hours
@@ -34,12 +36,17 @@ const TOKEN_DAYS = 7; // a Meta token expiring within this many days: red banner
 // SQL
 // ---------------------------------------------------------------------------
 
-// One product = one advertiser + one product title: duplicates of it collapse into its best ad (most reach a day).
+// One advertiser + one product title. Jev's answers on an EU product are kept under this key ('eu|' + it), and the SQL
+// views below (the ad prefetch, Jev's queue) collapse duplicates by it. The board itself groups by the product page
+// (groupKey below), so the same product under two titles or two advertisers is one product there.
 // The first bound parameter of every query on BASE is "now" (ISO), for the ad age today.
 const KEY = `COALESCE(w.advertiser_page_id, '') || '|' || lower(trim(COALESCE(NULLIF(w.product_title, ''), w.ad_id)))`;
 const RPD = `CAST(COALESCE(w.reach_eu, 0) AS REAL) / MAX(COALESCE(w.ad_age_days, 0), 1)`;
-const AGE_NOW = `(COALESCE(w.ad_age_days, 0) + MAX(CAST(julianday(?1) - julianday(w.last_seen) AS INTEGER), 0))`;
-const PASS = `(COALESCE(w.active_ads, 0) >= ${MIN_ACTIVE_ADS} AND w.ad_age_days IS NOT NULL AND ${AGE_NOW} BETWEEN ${MIN_AGE_DAYS} AND ${MAX_AGE_DAYS} AND ${RPD} >= ${MIN_REACH_PER_DAY})`;
+// Age today: the whole days since the ad started (a UTC day). An old row without a start date: the age when last seen
+// + the whole days since, which can be a day short.
+const AGE_NOW = `COALESCE(CAST(julianday(?1) - julianday(NULLIF(w.ad_start_date, '')) AS INTEGER), COALESCE(w.ad_age_days, 0) + MAX(CAST(julianday(?1) - julianday(w.last_seen) AS INTEGER), 0))`;
+// The age when measured must pass too: reach a day over a 5-day-old ad is not the same figure.
+const PASS = `(COALESCE(w.active_ads, 0) >= ${MIN_ACTIVE_ADS} AND w.ad_age_days >= ${MIN_AGE_DAYS} AND ${AGE_NOW} BETWEEN ${MIN_AGE_DAYS} AND ${MAX_AGE_DAYS} AND ${RPD} >= ${MIN_REACH_PER_DAY})`;
 const BASE = `WITH g AS (
   SELECT w.ad_id, w.product_title, w.price, w.compare_at_price, w.currency, w.advertiser, w.active_ads,
     w.ad_age_days, w.reach_eu, w.scaled_count, w.keyword, w.store_url, w.product_url, w.ad_library_url, w.image_url,
@@ -68,8 +75,8 @@ const BASE = `WITH g AS (
 // An ad's top countries as Meta gives them: "FR 91%, BE 9%, LU 1%" (in data.top_countries).
 export const parseCountries = (s) => [...String(s || '').matchAll(/\b([A-Z]{2}) (\d{1,3})%/g)].map((m) => [m[1], Math.min(100, Number(m[2]))]);
 
-const SNAP_SQL = `SELECT w.ad_id, ${KEY} AS gk, w.product_title, w.price, w.compare_at_price, w.currency, w.advertiser, w.active_ads,
-  w.ad_age_days, w.reach_eu, w.scaled_count, w.keyword, w.store_url, w.product_url, w.ad_library_url, w.image_url,
+const SNAP_SQL = `SELECT w.ad_id, ${KEY} AS jk, w.product_title, w.price, w.compare_at_price, w.currency, w.advertiser, w.active_ads,
+  w.ad_age_days, w.ad_start_date, w.reach_eu, w.scaled_count, w.keyword, w.store_url, w.product_url, w.ad_library_url, w.image_url,
   w.first_seen, w.last_seen, w.data FROM winners w`;
 // Store signals (bestsellers.mjs, once a day), read with the winners and kept on each row: w.bs (best-seller rank)
 // and w.tp (the store's Trustpilot score).
@@ -120,12 +127,25 @@ export async function snapshot(DB, now = Date.now()) {
   return s.rows;
 }
 
+/**
+ * The board's product: the product page the ad links to (store domain + handle, as productKey), so the same product
+ * under two titles or two advertisers is one product: one decision, one note. An ad without a product page: its
+ * advertiser + title (KEY), as before.
+ */
+export const groupKey = (w) => productKey(w.product_url) || w.jk;
+
 async function readTables(DB) {
-  const optional = (sql) => DB.prepare(sql).all().then((r) => r.results || [], () => []); // no table yet: the board still works
+  // A table that is not there yet (an older database): the board works without it. Any other error fails the read, so
+  // it is not kept: a brief D1 error must not hide ranks, Trustpilot, Jev or the products outside the EU for 15 minutes.
+  const optional = (sql) => DB.prepare(sql).all().then((r) => r.results || [], (e) => {
+    if (/no such (table|column)/i.test(String(e && e.message))) return [];
+    throw e;
+  });
   const [{ results: eu }, bs, tp, world, jev] = await Promise.all([DB.prepare(SNAP_SQL).all(), optional(BS_SQL), optional(TRUST_SQL), optional(WORLD_SQL), optional(CHECK_SQL)]);
   const checks = new Map(jev.map((c) => [c.product_key, c]));
   for (const w of eu) {
-    const c = checks.get('eu|' + w.gk);
+    w.gk = groupKey(w);
+    const c = checks.get('eu|' + w.jk);
     w.jev = c ? checkOf(c) : null;
   }
   const results = eu.concat(world.map((w) => worldRow(w, checks.get(w.product_key))));
@@ -257,6 +277,22 @@ export function jevMatches(want, c) {
   return jevFlags(c).includes(want);
 }
 
+// What makes a product harder to sell from here ranks it lower in the Inbox, by Jev's yes answers (0.5 or more): people
+// or pets take it × 0.3, returns, health claims, brands and shipping limits × 0.5 each, the rest × 0.8 each; never
+// below × 0.2. An EU product people or pets take stays out of the Inbox (Browse still lists it, with its tag).
+export const RISK = { people: 0.3, animals: 0.3, sizing: 0.5, medical: 0.5, brand: 0.5, restricted: 0.5, kids: 0.8, skin: 0.8, electric: 0.8, fragile: 0.8, bulky: 0.8 };
+export const RISK_FLOOR = 0.2;
+const RED_RISKS = ['restricted', 'medical', 'skin']; // a red tag on the card
+const TRAIT_LABEL = Object.fromEntries(TRAITS.map((t) => [t.k, t.label]));
+/** { x: the Inbox factor, why: [{ k, label, x }], red: [keys] }, or null without an answer. */
+export function riskOf(c) {
+  if (!c) return null;
+  const yes = (k) => !!c.p && c.p[k] >= YES_AT;
+  const why = Object.entries(RISK).filter(([k]) => yes(k)).map(([k, x]) => ({ k, label: TRAIT_LABEL[k], x }));
+  return { x: Math.round(Math.max(RISK_FLOOR, why.reduce((f, w) => f * w.x, 1)) * 1000) / 1000, why, red: RED_RISKS.filter(yes) };
+}
+const takenIn = (r) => !r.world && !!r.jev && !!r.jev.p && (r.jev.p.people >= YES_AT || r.jev.p.animals >= YES_AT);
+
 /** For the board's breakdown and filter: how many undecided products have each answer. Sorted by count, nothing is picked. */
 export function jevSummary(rows) {
   const count = (items) => [...items.entries()].map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
@@ -315,48 +351,73 @@ export function proofOf(r) {
 }
 
 const bsRank = (r) => (r.bs && Number(r.bs.ok) && r.bs.rank != null ? Number(r.bs.rank) : null);
-/** The inbox puts products that sell first: × 1.5 in the store's top 10, × 1.2 in its top 50. */
+/** How many products its store sells, when known (EU: the hunt's store check; outside the EU: the scan). */
+export function storeSize(r) {
+  const n = r.world ? r.world.store_products : dataOf(r).store_products;
+  return n == null || !Number.isFinite(Number(n)) ? null : Number(n);
+}
+/**
+ * The inbox puts products that sell first, by their rank among what their store sells: × 1.5 in its top 10 and top 2%,
+ * × 1.2 in its top 50 and top 10%. In a store of 8 products every product is in its top 10, so the rank says little
+ * there; with the store's size unknown, no boost.
+ */
 export const sellsBoost = (r) => {
   const k = bsRank(r);
-  return k == null ? 1 : k <= 10 ? 1.5 : 1.2;
+  const n = storeSize(r);
+  if (k == null || !(n > 0)) return 1;
+  return k <= 10 && k <= 0.02 * n ? 1.5 : k <= 50 && k <= 0.1 * n ? 1.2 : 1;
 };
 
 const num = (x) => Number(x) || 0;
 const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 const better = (a, b) => b.rpd - a.rpd || cmp(a.ad_id, b.ad_id); // < 0: a first
-function countriesOf(w) {
-  if (!w._mk) {
-    let d = {};
-    try { d = JSON.parse(w.data || '{}') || {}; } catch (e) { d = {}; }
-    w._mk = parseCountries(d.top_countries);
+/** A winners row's data column (the full record), read once per row. */
+function dataOf(w) {
+  if (!w._d) {
+    try { w._d = JSON.parse(w.data || '{}') || {}; } catch (e) { w._d = {}; }
   }
+  return w._d;
+}
+function countriesOf(w) {
+  if (!w._mk) w._mk = parseCountries(dataOf(w).top_countries);
   return w._mk;
 }
 
+/** An EU ad's age today: the whole days since it started; an old row without a start date, its age when last seen + the days since. */
+export function ageNow(w, now) {
+  const start = Date.parse(w.ad_start_date || '');
+  if (Number.isFinite(start)) return Math.trunc((now - start) / 864e5);
+  const seen = Date.parse(w.last_seen);
+  return Number.isFinite(seen) ? num(w.ad_age_days) + Math.max(Math.trunc((now - seen) / 864e5), 0) : null;
+}
+
 /**
- * The rules at `now`, one product per advertiser + title, with its status. v: the board (each product's best
+ * The rules at `now`, one product per product page (groupKey), with its status. v: the board (each product's best
  * passing ad: most reach a day). k: every product once, its best ad (passing first): the ★ and ✓ Made ad lists keep
  * a product after it ages out of the rules. w: the products outside the EU that still run. ids: the ads of each product (gk), for /api/hide. hat: when it was
- * marked seen (made ad) or rejected.
+ * marked seen (made ad) or rejected. byAd: ad id → its product's group.
  */
 export function products(rows, hidden = [], stars = [], now = Date.now()) {
   const hidOf = new Map(hidden.map((h) => [h.ad_id, { hid: h.status === 'rejected' ? 2 : h.status === 'seen' ? 1 : 0, at: h.at || '' }]));
   const starred = new Set(stars.map((x) => x.ad_id));
   const groups = new Map();
+  const byAd = new Map();
   for (const w of rows) {
-    const seen = Date.parse(w.last_seen);
     // A product outside the EU: its age was worked out at the scan, and its ad may have been last seen days before that.
-    const age = w.world ? num(w.ad_age_days) : Number.isFinite(seen) ? num(w.ad_age_days) + Math.max(Math.trunc((now - seen) / 864e5), 0) : null;
+    const age = w.world ? num(w.ad_age_days) : ageNow(w, now);
     const rpd = num(w.reach_eu) / Math.max(num(w.ad_age_days), 1);
     // A product from outside the EU has no reach: it is judged by its proof signals and never reaches the EU tabs.
-    const pass = !w.world && num(w.active_ads) >= MIN_ACTIVE_ADS && w.ad_age_days != null && age != null && age >= MIN_AGE_DAYS && age <= MAX_AGE_DAYS && rpd >= MIN_REACH_PER_DAY ? 1 : 0;
+    const pass = !w.world && num(w.active_ads) >= MIN_ACTIVE_ADS && w.ad_age_days != null && num(w.ad_age_days) >= MIN_AGE_DAYS && age != null && age >= MIN_AGE_DAYS && age <= MAX_AGE_DAYS && rpd >= MIN_REACH_PER_DAY ? 1 : 0;
     const r = Object.assign({}, w, { rpd, age_now: age, pass: w.world ? w.world.active : pass, mk: countriesOf(w) });
     if (w.world) r.proof = proofOf(r);
     let g = groups.get(w.gk);
-    if (!g) groups.set(w.gk, (g = { hid: 0, hat: '', star: 0, best: null, any: null, ids: [] }));
+    if (!g) groups.set(w.gk, (g = { hid: 0, hat: '', star: 0, best: null, any: null, ids: [], jev: null }));
     g.ids.push(w.ad_id);
+    byAd.set(w.ad_id, g);
+    if (!g.jev && w.jev) g.jev = w.jev;
+    // One decision per product. Ads that used to be two products (two titles) can each have one: the latest counts.
     const h = hidOf.get(w.ad_id);
-    if (h) { g.hid = Math.max(g.hid, h.hid); if (h.at > g.hat) g.hat = h.at; }
+    if (h && (h.at > g.hat || (h.at === g.hat && h.hid > g.hid))) { g.hid = h.hid; g.hat = h.at; }
     if (starred.has(w.ad_id)) g.star = 1;
     if (pass && (!g.best || better(r, g.best) < 0)) g.best = r;
     if (!g.any || pass > g.any.pass || (pass === g.any.pass && better(r, g.any) < 0)) g.any = r;
@@ -365,22 +426,39 @@ export function products(rows, hidden = [], stars = [], now = Date.now()) {
   const k = [];
   const w = [];
   for (const g of groups.values()) {
-    if (g.best) v.push(Object.assign(g.best, { hid: g.hid, hat: g.hat, star: g.star }));
-    k.push(g.any === g.best ? g.any : Object.assign(g.any, { hid: g.hid, hat: g.hat, star: g.star }));
+    // Jev answered per advertiser + title: the product shows the answer of its best ad, else of another ad of it.
+    if (g.best) v.push(Object.assign(g.best, { hid: g.hid, hat: g.hat, star: g.star, jev: g.best.jev || g.jev }));
+    k.push(g.any === g.best ? g.any : Object.assign(g.any, { hid: g.hid, hat: g.hat, star: g.star, jev: g.any.jev || g.jev }));
     if (g.any.world && g.any.world.active) w.push(g.any);
   }
-  return { v, k, w, groups };
+  return { v, k, w, groups, byAd };
 }
 
-/** The board from D1: winners (cached), seen / rejected and stars (fresh). */
+// Every decision (all of them: an old "Bad store" must stay undoable), for what the board learns.
+const DECIDED_SQL = "SELECT ad_id, action, reasons, store, price, currency FROM feedback WHERE action IN ('seen', 'rejected', 'keep')";
+
+/** The board from D1: winners (cached, also as rows: every ad as read), seen / rejected and stars (fresh). */
 async function board(env, now) {
   const [rows, h, s, f] = await Promise.all([
     snapshot(env.DB, now),
     env.DB.prepare('SELECT ad_id, status, at FROM hidden').all(),
     env.DB.prepare('SELECT ad_id FROM stars').all(),
-    env.DB.prepare("SELECT action, reasons, keyword, store, price FROM feedback WHERE action != 'general'").all(),
+    env.DB.prepare(DECIDED_SQL).all(),
   ]);
-  return Object.assign(products(rows, h.results, s.results, now), { taste: tasteOf(f.results) });
+  const list = products(rows, h.results, s.results, now);
+  return Object.assign(list, { rows, taste: tasteOf(withFacts(f.results, list.byAd)) });
+}
+
+/**
+ * Decisions with what the board knows of their product now: Jev's category (its niche: the answer its card shows, so
+ * learning trains the category you saw) and, for older rows, its currency. Call after products(): it sets the cards' answers.
+ */
+function withFacts(fb, byAd) {
+  return fb.map((f) => {
+    const g = byAd.get(f.ad_id);
+    const shown = g && (g.best || g.any);
+    return Object.assign({}, f, { niche: (shown && shown.jev && shown.jev.main) || '', currency: f.currency || (shown && shown.currency) || '' });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -397,40 +475,83 @@ const reasonsOf = (s) => { try { const r = JSON.parse(s || '[]'); return Array.i
 export const storeOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, '').toLowerCase(); } catch (e) { return ''; } };
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 
+const PRIOR = 2; // a niche starts as if it had 2 decisions at your usual approval rate
+const NO_PRICE = 0.75; // a product without a price, while you have a price limit for it
+
 /**
- * What your decisions say. Per search keyword (niche): weight = (liked + 1) / (rejected + 1), between 0.3 and 3
- * ("not my niche" / "my niche" count double). Stores rejected as "Bad store" leave the inbox. Price: once two
- * products were "too expensive", everything from the cheapest of those up ranks at half.
+ * What your decisions say. fb: decisions with niche (Jev's main category of the product) and currency (withFacts).
+ * Niche: a yes (✓, or an old ★) counts for its niche; a no only when the reason was "Not my niche" (a price, a bad
+ * store or a weak ad says nothing about the niche). A niche's weight is its approval rate against your overall rate,
+ * smoothed, between 0.3 and 3: 1 is as usual. The search keyword that found an ad is not learned (it is often an accident).
+ * Stores rejected as "Bad store" leave the inbox. Price, per currency: once two products in one currency were "too
+ * expensive", everything in that currency from the cheapest of those up ranks at half.
  */
 export function tasteOf(fb = []) {
-  const kw = new Map();
+  const niches = new Map();
   const blocked = new Map();
-  const pricey = [];
+  const pricey = new Map();
+  let yes = 0;
+  let no = 0;
   for (const f of fb) {
     if (!DECISIONS.has(f.action)) continue; // notes and board notes are not decisions
     const r = reasonsOf(f.reasons);
     const bad = f.action === 'rejected';
-    const k = String(f.keyword || '').trim().toLowerCase();
-    if (k) {
-      const x = kw.get(k) || { good: 0, bad: 0 };
-      if (bad) x.bad += r.includes('niche') ? 2 : 1;
-      else x.good += r.includes('niche') ? 2 : 1;
-      kw.set(k, x);
+    if (!bad || r.includes('niche')) {
+      if (bad) no++;
+      else yes++;
+      const niche = String(f.niche || '').trim();
+      if (niche) {
+        const x = niches.get(niche) || { good: 0, bad: 0 };
+        if (bad) x.bad++;
+        else x.good++;
+        niches.set(niche, x);
+      }
     }
     if (bad && r.includes('store') && storeOf(f.store)) blocked.set(storeOf(f.store), (blocked.get(storeOf(f.store)) || 0) + 1);
-    if (bad && r.includes('price') && Number(f.price) > 0) pricey.push(Number(f.price));
+    const cur = String(f.currency || '').trim().toUpperCase();
+    if (bad && r.includes('price') && Number(f.price) > 0 && cur) {
+      if (!pricey.has(cur)) pricey.set(cur, []);
+      pricey.get(cur).push(Number(f.price));
+    }
   }
-  const weights = new Map([...kw].map(([k, x]) => [k, Math.round(clamp((x.good + 1) / (x.bad + 1), 0.3, 3) * 100) / 100]));
-  pricey.sort((a, b) => a - b);
-  return { kw, weights, blocked, maxPrice: pricey.length >= 2 ? pricey[0] : null };
+  const rate = (yes + 1) / (yes + no + 2); // your approval rate, never quite 0 or 1
+  const weights = new Map([...niches].map(([k, x]) => [k, Math.round(clamp((x.good + PRIOR * rate) / (x.good + x.bad + PRIOR) / rate, 0.3, 3) * 100) / 100]));
+  const maxPrice = new Map([...pricey].filter(([, p]) => p.length >= 2).map(([c, p]) => [c, Math.min(...p)]));
+  return { niches, weights, blocked, maxPrice, rate };
 }
 
-/** How well a product fits your taste (1 = no opinion yet): the inbox sorts by reach a day × this. */
-export function fitOf(r, taste) {
-  if (!taste) return 1;
-  let w = taste.weights.get(String(r.keyword || '').trim().toLowerCase()) ?? 1;
-  if (taste.maxPrice != null && Number(r.price) >= taste.maxPrice) w *= 0.5;
-  return w;
+/**
+ * How well a product fits what you taught the board: { x (1 = no opinion yet), niche: { name, w } or null, why: [{ text, x }] }.
+ * A price is only compared with your limit in its own currency; a product without a price, while you have a limit
+ * for it, ranks at three quarters (and says so) instead of slipping through.
+ */
+export function fitWhy(r, taste) {
+  const out = { x: 1, niche: null, why: [] };
+  if (!taste) return out;
+  const name = r.jev && r.jev.main;
+  const w = name ? taste.weights.get(name) : undefined;
+  if (w != null && w !== 1) {
+    out.niche = { name, w };
+    out.why.push({ text: `${w > 1 ? 'Your niche' : 'Not your niche'}: ${name}`, x: w });
+  }
+  const cur = String(r.currency || '').trim().toUpperCase();
+  const limit = cur ? taste.maxPrice.get(cur) : null;
+  const price = Number(r.price);
+  if (price > 0 && limit != null && price >= limit) out.why.push({ text: `Too expensive for you: ${cur} ${limit} and up`, x: 0.5 });
+  else if (!(price > 0) && (cur ? limit != null : taste.maxPrice.size > 0)) out.why.push({ text: 'No price to check against your price limit', x: NO_PRICE });
+  out.x = Math.round(out.why.reduce((f, y) => f * y.x, 1) * 1000) / 1000;
+  return out;
+}
+/** The inbox sorts by reach a day × this. */
+export const fitOf = (r, taste) => fitWhy(r, taste).x;
+
+/** An Inbox row with its score: base (reach a day, or proof outside the EU) × what you taught it × best seller × Jev's risk, and why. */
+function ranked(r, taste, base, boost = 1, extra = null) {
+  const fit = fitWhy(r, taste);
+  const risk = riskOf(r.jev);
+  const x = fit.x * boost * (risk ? risk.x : 1) * (extra ? extra.x : 1); // extra: momentum.mjs's factor, { x, why }
+  const why = [...fit.why, ...(boost !== 1 ? [{ text: 'Store best seller', x: boost }] : []), ...(risk ? risk.why.map((y) => ({ text: y.label, x: y.x })) : []), ...(extra ? extra.why : [])];
+  return Object.assign({}, r, { fit: fit.x, niche: fit.niche, score: base * x, ranked: { x: Math.round(x * 1000) / 1000, why } });
 }
 
 const SORTS = {
@@ -461,11 +582,11 @@ const WORLD_SORTS = {
   new: (a, b) => cmp(b.first_seen ?? '', a.first_seen ?? '') || stronger(a, b),
 };
 
-/** The products outside the EU: filters, one market (?cc=AU), sort and page. */
+/** The products outside the EU: filters, one market (?cc=AU), sort and page. The Inbox: most proof first, × what you taught the board × Jev's risks. */
 function worldView(p, list, csv) {
   const view = p.get('view') === 'inbox' ? 'inbox' : 'all';
   const hidden = view === 'all' && p.get('hidden') === '1';
-  let out = list.w.filter((r) => (view === 'inbox' ? inInbox(r) && !blockedBy(r, list.taste) : hidden ? r.hid > 0 : r.hid === 0));
+  let out = list.w.filter((r) => (view === 'inbox' ? inboxOk(r, list.taste) : hidden ? r.hid > 0 : r.hid === 0));
   const cc = String(p.get('cc') || '').toUpperCase();
   if (WORLD_MARKETS.includes(cc)) out = out.filter((r) => r.world.markets[cc]);
   if (p.get('noteu') === '1') out = out.filter((r) => r.world.in_eu === 0);
@@ -474,7 +595,8 @@ function worldView(p, list, csv) {
   if (p.get('jev')) out = out.filter((r) => jevMatches(String(p.get('jev')).slice(0, 80), r.jev));
   const q = String(p.get('q') || '').trim().slice(0, 80).toLowerCase();
   if (q) out = out.filter((r) => [r.product_title, r.advertiser, r.store_url, r.keyword].some((x) => String(x ?? '').toLowerCase().includes(q)));
-  out.sort(Object.hasOwn(WORLD_SORTS, p.get('sort') || '') ? WORLD_SORTS[p.get('sort')] : view === 'inbox' ? worldInbox : stronger);
+  if (view === 'inbox') out = out.map((r) => ranked(r, list.taste, r.proof.n + 1, 1, momentumFactor(r))).sort((a, b) => b.score - a.score || stronger(a, b));
+  else out.sort(Object.hasOwn(WORLD_SORTS, p.get('sort') || '') ? WORLD_SORTS[p.get('sort')] : stronger);
   const limit = csv ? 5000 : Math.min(Math.max(parseInt(p.get('limit'), 10) || (view === 'inbox' ? 20 : 40), 1), 100);
   const offset = offsetOf(p, csv);
   return { view, total: out.length, offset, rows: out.slice(offset, offset + limit) };
@@ -497,9 +619,9 @@ export function viewOf(p, list, { csv = false } = {}) {
     limit = csv ? 5000 : 100;
     offset = offsetOf(p, csv);
   } else if (view === 'inbox') {
-    out = list.v.filter((r) => inInbox(r) && !blockedBy(r, list.taste)) // not decided yet: not seen, rejected or kept (★)
-      .map((r) => Object.assign({}, r, { fit: fitOf(r, list.taste), boost: sellsBoost(r) * momentumX(r) }));
-    sort = (a, b) => b.rpd * b.fit * b.boost - a.rpd * a.fit * a.boost || cmp(a.ad_id, b.ad_id);
+    // Not decided yet; reach a day × what you taught the board × the store's best-seller rank × Jev's risks.
+    out = list.v.filter((r) => inboxOk(r, list.taste)).map((r) => ranked(r, list.taste, r.rpd, sellsBoost(r), momentumFactor(r)));
+    sort = (a, b) => b.score - a.score || cmp(a.ad_id, b.ad_id);
     limit = csv ? 5000 : Math.min(Math.max(parseInt(p.get('limit'), 10) || 20, 1), 100);
   } else {
     const hidden = p.get('hidden') === '1';
@@ -508,14 +630,16 @@ export function viewOf(p, list, { csv = false } = {}) {
     if (minRpd === 2500 || minRpd === 10000) out = out.filter((r) => r.rpd >= minRpd);
     const q = String(p.get('q') || '').trim().slice(0, 80).toLowerCase();
     if (q) out = out.filter((r) => [r.product_title, r.advertiser, r.store_url, r.keyword].some((x) => String(x ?? '').toLowerCase().includes(q)));
-    sort = SORTS[p.get('sort')] || SORTS.rpd;
+    // Only the board's own sorts: ?sort=__proto__ or constructor is no sort.
+    const asked = Object.hasOwn(SORTS, p.get('sort') || '') ? p.get('sort') : 'rpd';
+    sort = SORTS[asked];
     const cc = String(p.get('cc') || '').toUpperCase();
     if (/^[A-Z]{2}$/.test(cc)) {
       out = out.flatMap((r) => {
         const hit = r.mk.find(([c]) => c === cc);
         return hit ? [Object.assign({}, r, { crpd: (r.rpd * hit[1]) / 100 })] : [];
       });
-      if (!SORTS[p.get('sort')] || p.get('sort') === 'rpd') sort = (a, b) => b.crpd - a.crpd || cmp(a.ad_id, b.ad_id);
+      if (asked === 'rpd') sort = (a, b) => b.crpd - a.crpd || cmp(a.ad_id, b.ad_id);
     }
     if (p.get('jev')) out = out.filter((r) => jevMatches(String(p.get('jev')).slice(0, 80), r.jev));
     limit = csv ? 5000 : Math.min(Math.max(parseInt(p.get('limit'), 10) || 40, 1), 100);
@@ -529,14 +653,16 @@ const offsetOf = (p, csv) => (csv ? 0 : Math.min(Math.max(parseInt(p.get('offset
 
 const inInbox = (r) => r.hid === 0; // the ★ is gone from the board (2026-10-31): an old star no longer keeps a product out
 const blockedBy = (r, taste) => !!(taste && taste.blocked.size && taste.blocked.has(storeOf(r.store_url)));
+/** In the Inbox: not decided yet, not from a store you called bad, and (EU) nothing Jev says people or pets take. */
+const inboxOk = (r, taste) => inInbox(r) && !blockedBy(r, taste) && !takenIn(r);
 const NEW_MS = 864e5; // found in the last day: new
 
 export const countsOf = (list, now = Date.now(), scope = 'eu') => {
   const on = scope === 'world' ? list.w : list.v;
   return {
     all: on.filter((r) => r.hid === 0).length,
-    inbox: on.filter((r) => inInbox(r) && !blockedBy(r, list.taste)).length,
-    fresh: on.filter((r) => inInbox(r) && !blockedBy(r, list.taste) && now - Date.parse(r.first_seen) < NEW_MS).length,
+    inbox: on.filter((r) => inboxOk(r, list.taste)).length,
+    fresh: on.filter((r) => inboxOk(r, list.taste) && now - Date.parse(r.first_seen) < NEW_MS).length,
     starred: list.k.filter((r) => r.star).length,
     made: list.k.filter((r) => r.hid === 1).length,
     hidden: on.filter((r) => r.hid > 0).length,
@@ -601,11 +727,10 @@ export function worldMarketsOf(rows) {
   return { scope: 'world', markets, products: rows.length, proof: PROOF, rules_as_of: MARKET_RULES.as_of, rules_note: MARKET_RULES.note };
 }
 
-// Momentum (momentum.mjs): rising products that are not crowded first. The Inbox ranks × the same factor (1 for a
-// product without numbers yet, so it keeps its place). Outside the EU the Inbox ranks by proof (1 + signals) × it.
+// Momentum (momentum.mjs): rising products that are not crowded first. The Inbox ranks × the same factor (ranked(): 1 for
+// a product without numbers yet, so it keeps its place).
 SORTS.mom = byMomentum(better);
 WORLD_SORTS.mom = byMomentum(stronger);
-const worldInbox = timesMomentum((r) => r.proof.n + 1, stronger);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -623,21 +748,54 @@ function same(a, b) {
   return d === 0;
 }
 
-// The cookie: "<expiry>.<HMAC(pin + expiry)>", keyed with a secret derived from BOARD_PIN.
-// Changing BOARD_PIN logs every phone out.
-async function sign(pin, exp) {
-  const key = await crypto.subtle.importKey('raw', await sha256('winner-hunter-board|' + pin), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+// The cookie: "<expiry>.<HMAC(pin + expiry)>", keyed with a server key and BOARD_PIN. The server key is BOARD_SECRET when
+// that Worker secret is set, else a random key the board makes at the first login and keeps in D1 (state 'cookie_key').
+// Neither is in the code: with a key from the PIN alone (before 2026-11) anyone could make the cookie for a PIN guess
+// and try PINs on any page without the login's limit, and one copied cookie gave the PIN away offline. Those cookies no
+// longer open the board: every phone logs in once more. Changing BOARD_PIN or BOARD_SECRET, or deleting state
+// 'cookie_key', logs every phone out (a key read from D1 is kept up to 5 minutes).
+const KEY_ROW = 'cookie_key';
+const KEY_MS = 5 * 60000;
+const KEYS = new WeakMap(); // per D1 binding
+let KEPT = null; // on Cloudflare, as LAST
+/** The server key for the cookie; '' when the board has none yet. make: the first login makes it. */
+export async function cookieKey(env, now = Date.now(), make = false) {
+  if (env.BOARD_SECRET) return String(env.BOARD_SECRET);
+  const shared = typeof navigator !== 'undefined' && navigator.userAgent === 'Cloudflare-Workers';
+  const kept = KEYS.get(env.DB) || (shared ? KEPT : null);
+  if (kept && now >= kept.at && now - kept.at < KEY_MS) return kept.key;
+  const read = async () => String((await env.DB.prepare(`SELECT value FROM state WHERE key = '${KEY_ROW}'`).first('value')) || '');
+  let key = await read();
+  if (!key && make) {
+    await env.DB.prepare('INSERT OR IGNORE INTO state (key, value, updated_at) VALUES (?, ?, ?)').bind(KEY_ROW, b64url(crypto.getRandomValues(new Uint8Array(32))), new Date(now).toISOString()).run();
+    key = await read(); // two first logins at the same moment: both use the one that was saved
+  }
+  if (key) {
+    const e = { key, at: now };
+    KEYS.set(env.DB, e);
+    if (shared) KEPT = e;
+  }
+  return key;
+}
+async function sign(pin, exp, secret = '') {
+  const key = await crypto.subtle.importKey('raw', await sha256(secret ? `winner-hunter-board|${secret}|${pin}` : 'winner-hunter-board|' + pin), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   return b64url(await crypto.subtle.sign('HMAC', key, enc.encode(`board|${pin}|${exp}`)));
 }
-export async function makeToken(pin, now = Date.now()) {
+/** A cookie value for this PIN and server key (without a key: the old PIN-only cookie, which no longer opens the board). */
+export async function makeToken(pin, now = Date.now(), secret = '') {
   const exp = Math.floor(now / 1000) + MAX_AGE;
-  return `${exp}.${await sign(pin, exp)}`;
+  return `${exp}.${await sign(pin, exp, secret)}`;
 }
+/** The cookie POST /login gives (for tests and tools). */
+export const tokenFor = async (env, now = Date.now()) => makeToken(env.BOARD_PIN, now, await cookieKey(env, now, true));
 async function authed(req, env, now) {
   const m = (req.headers.get('cookie') || '').match(/(?:^|;\s*)__Host-wh=([0-9]+)\.([A-Za-z0-9_-]{20,100})(?:;|$)/);
   if (!m || !env.BOARD_PIN) return false;
-  if (Number(m[1]) * 1000 < now) return false;
-  return same(m[2], await sign(env.BOARD_PIN, m[1]));
+  const exp = Number(m[1]) * 1000;
+  // Expired, or valid for longer than the board ever gives a cookie: no.
+  if (exp < now || exp > now + MAX_AGE * 1000 + 5 * 60000) return false;
+  const key = await cookieKey(env, now);
+  return !!key && same(m[2], await sign(env.BOARD_PIN, m[1], key));
 }
 
 function secure(res, { nonce = '', html = false } = {}) {
@@ -683,7 +841,26 @@ ${msg ? `<p class="err" role="alert">${esc(msg)}</p>` : ''}<button type="submit"
 }
 
 const nonceOf = () => b64url(crypto.getRandomValues(new Uint8Array(16)));
-const ipOf = (req) => (req.headers.get('cf-connecting-ip') || 'unknown').slice(0, 64);
+
+/** Whose PIN tries these are: an IPv4 address, or the /64 of an IPv6 address (one phone or home network has all of it). */
+export function ipKey(ip) {
+  const s = String(ip || '').trim().toLowerCase().slice(0, 64);
+  if (!s.includes(':')) return s || 'unknown';
+  const v4 = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(s);
+  if (v4) return v4[1];
+  const [head, tail] = s.split('::');
+  const a = head ? head.split(':') : [];
+  const b = tail ? tail.split(':') : [];
+  const groups = s.includes('::') ? [...a, ...Array(Math.max(0, 8 - a.length - b.length)).fill('0'), ...b] : a;
+  return groups.slice(0, 4).map((g) => (parseInt(g, 16) || 0).toString(16)).join(':') + '::/64';
+}
+/** The network around it, which one person can easily hold whole (a free tunnel gives a /48): IPv6 its /48, IPv4 its /24. */
+export function netKey(ip) {
+  const k = ipKey(ip);
+  if (k.endsWith('::/64')) return k.split(':').slice(0, 3).join(':') + '::/48';
+  const v4 = /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}$/.exec(k);
+  return v4 ? v4[1] + '.0/24' : k + '/net';
+}
 
 const stateOf = (row) => {
   if (!row) return null;
@@ -736,14 +913,15 @@ export function boardAlert(run, token, now = Date.now()) {
   return null;
 }
 
-/** A problem with the hunt outside the EU, for its tab: { level, text } or null. */
+/** The problems with the hunt outside the EU, for its tab: { level, text } or null. Every red one, else every yellow one. */
 export function worldAlert(run, now = Date.now(), token = null, check = null) {
   const tok = tokenProblem(token, now); // without a working token the "Not in EU" check stops
   const own = worldRunAlert(run, now);
-  if (tok && own && own.level === 'red') return { level: 'red', text: `${own.text} · ${tok}` };
-  if (tok) return { level: 'red', text: tok };
-  if (own) return own;
-  return check && check.stopped ? { level: 'yellow', text: `Jev-check gestopt / Jev check stopped: ${check.stopped}` } : null;
+  const red = [own && own.level === 'red' ? own.text : '', tok].filter(Boolean);
+  const yellow = [own && own.level === 'yellow' ? own.text : '', check && check.stopped ? `Jev-check gestopt / Jev check stopped: ${check.stopped}` : ''].filter(Boolean);
+  if (red.length) return { level: 'red', text: red.join(' · ') };
+  if (yellow.length) return { level: 'yellow', text: yellow.join(' · ') };
+  return null;
 }
 
 function worldRunAlert(run, now) {
@@ -757,6 +935,8 @@ function worldRunAlert(run, now) {
   return null;
 }
 const httpsOr = (u) => (typeof u === 'string' && /^https:\/\//i.test(u) ? u : '');
+const BIG_STORE = 250; // products in the store
+const FEW_COPIES = 5; // copies of the ad for this product
 
 /** One ad as the board gets it: facts, no score (every ad on the board passed the rules). */
 export function toAd(r) {
@@ -768,6 +948,7 @@ export function toAd(r) {
   }
   const off = r.compare_at_price > r.price && r.price > 0 ? Math.round((1 - r.price / r.compare_at_price) * 100) : null;
   const shop = (Array.isArray(d.checklist) ? d.checklist : []).find((c) => c && c.key === 'shopify');
+  const products = storeSize(r);
   return {
     id: String(r.ad_id),
     title: r.product_title || '',
@@ -777,10 +958,15 @@ export function toAd(r) {
     off,
     reach: r.reach_eu,
     rpd: Math.round(r.rpd || 0),
-    age: r.age_now ?? r.ad_age_days,
+    age: r.age_now ?? r.ad_age_days, // today, if it still runs (the rules)
+    age_seen: r.ad_age_days == null ? null : Number(r.ad_age_days), // when it was last measured (last_seen), with its reach and ads
     ads: r.active_ads,
     scaled: r.scaled_count,
-    products: r.world ? r.world.store_products : Number.isFinite(Number(d.store_products)) && d.store_products !== null ? Number(d.store_products) : null,
+    products,
+    // A store with a big catalogue that hardly copies this ad: its ads may sell the store, not this product.
+    catalogue: products != null && products >= BIG_STORE && (num(r.scaled_count) || 1) < FEW_COPIES,
+    // No product page, price or best-seller rank: the title is the ad's own words, the product itself is not known.
+    unidentified: !r.world && !productKey(r.product_url) && r.price == null && bsRank(r) == null,
     myshopify: shop && /\.myshopify\.com$/i.test(String(shop.text || '')) ? String(shop.text).slice(0, 100) : '',
     adv: r.advertiser || '',
     kw: r.keyword || '',
@@ -801,6 +987,9 @@ export function toAd(r) {
     hidden: r.hid === 2 ? 'rejected' : r.hid === 1 ? 'seen' : '',
     made_at: r.hid === 1 ? r.hat || '' : '', // when you marked it ✓ Made ad
     fit: r.fit == null ? null : r.fit,
+    niche: r.niche || null, // the Inbox: what the board learned about its niche, { name, w }
+    ranked: r.ranked || null, // the Inbox: how far it moved and why, { x, why: [{ text, x }] }
+    risk: riskOf(r.jev), // Jev's risks: { x, why, red }
     best: bestOf(r.bs),
     trust: trustOf(r.tp),
     jev: r.jev ? { ...r.jev, flags: jevFlags(r.jev) } : null,
@@ -854,36 +1043,49 @@ export const toCsv = (ads) => [CSV_COLS.map((c) => c[0]).join(','), ...ads.map((
 // Routes
 // ---------------------------------------------------------------------------
 
+// One statement counts the try and gives its number in the window (a window older than 15 minutes starts again at 1).
+// Tries that arrive at the same moment each get their own number, so no more than PIN_TRIES of them are ever compared.
+export const PIN_TRY_SQL = `INSERT INTO pin_tries (ip, n, since) VALUES (?1, 1, ?2) ON CONFLICT(ip) DO UPDATE SET
+  n = CASE WHEN pin_tries.since >= ?3 THEN pin_tries.n + 1 ELSE 1 END, since = CASE WHEN pin_tries.since >= ?3 THEN pin_tries.since ELSE ?2 END
+RETURNING n`;
+
 async function login(req, env, now) {
   const nonce = nonceOf();
   const ct = req.headers.get('content-type') || '';
   if (!/application\/x-www-form-urlencoded|multipart\/form-data/.test(ct)) return pinPage(nonce, 'Enter your PIN.', 400);
-  const key = 'pinfail:' + ipOf(req);
-  let fails = { n: 0, since: now };
+  const ip = ipKey(req.headers.get('cf-connecting-ip'));
+  const net = netKey(req.headers.get('cf-connecting-ip'));
+  // Counted before the PIN is compared, for the address and for its network. A try that cannot be counted (D1 down, no
+  // table) is not compared: no lockout, no login. A phone with its cookie still opens the board.
+  let n = NaN;
+  let w = NaN;
   try {
-    const row = await env.DB.prepare('SELECT value FROM state WHERE key = ?').bind(key).first();
-    if (row) fails = JSON.parse(row.value);
+    const [a, b] = await Promise.all([ip, net].map((k) => env.DB.prepare(PIN_TRY_SQL).bind(k, now, now - PIN_WINDOW).first()));
+    n = Number(a && a.n);
+    w = Number(b && b.n);
   } catch (e) {
-    // no state table yet: no lockout
+    console.error(e);
   }
-  if (now - fails.since > PIN_WINDOW) fails = { n: 0, since: now };
-  if (fails.n >= PIN_TRIES) return pinPage(nonce, 'Too many wrong PINs. Try again in 15 minutes.', 429);
+  if (!(n >= 1 && w >= 1)) return pinPage(nonce, 'The board cannot check PINs right now. Try again in a minute.', 503);
+  if (n > PIN_TRIES || w > NET_TRIES) return pinPage(nonce, 'Too many wrong PINs. Try again in 15 minutes.', 429);
   const form = await req.formData().catch(() => null);
   const pin = String((form && form.get('pin')) || '').slice(0, 64);
   // Compare hashes in constant time, so the answer time says nothing about the PIN.
   const ok = pin && same(b64url(await sha256(pin)), b64url(await sha256(env.BOARD_PIN)));
-  try {
-    if (ok) await env.DB.prepare('DELETE FROM state WHERE key = ?').bind(key).run();
-    else {
-      await env.DB.prepare('INSERT INTO state (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at')
-        .bind(key, JSON.stringify({ n: fails.n + 1, since: fails.since }), new Date(now).toISOString()).run();
-      await env.DB.prepare("DELETE FROM state WHERE key LIKE 'pinfail:%' AND updated_at < ?").bind(new Date(now - 864e5).toISOString()).run();
-    }
-  } catch (e) {
-    // counting is best effort
+  if (!ok) {
+    // Windows that are over go, found through the index on since: a wrong PIN never scans the table.
+    await env.DB.prepare('DELETE FROM pin_tries WHERE since < ?').bind(now - PIN_WINDOW).run().catch(() => {});
+    return pinPage(nonce, 'Wrong PIN.', 401);
   }
-  if (!ok) return pinPage(nonce, 'Wrong PIN.', 401);
-  return redirect('/', `${COOKIE}=${await makeToken(env.BOARD_PIN, now)}; Path=/; Max-Age=${MAX_AGE}; HttpOnly; Secure; SameSite=Lax`);
+  await env.DB.prepare('DELETE FROM pin_tries WHERE ip = ?').bind(ip).run().catch(() => {}); // the network's count runs out by itself
+  let key = '';
+  try {
+    key = await cookieKey(env, now, true);
+  } catch (e) {
+    console.error(e);
+  }
+  if (!key) return pinPage(nonce, 'The board cannot sign you in right now. Try again in a minute.', 503);
+  return redirect('/', `${COOKIE}=${await makeToken(env.BOARD_PIN, now, key)}; Path=/; Max-Age=${MAX_AGE}; HttpOnly; Secure; SameSite=Lax`);
 }
 
 async function ads(url, env, now, viewer) {
@@ -949,9 +1151,9 @@ async function hide(req, url, env, now) {
     const part = ids.slice(i, i + 90);
     steps.push(env.DB.prepare(`DELETE FROM feedback WHERE action IN (${gone.map(() => '?').join(', ')}) AND ad_id IN (${part.map(() => '?').join(', ')})`).bind(...gone, ...part));
   }
-  if (ACTION_OF[status]) {
-    steps.push(env.DB.prepare('INSERT INTO feedback (ad_id, action, reasons, note, keyword, store, advertiser, title, price, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, ACTION_OF[status], '[]', '', me.keyword ?? '', me.store_url ?? '', me.advertiser ?? '', String(me.product_title ?? '').slice(0, 200), me.price ?? null, at));
+  if (Object.hasOwn(ACTION_OF, status)) {
+    steps.push(env.DB.prepare('INSERT INTO feedback (ad_id, action, reasons, note, keyword, store, advertiser, title, price, currency, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, ACTION_OF[status], '[]', '', me.keyword ?? '', me.store_url ?? '', me.advertiser ?? '', String(me.product_title ?? '').slice(0, 200), me.price ?? null, me.currency ?? '', at));
   }
   await env.DB.batch(steps);
   return json({ ok: true, ad_id: id, status });
@@ -973,8 +1175,9 @@ async function readJson(req, url, max = 2000) {
 const clean = (s, n) => String(s ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, n);
 
 /**
- * POST /api/feedback. {ad_id, reasons?, note?}: why you made that decision (on its latest feedback row).
- * {general: "…"}: a note about the board. {unblock: "shop.com"}: that store may come back in the inbox.
+ * POST /api/feedback. {ad_id, reasons?, note?}: why you made that decision (on its decision row: never on your note
+ * about the product, which can be saved after the decision). {general: "…"}: a note about the board.
+ * {unblock: "shop.com"}: that store may come back in the inbox.
  */
 async function feedback(req, url, env, now) {
   const { j, err } = await readJson(req, url);
@@ -996,14 +1199,14 @@ async function feedback(req, url, env, now) {
   }
   const id = String(j.ad_id || '');
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) return json({ error: 'Bad ad_id' }, 400);
-  const row = await env.DB.prepare("SELECT id, action FROM feedback WHERE ad_id = ? AND action != 'general' ORDER BY id DESC LIMIT 1").bind(id).first();
+  const row = await env.DB.prepare("SELECT id, action FROM feedback WHERE ad_id = ? AND action IN ('seen', 'rejected', 'keep') ORDER BY id DESC LIMIT 1").bind(id).first();
   if (!row) return json({ error: 'Decide first' }, 404);
   const allowed = REASONS[row.action === 'rejected' ? 'bad' : 'good'];
   const sets = [];
   const vals = [];
   if (Array.isArray(j.reasons)) {
     sets.push('reasons = ?');
-    vals.push(JSON.stringify([...new Set(j.reasons.map(String))].filter((r) => r in allowed)));
+    vals.push(JSON.stringify([...new Set(j.reasons.map(String))].filter((r) => Object.hasOwn(allowed, r))));
   }
   if (j.note != null) {
     sets.push('note = ?');
@@ -1036,14 +1239,22 @@ async function note(req, url, env, now) {
   if (!me) return json({ error: 'Unknown ad' }, 404);
   const ids = rows.filter((w) => w.gk === me.gk).map((w) => w.ad_id); // every ad of this product
   if (post) {
+    // The box holds the product's newest note: that one (and any saved after it) is replaced. Two products that are one
+    // product page now can each have an older note: those stay, and show below the box.
+    let newest = 0;
+    for (let i = 0; i < ids.length; i += 90) {
+      const part = ids.slice(i, i + 90);
+      const row = await env.DB.prepare(`SELECT MAX(id) AS id FROM feedback WHERE action = 'note' AND ad_id IN (${part.map(() => '?').join(', ')})`).bind(...part).first();
+      newest = Math.max(newest, Number(row && row.id) || 0);
+    }
     const steps = [];
     for (let i = 0; i < ids.length; i += 90) {
       const part = ids.slice(i, i + 90);
-      steps.push(env.DB.prepare(`DELETE FROM feedback WHERE action = 'note' AND ad_id IN (${part.map(() => '?').join(', ')})`).bind(...part));
+      steps.push(env.DB.prepare(`DELETE FROM feedback WHERE action = 'note' AND id >= ? AND ad_id IN (${part.map(() => '?').join(', ')})`).bind(newest, ...part));
     }
     if (text) {
-      steps.push(env.DB.prepare("INSERT INTO feedback (ad_id, action, reasons, note, keyword, store, advertiser, title, price, at) VALUES (?, 'note', '[]', ?, ?, ?, ?, ?, ?, ?)")
-        .bind(id, text, me.keyword ?? '', me.store_url ?? '', me.advertiser ?? '', String(me.product_title ?? '').slice(0, 200), me.price ?? null, new Date(now).toISOString()));
+      steps.push(env.DB.prepare("INSERT INTO feedback (ad_id, action, reasons, note, keyword, store, advertiser, title, price, currency, at) VALUES (?, 'note', '[]', ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(id, text, me.keyword ?? '', me.store_url ?? '', me.advertiser ?? '', String(me.product_title ?? '').slice(0, 200), me.price ?? null, me.currency ?? '', new Date(now).toISOString()));
     }
     await env.DB.batch(steps);
     return json({ ok: true });
@@ -1052,22 +1263,30 @@ async function note(req, url, env, now) {
   const mine = new Set(ids);
   const own = results.find((f) => f.action === 'note' && mine.has(f.ad_id));
   const shop = storeOf(me.store_url);
-  const others = results.filter((f) => !mine.has(f.ad_id) && ((shop && storeOf(f.store) === shop) || (me.advertiser && f.advertiser === me.advertiser)))
+  const earlier = results.filter((f) => f !== own && f.action === 'note' && mine.has(f.ad_id)); // older notes on this product
+  const others = earlier.concat(results.filter((f) => !mine.has(f.ad_id) && ((shop && storeOf(f.store) === shop) || (me.advertiser && f.advertiser === me.advertiser))))
     .slice(0, 5).map((f) => ({ title: f.title || '', note: f.note, at: f.at }));
   return json({ note: own ? own.note : '', others });
 }
 
-/** GET /api/learned: what the board learned from your feedback, for the 🧠 page (and for Claude to read). */
-async function learned(env) {
-  const { results } = await env.DB.prepare('SELECT ad_id, action, reasons, note, keyword, store, advertiser, title, price, at FROM feedback ORDER BY id DESC LIMIT 5000').all();
-  const taste = tasteOf(results.filter((f) => f.action !== 'general'));
+/**
+ * GET /api/learned: what the board learned from your feedback, for the 🧠 page (and for Claude to read). From every
+ * decision, as the Inbox uses them: a store blocked long ago is listed, so it can be brought back.
+ */
+async function learned(env, now) {
+  const [rows, { results: fb }, { results: notes }] = await Promise.all([
+    snapshot(env.DB, now),
+    env.DB.prepare(DECIDED_SQL).all(),
+    env.DB.prepare("SELECT action, reasons, note, title, at FROM feedback WHERE note != '' ORDER BY id DESC LIMIT 50").all(),
+  ]);
+  const taste = tasteOf(withFacts(fb, products(rows, [], [], now).byAd));
   const by = { rejected: 0, keep: 0, seen: 0 };
   const count = { bad: {}, good: {} };
-  for (const f of results) {
-    if (!(f.action in by)) continue;
+  for (const f of fb) {
+    if (!Object.hasOwn(by, f.action)) continue;
     by[f.action]++;
     const side = f.action === 'rejected' ? 'bad' : 'good';
-    for (const r of reasonsOf(f.reasons)) if (r in REASONS[side]) count[side][r] = (count[side][r] || 0) + 1;
+    for (const r of reasonsOf(f.reasons)) if (Object.hasOwn(REASONS[side], r)) count[side][r] = (count[side][r] || 0) + 1;
   }
   const list = (side) => Object.entries(count[side]).map(([key, n]) => ({ key, label: REASONS[side][key], n })).sort((a, b) => b.n - a.n);
   return json({
@@ -1075,10 +1294,12 @@ async function learned(env) {
     by_action: by,
     reasons: { bad: list('bad'), good: list('good') },
     reason_labels: REASONS,
-    niches: [...taste.kw].map(([kw, x]) => ({ kw, good: x.good, bad: x.bad, weight: taste.weights.get(kw) })).sort((a, b) => b.weight - a.weight || b.good - a.good),
+    approval_rate: Math.round(taste.rate * 100) / 100,
+    niches: [...taste.niches].map(([niche, x]) => ({ niche, good: x.good, bad: x.bad, weight: taste.weights.get(niche) })).sort((a, b) => b.weight - a.weight || b.good - a.good || a.niche.localeCompare(b.niche)),
     blocked: [...taste.blocked].map(([store, n]) => ({ store, n })),
-    max_price: taste.maxPrice,
-    notes: results.filter((f) => f.note).slice(0, 50).map((f) => ({ action: f.action, title: f.title || '', note: f.note, reasons: reasonsOf(f.reasons), at: f.at })),
+    max_prices: [...taste.maxPrice].map(([currency, price]) => ({ currency, price })).sort((a, b) => a.currency.localeCompare(b.currency)),
+    no_price: NO_PRICE,
+    notes: notes.map((f) => ({ action: f.action, title: f.title || '', note: f.note, reasons: reasonsOf(f.reasons), at: f.at })),
   });
 }
 
@@ -1122,7 +1343,7 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       if (path === '/api/ads' && method === 'GET') return await ads(url, env, now, env.AD_VIEWER === 'on' && !!(launch && env.BROWSER && String(env.META_TOKEN || '').trim()));
       if (path === '/api/hide' && method === 'POST') return await hide(req, url, env, now);
       if (path === '/api/feedback' && method === 'POST') return await feedback(req, url, env, now);
-      if (path === '/api/learned' && method === 'GET') return await learned(env);
+      if (path === '/api/learned' && method === 'GET') return await learned(env, now);
       if (path === '/api/note' && (method === 'GET' || method === 'POST')) return await note(req, url, env, now);
       if (path === '/export.csv' && method === 'GET') return await csv(url, env, now);
       return json({ error: 'Method not allowed' }, 405);
@@ -1141,12 +1362,38 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
     if (path === '/api/launch' || path === '/launch.js') {
       if (!ok) return json({ error: 'Log in first' }, 401);
       if (path === '/launch.js') return method === 'GET' ? text(LAUNCH_JS, 200, { 'Content-Type': 'text/javascript; charset=utf-8' }) : json({ error: 'Method not allowed' }, 405);
-      const deps = { products: async () => (await board(env, now)).k, toAd };
+      // The board's products, and its ads (each with its product page and its old advertiser + title key), so a launch
+      // card saved under the old key of an EU product is still found as that product's card.
+      const deps = { board: async () => { const b = await board(env, now); return { products: b.k, rows: b.rows }; }, toAd, pageKey: productKey };
       if (method === 'GET') return json(await launchList(env, url.searchParams.get('pick') === '1', deps));
       if (method !== 'POST') return json({ error: 'Method not allowed' }, 405);
       const { j, err } = await readJson(req, url, 8000);
       if (err) return err;
       const out = await launchPost(env, j, now, deps);
+      return json(out.body, out.status);
+    }
+    // ---- 🔎 Sourcing (sourcing.mjs): the supplier match pipeline on a launch card. A block of its own, as the Launch view's.
+    // /sourcing.js: the links, the comparison and the messages the panel works out as you type.
+    if (path === '/api/sourcing' || path === '/sourcing.js') {
+      if (!ok) return json({ error: 'Log in first' }, 401);
+      if (path === '/sourcing.js') return method === 'GET' ? text(SOURCING_JS, 200, { 'Content-Type': 'text/javascript; charset=utf-8' }) : json({ error: 'Method not allowed' }, 405);
+      let out;
+      if (method === 'GET') out = await sourcingGet(env, url.searchParams, now);
+      else if (method === 'POST') {
+        const { j, err } = await readJson(req, url, 8000);
+        if (err) return err;
+        out = await sourcingPost(env, j, now);
+      } else return json({ error: 'Method not allowed' }, 405);
+      return json(out.body, out.status);
+    }
+    // Off unless the Worker has AD_VIEWER = "on": the board no longer uses it, and a Meta token left in the Worker by an
+    // older deploy is never sent anywhere.
+    if (path.startsWith('/api/ad/') && env.AD_VIEWER === 'on') {
+      if (!ok) return json({ error: 'Log in first' }, 401);
+      if (method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+      const id = path.slice('/api/ad/'.length);
+      if (!/^\d{1,25}$/.test(id)) return json({ error: 'Bad ad id' }, 400);
+      const out = await adView(id, env, { now, launch });
       return json(out.body, out.status);
     }
     // ---- Momentum (momentum.mjs): the daily trend summaries, read only. A block of its own, as Launch. /momentum.js: the
@@ -1159,16 +1406,6 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       // The products in memory and only what was decided (hidden): no stars or feedback read for the panel.
       const lean = async () => products(await snapshot(env.DB, now), (await env.DB.prepare('SELECT ad_id, status, at FROM hidden').all()).results, [], now);
       return json(await momentumApi(env, scope, { board: lean, toAd }));
-    }
-    // Off unless the Worker has AD_VIEWER = "on": the board no longer uses it, and a Meta token left in the Worker by an
-    // older deploy is never sent anywhere.
-    if (path.startsWith('/api/ad/') && env.AD_VIEWER === 'on') {
-      if (!ok) return json({ error: 'Log in first' }, 401);
-      if (method !== 'GET') return json({ error: 'Method not allowed' }, 405);
-      const id = path.slice('/api/ad/'.length);
-      if (!/^\d{1,25}$/.test(id)) return json({ error: 'Bad ad id' }, 400);
-      const out = await adView(id, env, { now, launch });
-      return json(out.body, out.status);
     }
     return text('Not found', 404);
   } catch (e) {

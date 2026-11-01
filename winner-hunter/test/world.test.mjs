@@ -7,7 +7,7 @@ import { d1Client, migrate } from '../lib/d1.mjs';
 import { MARKETS, LANGS, euFacts, sameThing, resetCooling, parseWorldKeywords, searchesOf, libraryUrl, readLibrary, toRow, classify, screenEU, checkStore, fetchProduct, suggestProduct, addUp, MIN_DAYS } from '../lib/world.mjs';
 import { hunt, ADS_SQL, saveTokenCheck } from '../world.mjs';
 import { openLibrary } from '../lib/adlibrary.mjs';
-import { handle, makeToken, products, proofOf, worldRow, worldMarketsOf, worldAlert, PROOF, WORLD_MARKETS } from '../worker/src/app.mjs';
+import { handle, tokenFor, products, proofOf, worldRow, worldMarketsOf, worldAlert, PROOF, WORLD_MARKETS } from '../worker/src/app.mjs';
 import { MARKET_RULES } from '../worker/src/market-rules.mjs';
 import { d1Binding, d1Rest, memoryDb } from './helpers/sqlite-d1.mjs';
 import { seededEnv } from './helpers/seed.mjs';
@@ -298,11 +298,12 @@ test('a night: searched in every market, saved, products on the board, EU check,
 
 test('a decision on a product outside the EU never reaches an EU winner with the same ad', async () => {
   const env = await seededEnv();
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, NOW)}`;
+  const at = Date.UTC(2026, 9, 17, 8, 0); // the seeded EU board's day
+  const cookie = `__Host-wh=${await tokenFor(env, at)}`;
   const [p] = addUp([row('9000', 'AU')], ctx());
   assert.strictEqual(p.ad_id, 'w9000');
   put(env.db, { ...P('pod.test/products/pillow', p.ad_id) });
-  const call = (path, init = {}) => handle(new Request('https://board.test' + path, { ...init, headers: { cookie, 'content-type': 'application/json' } }), env, { html: '', now: Date.UTC(2026, 9, 17, 8, 0) });
+  const call = (path, init = {}) => handle(new Request('https://board.test' + path, { ...init, headers: { cookie, 'content-type': 'application/json' } }), env, { html: '', now: at });
   const before = await (await call('/api/ads?view=all&limit=100')).json();
   assert.ok(before.ads.some((a) => a.id === '9000'), 'the EU winner with that ad');
   await call('/api/hide', { method: 'POST', body: JSON.stringify({ ad_id: p.ad_id, status: 'rejected' }) });
@@ -461,7 +462,7 @@ const seedWorld = (mem) => {
   mem.prepare("INSERT INTO store_trust (store, status, score, reviews, profile) VALUES ('a.test', 'page', 4.5, 800, 'a.test')").run();
 };
 const authed = async (env, path, init = {}) => {
-  const res = await handle(new Request('https://board.test' + path, { ...init, headers: { cookie: `__Host-wh=${await makeToken('1234', NOW)}`, ...(init.headers || {}) } }), env, { html: '<html></html>', now: NOW });
+  const res = await handle(new Request('https://board.test' + path, { ...init, headers: { cookie: `__Host-wh=${await tokenFor(env, NOW)}`, ...(init.headers || {}) } }), env, { html: '<html></html>', now: NOW });
   return res;
 };
 const J = async (env, path, init) => (await authed(env, path, init)).json();
@@ -508,6 +509,38 @@ test('the board outside the EU: most proof first, one market, filters, sorts, an
   const inbox = await J(env, '/api/ads?scope=world&view=inbox');
   assert.strictEqual(inbox.view, 'inbox');
   assert.strictEqual(inbox.counts.inbox, 3);
+});
+
+test('the Inbox outside the EU learns too: niche and price from your decisions, and Jev\'s risks (people take it: × 0.3, not hidden here)', async () => {
+  const { env, mem } = await setup();
+  seedWorld(mem);
+  put(mem, P('e.test/products/lamp', '500', { active: 0 }));
+  const jev = mem.prepare("INSERT INTO world_checks (product_key, people, animals, gymwear, physical, category, input, checked_at, version, main, sub, answers) VALUES (?, ?, 0.01, 0.01, 0.99, ?, 'photo', 'x', 2, ?, '', ?)");
+  const check = (key, main, people = 0.01) => jev.run(key, people, main, main, JSON.stringify({ p: { people }, choices: {} }));
+  check('a.test/products/strong', 'Home');
+  check('b.test/products/weak', 'Pets');
+  check('c.test/products/us', 'Pets', 0.9);
+  check('d.test/products/gone', 'Pets');
+  check('e.test/products/lamp', 'Home');
+  const before = await J(env, '/api/ads?scope=world&view=inbox');
+  // (proof + 1) × Jev's risk: 100: 7; 200: 1; 300: 2 × 0.3, people take it (by proof alone 300 came before 200)
+  assert.deepStrictEqual(before.ads.map((a) => [a.id, a.ranked.x, a.fit]), [['100', 1, 1], ['200', 1, 1], ['300', 0.3, 1]]);
+  assert.deepStrictEqual((await J(env, '/api/ads?scope=world&view=all')).ads.map((a) => a.id), ['100', '300', '200'], 'Browse: by proof, as before');
+  // Two Pets products approved and two Home products "Not my niche" (both no longer running); two AUD prices too expensive.
+  const fb = mem.prepare('INSERT INTO feedback (ad_id, action, reasons, price, currency, at) VALUES (?, ?, ?, ?, ?, ?)');
+  fb.run('400', 'seen', '[]', 20, 'AUD', 'x');
+  fb.run('400', 'keep', '[]', 20, 'AUD', 'x');
+  fb.run('500', 'rejected', '["niche"]', 20, 'AUD', 'x');
+  fb.run('500', 'rejected', '["niche","price"]', 45, 'AUD', 'x');
+  fb.run('500', 'rejected', '["price"]', 60, 'AUD', 'x');
+  const after = await J(env, '/api/ads?scope=world&view=inbox');
+  const by = (id) => after.ads.find((a) => a.id === id);
+  assert.deepStrictEqual(by('200').ranked.why, [{ text: 'Your niche: Pets', x: 1.5 }, { text: 'Too expensive for you: AUD 45 and up', x: 0.5 }]);
+  assert.deepStrictEqual(by('100').ranked.why, [{ text: 'Not your niche: Home', x: 0.5 }, { text: 'Too expensive for you: AUD 45 and up', x: 0.5 }]);
+  assert.deepStrictEqual(by('300').ranked.why.map((w) => w.text), ['Your niche: Pets', 'Too expensive for you: AUD 45 and up', 'People take']);
+  // (proof + 1) × fit × risk: 100: 7 × 0.25; 200: 1 × 0.75; 300: 2 × 0.75 × 0.3
+  assert.deepStrictEqual(after.ads.map((a) => a.id), ['100', '200', '300']);
+  assert.strictEqual(by('200').niche.w, 1.5);
 });
 
 test('decisions work on them as on any product: reject, star, note; ★ and ✓ keep them; the EU tabs never show them', async () => {
@@ -588,6 +621,8 @@ test('a problem with the scan shows on its tab only', async () => {
   assert.deepStrictEqual(worldAlert(null, NOW, { at: null, valid: false }), { level: 'red', text: 'Meta token ongeldig / Meta token invalid' });
   assert.strictEqual(worldAlert({ health: 'failed', alert: 'x', finished_at: iso(NOW) }, NOW, { at: iso(NOW - 864e5) }).text, 'x · Meta token verlopen / Meta token expired');
   assert.strictEqual(worldAlert({ health: 'warning', alert: 'y', finished_at: iso(NOW) }, NOW, { at: iso(NOW - 864e5) }).text, 'Meta token verlopen / Meta token expired', 'red wins over yellow');
+  assert.deepStrictEqual(worldAlert({ health: 'warning', alert: 'Ad Library weigerde 3 van 90 / Ad Library refused 3 of 90', finished_at: iso(NOW) }, NOW, null, { stopped: 'no balance left' }),
+    { level: 'yellow', text: 'Ad Library weigerde 3 van 90 / Ad Library refused 3 of 90 · Jev-check gestopt / Jev check stopped: no balance left' }, 'two warnings: both');
   const saved = [];
   const db = { setState: async (k, v) => { saved.push([k, v]); }, getState: async () => (saved.length ? JSON.stringify(saved.at(-1)[1]) : null) };
   const one = (o) => ({ n: 1, secret: 'META_TOKEN', checked_at: iso(NOW), ...o });

@@ -1,7 +1,7 @@
 /*
  * Momentum on the board: is a product's demand growing, steady or falling, how long its ads survive, how many other
  * stores sell the same item, and how crowded that makes it. momentum.mjs (a GitHub Actions job, once a day) works it out
- * from the board's own data and stores a summary per product in D1 table `momentum` (migrations/0016_momentum.sql). The
+ * from the board's own data and stores a summary per product in D1 table `momentum` (migrations/0018_momentum.sql). The
  * board reads those summaries in one small query (a few rows, not one per product) when it reads its tables, and ranks
  * with them: the Inbox × the momentum factor, and a "Momentum" sort. Nothing here writes to D1.
  *   GET /api/momentum?scope=world|eu    { weights, run, counts, rising }: the Momentum panel (from the board in memory)
@@ -150,9 +150,10 @@ export function momentumKit() {
     const fresh = num(mo.rn) && mo.rn > 0 ? ` (${mo.rn} new in 14d)` : '';
     return short ? `${shops}${fresh}` : `${shops} sell the same or a similar item${fresh}`;
   };
-  // Ads survived: its longest-running ad, from Meta's start date to the last time the hunt saw it still running.
+  // Ads survived: its longest-running ad, from Meta's start date to the last time the hunt saw it still running. A hint,
+  // not proof (some advertisers leave ads switched on): shown, not in the score.
   const survivedText = (mo, long) => (!num(mo.sv) || mo.sv <= 0 ? ''
-    : long ? `Ads survived ${mo.sv} days: its longest-running ad, from its start to the last time it was seen${num(mo.sl) && mo.sl > 1 ? ` · ${mo.sl} of its ads ran 30+ days` : ''}`
+    : long ? `Ads survived ${mo.sv} days: its longest-running ad, from its start to the last time it was seen${num(mo.sl) && mo.sl > 1 ? ` · ${mo.sl} of its ads ran 30+ days` : ''}. A hint, not proof: some advertisers leave ads on`
       : `Ads survived ${mo.sv}d`);
   const scoreTip = (mo) => {
     const used = mo.used || scoreOf(mo).used;
@@ -166,7 +167,7 @@ export function momentumKit() {
   function row(a, inbox) {
     const mo = a && a.mo;
     if (!mo || !mo.l) return '';
-    if (inbox) return block(mo);
+    if (inbox) return block(mo, !!a.ranked);
     return compact(mo, spark(mo.s, { invert: mo.sm === 'rank' }), survivedText(mo));
   }
   /** A card's row: label, sparkline, the move, the crowding pill; under it ads survived and rivals. Too new: only those. */
@@ -177,14 +178,17 @@ export function momentumKit() {
     return `<div class="mo ${esc(mo.l)}" title="${esc(scoreTip(mo))}"><div class="mo1"><b class="mol">${ARROW[mo.l] || ''} ${esc(LABEL[mo.l] || '')}</b>${line}<span class="mot">${esc(moveText(mo))}</span>${crowd}</div>${line2 ? `<div class="mo2">${esc(line2)}</div>` : ''}</div>`;
   }
 
-  /** The Inbox card's block: the score and why, the ranking factor, ads survived, rivals, Google searches, since when. */
-  function block(mo) {
+  /**
+   * The Inbox card's block: the score and why, the ranking factor, ads survived, rivals, Google searches, since when.
+   * ranked: the card already has the Inbox's own rank line (app.mjs ranked(), with momentum's factor in it): not twice.
+   */
+  function block(mo, ranked = false) {
     const lines = [];
     const trendless = mo.l === 'new';
     const score = trendless || mo.l === 'stopped' ? '' : ` ${signed(mo.m)}`;
     lines.push(`<div class="mo1"><b class="mol">${ARROW[mo.l] ? ARROW[mo.l] + ' ' : ''}${esc(LABEL[mo.l] || '')}${esc(score)}</b>${trendless ? '' : spark(mo.s, { w: 88, h: 22, invert: mo.sm === 'rank' }) + `<span class="mot">${esc(moveText(mo))}</span>`}</div>`);
     lines.push(`<div class="mo2">${esc(scoreTip(mo))}</div>`);
-    if (mo.why && mo.why.length) lines.push(`<div class="mo2">Ranks it × ${esc(mo.x)} in the Inbox: ${esc(mo.why.map((w) => `${w.text} × ${w.x}`).join(' · '))}</div>`);
+    if (mo.why && mo.why.length && !ranked) lines.push(`<div class="mo2">Ranks it × ${esc(mo.x)} in the Inbox: ${esc(mo.why.map((w) => `${w.text} × ${w.x}`).join(' · '))}</div>`);
     const surv = survivedText(mo, true);
     if (surv) lines.push(`<div class="mo2">${esc(surv)}</div>`);
     if (num(mo.r) && mo.r > 0) {
@@ -380,18 +384,19 @@ export function attachMomentum(rows, map) {
 
 // The ranking factor, worked out once per summary (the summaries stay in memory with the board's tables).
 const FACTOR = new WeakMap();
-/** A board row's ranking factor: 1 without a summary. */
-export function momentumX(r) {
+const NONE = Object.freeze({ x: 1, why: Object.freeze([]) });
+/** A board row's ranking factor and why ({ x, why: [{ text, x }] }, as app.mjs ranked() takes it): × 1 without a summary. */
+export function momentumFactor(r) {
   const mo = r && r.mo;
-  if (!mo) return 1;
+  if (!mo) return NONE;
   let f = FACTOR.get(mo);
-  if (f == null) FACTOR.set(mo, (f = factorOf(mo).x));
+  if (!f) FACTOR.set(mo, (f = factorOf(mo)));
   return f;
 }
+/** A board row's ranking factor alone: 1 without a summary. */
+export const momentumX = (r) => momentumFactor(r).x;
 /** The Momentum sort: the biggest ranking factor first (rising and not crowded), then the view's own order. */
 export const byMomentum = (then) => (a, b) => momentumX(b) - momentumX(a) || then(a, b);
-/** An Inbox order: base × the momentum factor, biggest first, then the view's own order (the factor is 1 without numbers). */
-export const timesMomentum = (base, then) => (a, b) => base(b) * momentumX(b) - base(a) * momentumX(a) || then(a, b);
 
 /** For the card (toAd): the summary with its score, label, crowding and factor, or null. */
 export const momentumCard = (r) => (r && r.mo ? cardOf(r.mo) : null);

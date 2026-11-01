@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { productKey, storeTop, productId, rankOf, addDay, movement } from '../lib/bestsellers.mjs';
 import { refresh, WANTED_SQL } from '../bestsellers.mjs';
 import { storeTrust, trustIdIn, trustPage, businessUnitIn, UA } from '../lib/trust.mjs';
-import { handle, makeToken, productKey as boardKey, movement as boardMovement, bestOf, sellsBoost } from '../worker/src/app.mjs';
+import { handle, tokenFor, productKey as boardKey, movement as boardMovement, bestOf, sellsBoost } from '../worker/src/app.mjs';
 import { d1Client } from '../lib/d1.mjs';
 import { d1Rest } from './helpers/sqlite-d1.mjs';
 import { seededEnv, NOW } from './helpers/seed.mjs';
@@ -28,6 +28,9 @@ function stores(lists) {
       return l ? l() : new Response('<html>not found</html>', { status: 404 });
     }
     if (u.host === 'shop2.test' && u.pathname === '/products/item-2.js') return json({ id: 22, handle: 'item-2' });
+    // shop1's other products on the board (not in its lists): their ids, so they are looked up once
+    const other = /^\/products\/([a-z-]+)\.js$/.exec(u.pathname);
+    if (u.host === 'shop1.test' && other) return json({ id: 100 + other[1].length, handle: other[1] });
     return new Response('nope', { status: 404 });
   };
   return { calls, doFetch };
@@ -128,7 +131,7 @@ test('bestsellers.mjs: ranks for the board products, kept per day; the board sho
   assert.ok(!w2.calls.some((u) => u.endsWith('.js')), 'product ids remembered');
   assert.strictEqual(row('shop1.test/products/item-1').history, '[["2026-10-17",3],["2026-10-25",1]]');
 
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, later)}`;
+  const cookie = `__Host-wh=${await tokenFor(env, later)}`;
   const get = async (path) => (await handle(new Request('https://wh.example.workers.dev' + path, { headers: { cookie } }), env, { html: '', now: later })).json();
   const all = await get('/api/ads');
   const best = (id) => all.ads.find((a) => a.id === id).best;
@@ -138,18 +141,31 @@ test('bestsellers.mjs: ranks for the board products, kept per day; the board sho
   assert.strictEqual(best('9005'), null, 'store without a list: nothing shown');
   assert.strictEqual(best('9000'), null, 'no product page: nothing shown');
 
+  // shop3 sells 400 products (its #1 is in its top 2%); shop1 sells 8 (its #1 says little: every product is in its top 10)
+  env.db.prepare("UPDATE winners SET data = json_set(data, '$.store_products', 400) WHERE ad_id = '9003'").run();
+  env.db.prepare("UPDATE winners SET data = json_set(data, '$.store_products', 8) WHERE ad_id = '9001'").run();
+  env.db.prepare("UPDATE state SET updated_at = 'sizes' WHERE key = 'last_run'").run(); // the board reads the winners again
   const sorted = (await get('/api/ads?sort=best')).ads.map((a) => (a.best && a.best.rank) || 999);
   assert.deepStrictEqual(sorted, [...sorted].sort((a, b) => a - b), 'sort=best: best store rank first, unknown last');
   assert.strictEqual(sorted[0], 1);
 
   const inbox = (await get('/api/ads?view=inbox&limit=100')).ads.map((a) => a.id);
   const plain = all.ads.map((a) => a.id); // by reach a day
-  assert.ok(inbox.indexOf('9003') < plain.indexOf('9003'), 'a top-10 seller moves up in the inbox');
+  assert.ok(inbox.indexOf('9003') < plain.indexOf('9003'), "#1 of a 400-product store's best sellers moves up in the inbox");
+  assert.ok(inbox.indexOf('9001') >= plain.indexOf('9001'), "#1 of an 8-product store's does not");
 
-  assert.strictEqual(sellsBoost({ bs: { ok: 1, rank: 4 } }), 1.5);
-  assert.strictEqual(sellsBoost({ bs: { ok: 1, rank: 30 } }), 1.2);
-  assert.strictEqual(sellsBoost({ bs: { ok: 1, rank: null } }), 1);
-  assert.strictEqual(sellsBoost({ bs: { ok: 0, rank: 2 } }), 1, 'unknown is not a boost');
+  const of = (rank, size) => ({ bs: { ok: 1, rank }, data: JSON.stringify({ store_products: size }) });
+  assert.strictEqual(sellsBoost(of(4, 400)), 1.5, 'top 10 and top 2%');
+  assert.strictEqual(sellsBoost(of(30, 400)), 1.2, 'top 50 and top 10%');
+  assert.strictEqual(sellsBoost(of(4, 100)), 1.2, 'top 10, but 4% of the store');
+  assert.strictEqual(sellsBoost(of(1, 50)), 1.5);
+  assert.strictEqual(sellsBoost(of(8, 8)), 1, 'every product of a tiny store is in its top 10');
+  assert.strictEqual(sellsBoost(of(1, 8)), 1);
+  assert.strictEqual(sellsBoost(of(45, 300)), 1, 'top 50, but 15% of the store');
+  assert.strictEqual(sellsBoost({ world: { store_products: 600 }, bs: { ok: 1, rank: 9 } }), 1.5, 'outside the EU: the size from the scan');
+  assert.strictEqual(sellsBoost({ bs: { ok: 1, rank: 4 } }), 1, 'store size unknown: the rank says nothing yet');
+  assert.strictEqual(sellsBoost(of(null, 400)), 1);
+  assert.strictEqual(sellsBoost({ bs: { ok: 0, rank: 2 }, data: '{"store_products":400}' }), 1, 'unknown is not a boost');
   assert.strictEqual(bestOf({ ok: 1, rank: null, history: 'not json' }).rank, null);
 });
 
@@ -178,7 +194,7 @@ test('bestsellers.mjs: a store that times out or answers 5xx keeps its last rank
 test('the board without the bestseller table (not migrated yet) still works, just without ranks', async () => {
   const env = await seededEnv();
   env.db.exec('DROP TABLE bestseller');
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, NOW)}`;
+  const cookie = `__Host-wh=${await tokenFor(env, NOW)}`;
   const res = await handle(new Request('https://wh.example.workers.dev/api/ads', { headers: { cookie } }), env, { html: '', now: NOW });
   assert.strictEqual(res.status, 200);
   assert.ok((await res.json()).ads.every((a) => a.best === null));
@@ -282,7 +298,7 @@ test('bestsellers.mjs + board: Trustpilot per store every 3 days; the card gets 
   assert.ok(s3.calls.some((u) => /widget\.trustpilot/.test(u)), 'after 3 days: checked again');
 
   const later = NOW + 3 * DAY;
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, later)}`;
+  const cookie = `__Host-wh=${await tokenFor(env, later)}`;
   const ads = (await (await handle(new Request('https://wh.example.workers.dev/api/ads', { headers: { cookie } }), env, { html: '', now: later })).json()).ads;
   const trust = (id) => ads.find((a) => a.id === id).trust;
   assert.deepStrictEqual(trust('9001'), { status: 'widget', score: 4.2, reviews: 1252, profile: 'shop1.test' });
@@ -342,7 +358,7 @@ test('bestsellers.mjs: one token a run, a new one once when Trustpilot stops tak
   assert.ok(!again.calls.some((u) => /trustpilot\.com\/review\/shop1\.test/.test(u)), 'a Trustpilot answer holds its 3 days');
 
   // The board: the score from the page; "not on Trustpilot"
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, NOW)}`;
+  const cookie = `__Host-wh=${await tokenFor(env, NOW)}`;
   const ads = (await (await handle(new Request('https://wh.example.workers.dev/api/ads', { headers: { cookie } }), env, { html: '', now: NOW })).json()).ads;
   const trust = (id) => ads.find((a) => a.id === id).trust;
   assert.deepStrictEqual(trust('9001'), { status: 'page', score: 4.6, reviews: 980, profile: 'shop1.test' });

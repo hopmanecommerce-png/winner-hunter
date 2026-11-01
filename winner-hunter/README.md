@@ -10,12 +10,14 @@ GitHub Actions (4x a day, outside the EU)  →  Cloudflare D1 (the database)  �
 
 ## Jev's answers (Outside EU tab)
 
-After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, once, from its name, type, shop and photo. The card shows its category and tags such as "People take 99%"; the **Jev** filter and the CSV have the same data. Nothing is hidden or ranked by it. It needs the GitHub secret `TYPESAFE_API_KEY`; without a key or a balance the products stay on the board without answers. About 0.01 cents a product.
+After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, once, from its name, type, shop and photo. The card shows its category and tags such as "People take 99%"; the **Jev** filter and the CSV have the same data. Its risks rank a product lower in both Inboxes, and the Inbox card says why: people or pets take it × 0.3, sizing returns, a medical claim, a brand or hard to ship × 0.5 each, for children, cosmetics, electric, fragile or big × 0.8 each, never below × 0.2. An EU product people or pets take stays out of the Inbox (Browse still lists it). Hard to ship, Medical claim and Cosmetics get a red tag. It needs the GitHub secret `TYPESAFE_API_KEY`; without a key or a balance the products stay on the board without answers. About 0.01 cents a product.
 
 ## What you see on the board
 
 - Only ads that pass **all four hard rules** (no points, no score): **Shopify store**, advertiser has **75+ active ads**,
-  ad live **7 to 42 days**, **500+ EU reach per day**. Anything else is never saved and never shown. Not on the EU board
+  ad live **7 to 42 days** (7+ when it was measured, at most 42 today counted from the day it started), **500+ EU reach
+  per day**. Anything else is never saved and never shown. One product = one product page: the same product under two
+  titles or two advertisers is one card and one decision. Not on the EU board
   either: supplements, food and drink, cosmetics, perfume, products with a medical claim and pet medicine (they need EU
   paperwork; words in `lib/world.mjs` screenEU, so some slip through: Reject handles those).
 - **Inbox** (start screen): every product you have not decided on, one at a time, best first. **✗ Reject**, **★ Keep**
@@ -25,8 +27,10 @@ After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, o
 - **📝 Note** (under the Inbox card, key N): write about the ad, the competitor or the product. It saves as you type and
   stays with the product. Your notes on other products of the same store or advertiser show below it.
 - **Why?** After each choice: tap a reason (Too expensive, Not my niche, Bad store… or Wow product, My niche…).
-  The board **learns**: niches you like go up in the Inbox, niches you reject go down,
-  "Bad store" takes that store out of the Inbox, "Too expensive" (twice) ranks expensive products lower.
+  The board **learns** (both Inboxes): a niche is Jev's category of a product; one you approve more often than usual
+  goes up, one you mark "Not my niche" goes down (a no for another reason says nothing about the niche). "Bad store"
+  takes that store out of the Inbox. "Too expensive" twice in one currency ranks that currency's products from the
+  cheaper price up at half; a product without a price ranks at × 0.75 while there is a limit for it.
 - **🧠**: what the board learned, your notes, and a box to tell the board something. Everything is in the D1
   table `feedback`; ask Claude "learn from my Winner Hunter feedback" to turn it into better keywords and rules.
 - **🚀 Launch** (next to 🧠): launch an approved product today. Start a launch card from any product you approved (✓, or
@@ -34,13 +38,15 @@ After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, o
   run, store size and risk flags, with **Go** / **No go**. Under it the checklist: sourcing, margin (worked out as you
   type; VAT 21% and payment fees 3% unless you fill in your own), compliance, competitors and ads, store, creatives,
   launch (budget, kill and scale rule). It saves as you type (D1 table `launches`). **📌 Pin** marks the product you
-  launch now, one at a time; a No go loses the pin.
+  launch now, one at a time; a No go loses the pin. One card per product, as the board groups it (an EU product by its
+  product page). A card started before that keeps its old advertiser + title key in D1 and is still that product's card.
 - **Browse**: everything that passes, most reach per day first, with search, sort and filters. **★**: your kept products.
   **✓**: every product you approved, the last one first, with the day you approved it (also after it ages out of
   the rules). The ✓ count jumps each time you tap **✓ Approved**.
 - **🏆 Store best seller**: proof that a product sells. Once a day (after the hunt) every board product gets its rank in
   its own store's best-seller list (Shopify's sales order, top 50) and how it moved in a week: "#2 best seller in its
-  store · ↑3 in 8d". The Inbox puts sellers first (× 1.5 in the store's top 10, × 1.2 in its top 50); Browse can sort
+  store · ↑3 in 8d". The Inbox puts sellers first (× 1.5 in the store's top 10 and top 2% of its products, × 1.2 in its top 50
+  and top 10%; nothing while the store's size is unknown); Browse can sort
   by it. No line = the store gives no list (headless shop); "Not in its store's top 50" = checked, not selling much.
 - **📈 Momentum** (a row on every card, a block on the Inbox card, a panel above the products): is it **rising, steady or
   falling**, with a sparkline of its last 14 days, how long its **ads survived**, how many **other stores sell the same
@@ -57,6 +63,47 @@ After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, o
 - **✓ Approved** moves a product to **✓**; **✗ Reject** (not for me) hides it; **Undo** brings it back.
 - **CSV** downloads what you are looking at.
 - A "store photo" label means: photo from the shop's page, not the product photo of the ad.
+- "Measured 17 Sep": the card's figures (reach, ads, copies, days live) are from then, more than 2 days ago (the EU hunt
+  only runs by hand). "Product not identified": no product page, price or rank was found, the title is the ad's own
+  words. "Big catalogue, 1 ad": a store of 250+ products with fewer than 5 copies of this ad.
+
+## 🔎 Sourcing (on a launch card)
+
+Under the decision on a 🚀 launch card, **🔎 Sourcing** takes the product to a supplier you trust, at a cost you know
+(`worker/src/sourcing.mjs`, D1 tables `product_sourcing` and `product_suppliers`). It saves as you go.
+
+- **Find it**: search links by name on 1688 (with the Chinese words you set; "translate the name" helps), AliExpress,
+  Alibaba and CJ, and by photo on Google Lens and Yandex (they take the product photo's link). 1688, AliExpress and
+  Alibaba only search a photo in their own app: save the photo, then tap the camera there.
+- **Suppliers**: paste a link, or the text the 1688 or AliExpress app shares (price, MOQ, rating, repeat buyers and
+  factory come along), then fill in the rest: price and currency, shipping to NL, MOQ, rating, factory or trader, repeat
+  buyers (1688: 回头率), packed weight, days to the customer, notes. They are listed by what one order costs at the
+  customer's door: the unit, its shipping and the EU import fees on a parcel from China (€3 duty from 1 Jul 2026 and
+  €2 handling per item line from 1 Nov 2026: €5; none from EU stock), in euros at ¥8.3 and $1.16 for €1 unless you set
+  your own rate. Flags say what to look at: a trader, few repeat buyers, a rating under 4.5, MOQ above 50, slow, no
+  shipping cost yet.
+- **Choose** puts the supplier's cost in euros, its link, shipping, MOQ and lead time in the card's Sourcing step: the
+  margin and break-even ROAS on top follow at once (a COGS you typed in the Margin step still counts first). A new price
+  or rate for the chosen one: the card follows. Choose another, remove it or choose none: the card keeps its numbers.
+- **Vet the supplier** and **Sample order**: two checklists of ten, from the sourcing research (an unedited video with
+  today's date, the CE/RoHS/REACH report, battery papers, packed size, defects, safe payment; samples from the top two,
+  the agent's QC, a competitor's unit, labels, line quotes, the €3 + €2 and your IOSS in writing).
+- **First message**: to an agent (find it on 1688, samples and QC, line quotes, the €3 + €2 and your IOSS) or to a
+  supplier (the questions to ask before you pay), in English or Chinese, with your name and test quantity. **Copy**.
+
+**Shared numbers**, for every part of the board that works out costs: `product_sourcing` holds, by the launch card's
+`product_key`, `supplier_cost` (euros for one unit: the product only, no shipping or EU fees), `supplier_url`,
+`weight_g` (one unit packed, in grams: one you type wins over a supplier's), `ship_cost` (euros, one order to NL),
+`moq` and `lead_days`. `chosenSupplier(env, key)` in `worker/src/sourcing.mjs` reads them.
+
+**CJ Dropshipping (optional)**: with a Worker secret `CJ_API_KEY`, the panel finds CJ products by photo (CJ allows that
+from account Level 3; below it, by name) or by name, and gives one product's cost, packed weight, stock (the EU apart)
+and cheapest freight to NL, DE and FR, from China and from CJ's EU warehouse. **Add as supplier** lists it by the route
+that lands cheapest. Without the secret it is off and calls nothing. Set it once: Cloudflare dashboard → Workers &
+Pages → winner-hunter-clean → Settings → Variables and Secrets → Add (type Secret, name `CJ_API_KEY`, your key from CJ:
+My CJ → Authorization → API), or `cd winner-hunter/worker && npx wrangler secret put CJ_API_KEY`. Off again: delete it.
+The CJ token is kept in D1 (`state` row `cj_token`) sealed with a key made from `CJ_API_KEY`: the hunts can read D1, and
+a token there is no use to them.
 
 ## Set up (once)
 
@@ -67,8 +114,13 @@ Add these 4 secrets in GitHub: **Settings → Secrets and variables → Actions 
 | `META_TOKEN` | Meta access token for the Ad Library API. Optional extra: `META_TOKEN_2`, `META_TOKEN_3` (other Meta apps, used when one hits its hourly limit). |
 | `CF_API_TOKEN` | Cloudflare API token. Make it at dash.cloudflare.com → My Profile → API Tokens → Create Token → Custom token, with **Account → D1 → Edit** and **Account → Workers Scripts → Edit**. |
 | `CF_ACCOUNT_ID` | Your Cloudflare account ID (Cloudflare dashboard → Workers & Pages, right side). |
-| `BOARD_PIN` | The PIN for the board. Use 6+ digits. |
+| `BOARD_PIN` | The PIN for the board. Use 6+ digits. 10 tries per address (IPv6: per /64) and 30 per network (IPv6 /48, IPv4 /24) per 15 minutes. |
 | `CF_D1_TOKEN` | Optional, better: a second Cloudflare token with only **Account → D1 → Edit**. The hunts (World Hunter, Winner Hunter, Jev check, Ad prefetch) then use it instead of `CF_API_TOKEN`, so the jobs that open Facebook and shops hold no token that can change the board. |
+
+The login cookie is keyed by the PIN and a random key the board makes at the first login and keeps in D1 (`state` row
+`cookie_key`): no one can make a cookie to try PINs, and a copied cookie does not give the PIN away. To log every phone
+out: change `BOARD_PIN`, or delete that row. Optional: a Worker secret `BOARD_SECRET` (32+ random characters,
+`cd winner-hunter/worker && npx wrangler secret put BOARD_SECRET`) takes the place of the key in D1.
 
 Then, in **Actions**:
 
@@ -185,7 +237,7 @@ only writes its own two.
   without numbers yet ranks as before. The EU board's numbers only change when its hunt runs (by hand): its products say
   "No new numbers since …" instead of a trend.
 - **Ads survived N days**: its longest-running ad, from Meta's start date to the last time the hunt saw it still running.
-  Advertisers stop ads that lose money, so an ad that ran long pays for itself.
+  A hint, not proof (some advertisers leave ads switched on), so it is shown but not in the score.
 - **Rivals and crowding**: other stores selling the same or a very similar item, among every store the hunts found (also
   TikTok shops): the same words in the title, the supplier's own photo id in the photo's file name (stores importing the
   same AliExpress or 1688 listing keep it), or a photo that looks the same (a fingerprint made in the runner's Chrome, so
@@ -193,7 +245,7 @@ only writes its own two.
   stores the board knows count (those the hunts found, and the TikTok tab's shops), so the real number is higher.
 - **Google Trends** (optional): add the GitHub secret `SERPAPI_KEY` (serpapi.com). The job then asks about shortlisted
   products only (a launch card, then approved ✓, approved on the TikTok tab, starred), at most `TRENDS_MAX` a run
-  (repository variable, default 5; SerpApi's free plan has 100 searches a month), each again after `TRENDS_DAYS` days
+  (repository variable, default 3: about 90 a month, inside SerpApi's free 100; more is Q5 in docs/learnings), each again after `TRENDS_DAYS` days
   (default 14), in the product's biggest market. Without the key nothing is asked.
 
 **D1 budget.** The board reads all summaries in one query of a few rows (one per 400 KB, not one per product) together

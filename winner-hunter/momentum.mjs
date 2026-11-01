@@ -2,7 +2,7 @@
 /*
  * Momentum, once a day (momentum.yml): where each product on the board is heading. It reads the board's own tables and
  * writes one row a day of numbers (D1 table momentum_daily) and a summary per product for the board (table momentum).
- *   CF_API_TOKEN=… CF_ACCOUNT_ID=… [SERPAPI_KEY=…] [TRENDS_MAX=5] [TRENDS_DAYS=14] [MOMENTUM_MINUTES=20] node winner-hunter/momentum.mjs
+ *   CF_API_TOKEN=… CF_ACCOUNT_ID=… [SERPAPI_KEY=…] [TRENDS_MAX=3] [TRENDS_DAYS=14] [MOMENTUM_MINUTES=20] node winner-hunter/momentum.mjs
  *
  * 1. The board's products: outside the EU (world_products), the EU board (winners, one product per advertiser + title),
  *    TikTok (tiktok_products), each with its store's best-seller rank and how long its ads were seen running (world_ads).
@@ -145,7 +145,7 @@ export async function askTrends(item, { key, doFetch = globalThis.fetch, now = D
  * The run. deps: { db (lib/d1.mjs client), now, log, doFetch, serpKey (SerpApi, '' = no Google Trends), trendsMax,
  * trendsDays, hasher (hashInPage in a browser, or null), photoMax, deadline (ms) }. Returns the run's record.
  */
-export async function run({ db, now = Date.now, log = console.log, doFetch = globalThis.fetch, serpKey = '', trendsMax = 5, trendsDays = 14, hasher = null, photoMax = PHOTO_MAX, deadline = Infinity }) {
+export async function run({ db, now = Date.now, log = console.log, doFetch = globalThis.fetch, serpKey = '', trendsMax = 3, trendsDays = 14, hasher = null, photoMax = PHOTO_MAX, deadline = Infinity }) {
   const t0 = now();
   const day = dayOf(t0);
   const iso = new Date(t0).toISOString();
@@ -297,7 +297,7 @@ async function main() {
   const chrome = await chromeHasher();
   if (!chrome) console.log('::notice::No browser for photo fingerprints: rivals are found by their words and supplier photos only');
   try {
-    const t = await run({ db: d1Client(s), serpKey: String(env.SERPAPI_KEY || '').trim(), trendsMax: intEnv(env.TRENDS_MAX, 5, 0, 100), trendsDays: intEnv(env.TRENDS_DAYS, 14, 1, 90),
+    const t = await run({ db: d1Client(s), serpKey: String(env.SERPAPI_KEY || '').trim(), trendsMax: intEnv(env.TRENDS_MAX, 3, 0, 100), trendsDays: intEnv(env.TRENDS_DAYS, 14, 1, 90),
       hasher: chrome && chrome.hash, deadline: Date.now() + minutes * 60000 });
     if (env.GITHUB_STEP_SUMMARY) {
       const l = t.labels;

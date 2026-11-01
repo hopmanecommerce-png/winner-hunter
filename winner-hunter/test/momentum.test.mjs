@@ -1,4 +1,4 @@
-// Momentum (momentum.mjs, lib/momentum.mjs, worker/src/momentum.mjs, migrations/0016_momentum.sql): the trend maths, the
+// Momentum (momentum.mjs, lib/momentum.mjs, worker/src/momentum.mjs, migrations/0018_momentum.sql): the trend maths, the
 // same item in other stores, Google Trends, the daily job on an in-memory D1 (node:sqlite), what the board reads and how
 // it ranks with it, and the D1 budget: a day costs a few writes, the board reads a few rows, not one per product.
 import test from 'node:test';
@@ -34,8 +34,8 @@ async function login(env, now = NOW) {
 // ---------------------------------------------------------------------------
 // The migration
 // ---------------------------------------------------------------------------
-test('migration 0016: only CREATE … IF NOT EXISTS, safe again and again, and the history view expands a day into rows', () => {
-  const st = statements(fs.readFileSync(new URL('../worker/migrations/0016_momentum.sql', import.meta.url), 'utf8'));
+test('migration 0018: only CREATE … IF NOT EXISTS, safe again and again, and the history view expands a day into rows', () => {
+  const st = statements(fs.readFileSync(new URL('../worker/migrations/0018_momentum.sql', import.meta.url), 'utf8'));
   assert.deepStrictEqual(st.map((x) => x.split('\n')[0].split('(')[0].trim()), ['CREATE TABLE IF NOT EXISTS momentum_daily', 'CREATE VIEW IF NOT EXISTS momentum_history AS', 'CREATE TABLE IF NOT EXISTS momentum']);
   assert.ok(st.every((x) => !/\b(DROP|DELETE|ALTER|UPDATE|INSERT)\b/i.test(x)), 'nothing that drops, changes or fills data');
   const db = new DatabaseSync(':memory:');

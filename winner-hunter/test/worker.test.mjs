@@ -4,7 +4,7 @@ import { TRAITS, AD_TRAITS, CHOICES, AD_CHOICES } from '../worker/src/jev-questi
 import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
-import { handle, makeToken, csvCell, toCsv, boardAlert, PREFETCH_SQL, tasteOf, fitOf } from '../worker/src/app.mjs';
+import { handle, makeToken, tokenFor, cookieKey, csvCell, toCsv, boardAlert, PREFETCH_SQL, tasteOf, fitOf, fitWhy, riskOf, ipKey, netKey, products } from '../worker/src/app.mjs';
 import { landingUrl, cleanAd } from '../worker/src/adview.mjs';
 import { seededEnv, NOW } from './helpers/seed.mjs';
 
@@ -14,7 +14,7 @@ const req = (path, init = {}) => new Request(ORIGIN + path, init);
 const call = (env, path, init, now = NOW) => handle(req(path, init), env, { html: HTML, now });
 
 async function loggedIn(env) {
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, NOW)}`;
+  const cookie = `__Host-wh=${await tokenFor(env, NOW)}`;
   return {
     get: (path, now) => call(env, path, { headers: { cookie } }, now),
     post: (path, body, headers = {}) => call(env, path, { method: 'POST', headers: Object.assign({ cookie, 'content-type': 'application/json', origin: ORIGIN }, headers), body: typeof body === 'string' ? body : JSON.stringify(body) }),
@@ -22,6 +22,18 @@ async function loggedIn(env) {
   };
 }
 const login = (env, pin, ip = '1.2.3.4') => call(env, '/login', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', 'cf-connecting-ip': ip }, body: 'pin=' + encodeURIComponent(pin) });
+// Jev's answer for every seeded EU product, under its advertiser + title as world-check.mjs saves it: Pets for the
+// search word "hond", Clothing for "dress"; p: more answers (e.g. { sizing: 0.9 }) for the ads in `ids`.
+function jevFor(env, p = {}, ids = []) {
+  const key = "'eu|' || advertiser_page_id || '|' || lower(trim(COALESCE(NULLIF(product_title, ''), ad_id)))";
+  env.db.prepare(`INSERT OR IGNORE INTO world_checks (product_key, people, animals, gymwear, physical, category, input, checked_at, version, main, sub, answers)
+    SELECT ${key}, 0.01, 0.01, 0.01, 0.99, CASE keyword WHEN 'hond' THEN 'Pets' ELSE 'Clothing' END, 'photo', 'x', 2, CASE keyword WHEN 'hond' THEN 'Pets' ELSE 'Clothing' END, '', '{}' FROM winners`).run();
+  for (const id of ids) {
+    const answers = JSON.stringify({ p: { people: 0.01, animals: 0.01, gymwear: 0.01, physical: 0.99, ...p }, choices: {} });
+    env.db.prepare(`UPDATE world_checks SET answers = ?, people = ?, animals = ? WHERE product_key = (SELECT ${key} FROM winners WHERE ad_id = ?)`).run(answers, p.people ?? 0.01, p.animals ?? 0.01, id);
+  }
+  env.db.prepare("UPDATE state SET updated_at = ? WHERE key = 'last_run'").run('jev ' + Math.random()); // the board reads its tables again
+}
 
 test('no BOARD_PIN secret: the board stays closed', async () => {
   const env = await seededEnv();
@@ -60,12 +72,13 @@ test('the cookie is required and checked: missing, forged, expired, other PIN', 
   assert.strictEqual((await call(env, '/export.csv')).status, 401);
   assert.strictEqual((await call(env, '/api/hide', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"ad_id":"9000","status":"seen"}' })).status, 401);
   const exp = Math.floor(NOW / 1000) + 1000;
-  for (const cookie of [`__Host-wh=${exp}.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`, `__Host-wh=${await makeToken('111111', NOW)}`, 'wh=' + (await makeToken('482913', NOW))]) {
+  const key = await cookieKey(env, NOW, true);
+  for (const cookie of [`__Host-wh=${exp}.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`, `__Host-wh=${await makeToken('111111', NOW, key)}`, 'wh=' + (await makeToken('482913', NOW, key)), `__Host-wh=${await makeToken('482913', NOW)}`]) {
     assert.strictEqual((await call(env, '/api/ads', { headers: { cookie } })).status, 401, cookie);
   }
-  const old = `__Host-wh=${await makeToken('482913', NOW - 91 * 864e5)}`;
+  const old = `__Host-wh=${await makeToken('482913', NOW - 91 * 864e5, key)}`;
   assert.strictEqual((await call(env, '/api/ads', { headers: { cookie: old } })).status, 401, 'expired after 90 days');
-  const ok = `__Host-wh=${await makeToken('482913', NOW - 89 * 864e5)}`;
+  const ok = `__Host-wh=${await makeToken('482913', NOW - 89 * 864e5, key)}`;
   assert.strictEqual((await call(env, '/api/ads', { headers: { cookie: ok } })).status, 200);
 });
 
@@ -76,6 +89,101 @@ test('10 wrong PINs from one IP: locked for 15 minutes (other IPs not)', async (
   assert.strictEqual((await login(env, '482913', '9.9.9.9')).status, 303);
   const later = await handle(req('/login', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', 'cf-connecting-ip': '1.2.3.4' }, body: 'pin=482913' }), env, { html: HTML, now: NOW + 16 * 60000 });
   assert.strictEqual(later.status, 303);
+});
+
+test('PIN tries sent at the same moment: each is counted before its PIN is compared, so no more than 10 are compared', async () => {
+  const env = await seededEnv();
+  env.DB = slowly(env.DB); // a few ms per query, as a round trip to D1 takes: the 30 tries overlap
+  const got = (await Promise.all(Array.from({ length: 30 }, (_, i) => login(env, '7' + i)))).map((r) => r.status);
+  assert.deepStrictEqual([got.filter((s) => s === 401).length, got.filter((s) => s === 429).length], [10, 20]);
+  assert.strictEqual((await login(env, '482913')).status, 429);
+});
+
+test('PIN lockout: an IPv6 address counts by its /64, so a phone cannot hop to a new address for 10 more tries', async () => {
+  assert.strictEqual(ipKey('2001:db8:1:2::1'), '2001:db8:1:2::/64');
+  assert.strictEqual(ipKey('2001:0DB8:0001:0002:aaaa:bbbb:cccc:dddd'), '2001:db8:1:2::/64');
+  assert.strictEqual(ipKey('2001:db8::7'), '2001:db8:0:0::/64');
+  assert.strictEqual(ipKey('::ffff:1.2.3.4'), '1.2.3.4');
+  assert.strictEqual(ipKey('1.2.3.4'), '1.2.3.4');
+  assert.strictEqual(ipKey(''), 'unknown');
+  const env = await seededEnv();
+  for (let i = 0; i < 10; i++) assert.strictEqual((await login(env, '1' + i, `2001:db8:1:2:${i}::${i + 1}`)).status, 401);
+  assert.strictEqual((await login(env, '482913', '2001:db8:1:2:ffff::1')).status, 429, 'another address in the same /64');
+  assert.strictEqual((await login(env, '482913', '2001:db8:1:3::1')).status, 303, 'the next /64 is someone else');
+});
+
+test('PIN lockout: 30 tries per network too (IPv6 /48, IPv4 /24), so a free /48 of 65,536 /64s is no way around it', async () => {
+  assert.deepStrictEqual(['2001:db8:1:2::1', '2001:db8::7', '1.2.3.4', '::ffff:1.2.3.4', ''].map(netKey), ['2001:db8:1::/48', '2001:db8:0::/48', '1.2.3.0/24', '1.2.3.0/24', 'unknown/net']);
+  const env = await seededEnv();
+  for (let i = 0; i < 30; i++) assert.strictEqual((await login(env, '1' + i, `2001:db8:1:${i.toString(16)}::1`)).status, 401, `a new /64 each time: ${i}`);
+  assert.strictEqual((await login(env, '482913', '2001:db8:1:ff::1')).status, 429, 'a 31st /64 in the same /48');
+  assert.strictEqual((await login(env, '482913', '2001:db8:2::1')).status, 303, 'another /48');
+  for (let i = 1; i <= 30; i++) assert.strictEqual((await login(env, '1' + i, `9.8.7.${i}`)).status, 401);
+  assert.strictEqual((await login(env, '482913', '9.8.7.200')).status, 429, 'a 31st address in the same /24');
+  assert.strictEqual((await login(env, '482913', '9.8.6.1')).status, 303);
+});
+
+test('PIN lockout fails closed: a try that cannot be counted is not compared, not even the right PIN', async () => {
+  const env = await seededEnv();
+  const prepare = env.DB.prepare;
+  env.DB.prepare = (sql) => (/pin_tries/.test(sql) ? { bind: () => ({ first: async () => { throw new Error('D1 down'); }, run: async () => { throw new Error('D1 down'); } }) } : prepare(sql));
+  for (const pin of ['000000', '482913']) {
+    const res = await login(env, pin);
+    assert.strictEqual(res.status, 503, pin);
+    assert.match(await res.text(), /cannot check PINs right now/);
+    assert.strictEqual(res.headers.get('set-cookie'), null);
+  }
+  const { DatabaseSync } = await import('node:sqlite');
+  const { d1Binding } = await import('./helpers/sqlite-d1.mjs');
+  assert.strictEqual((await login({ DB: d1Binding(new DatabaseSync(':memory:')), BOARD_PIN: '482913' }, '482913')).status, 503, 'no table yet: no login either');
+  assert.strictEqual((await (await loggedIn(env)).get('/api/ads')).status, 200, 'a phone with its cookie still opens the board');
+});
+
+test('PIN lockout stays cheap: a wrong PIN reads no table, old windows are removed through the index', async () => {
+  const env = await seededEnv();
+  for (let i = 0; i < 300; i++) env.db.prepare('INSERT INTO pin_tries (ip, n, since) VALUES (?, 1, ?)').run('10.0.' + i, NOW - (i % 2 ? 20 : 5) * 60000);
+  env.DB.log.length = 0;
+  assert.strictEqual((await login(env, '000000')).status, 401);
+  assert.ok(env.DB.log.every((l) => !/FROM state|LIKE/.test(l.sql)), 'nothing in state, no LIKE');
+  for (const l of env.DB.log) {
+    const plan = env.db.prepare('EXPLAIN QUERY PLAN ' + l.sql).all(...l.args).map((x) => x.detail).join('; ');
+    assert.doesNotMatch(plan, /SCAN/, `${l.sql}: ${plan}`);
+  }
+  assert.strictEqual(env.db.prepare('SELECT COUNT(*) AS n FROM pin_tries').get().n, 152, 'the 150 windows that are over are gone; the 150 open ones and this address and network stay');
+  assert.strictEqual((await login(env, '482913')).status, 303);
+  assert.strictEqual(env.db.prepare("SELECT COUNT(*) AS n FROM pin_tries WHERE ip = '1.2.3.4'").get().n, 0, 'the right PIN clears its own tries');
+});
+
+test('the cookie is keyed with a server key (BOARD_SECRET, else a random key the first login keeps in D1), never with the PIN alone', async () => {
+  const env = await seededEnv();
+  const ads = (cookie, e = env, now = NOW) => call(e, '/api/ads', { headers: { cookie: '__Host-wh=' + cookie } }, now);
+  const cookieOf = (res) => res.headers.get('set-cookie').match(/^__Host-wh=([^;]+)/)[1];
+  // Anyone can make the PIN-only cookie for a PIN guess. It never opens the board, so the login's limit cannot be gone
+  // around: locked out at /login, 100 guesses by cookie (the right PIN among them) get nowhere.
+  for (let i = 0; i < 10; i++) await login(env, '9' + i);
+  assert.strictEqual((await login(env, '482913')).status, 429);
+  for (let p = 482863; p < 482963; p++) assert.strictEqual((await ads(await makeToken(String(p), NOW))).status, 401, String(p));
+  // The first login makes the key, once; its cookie opens the board; the next login uses the same key.
+  assert.strictEqual(env.db.prepare("SELECT COUNT(*) AS n FROM state WHERE key = 'cookie_key'").get().n, 0, 'no key before the first login');
+  const first = cookieOf(await login(env, '482913', '5.5.5.5'));
+  const key = env.db.prepare("SELECT value FROM state WHERE key = 'cookie_key'").get().value;
+  assert.ok(key.length >= 40);
+  assert.strictEqual(first, await makeToken('482913', NOW, key));
+  assert.strictEqual((await ads(first)).status, 200);
+  assert.strictEqual(cookieOf(await login(env, '482913', '6.6.6.6')), first, 'the next login: the same key');
+  // No cookie lives longer than the 90 days the board gives, also with the key.
+  assert.strictEqual((await ads(await makeToken('482913', NOW + 365 * 864e5, key))).status, 401);
+  // A new PIN logs every phone out, and so does deleting the key (a key read is kept 5 minutes).
+  assert.strictEqual((await ads(first, Object.assign({}, env, { BOARD_PIN: '111111' }))).status, 401);
+  env.db.prepare("DELETE FROM state WHERE key = 'cookie_key'").run();
+  assert.strictEqual((await ads(first, env, NOW + 6 * 60000)).status, 401, 'key gone: logged out');
+  // BOARD_SECRET (a Worker secret) takes the place of the key in D1; a new one logs every phone out.
+  const sec = Object.assign({}, env, { BOARD_SECRET: 's3cret-' + 'x'.repeat(32) });
+  const viaSecret = cookieOf(await login(sec, '482913', '7.7.7.7'));
+  assert.strictEqual(viaSecret, await makeToken('482913', NOW, sec.BOARD_SECRET));
+  assert.strictEqual((await ads(viaSecret, sec)).status, 200);
+  assert.strictEqual((await ads(viaSecret, Object.assign({}, sec, { BOARD_SECRET: 'another-' + 'y'.repeat(32) }))).status, 401);
+  assert.strictEqual(env.db.prepare("SELECT COUNT(*) AS n FROM state WHERE key = 'cookie_key'").get().n, 0, 'with BOARD_SECRET no key is kept in D1');
 });
 
 test('/api/ads: All is the default view (no Top 20): ads that pass the rules, one per product, by reach per day; no score', async () => {
@@ -136,6 +244,12 @@ test('alert banner: red for a failed run or a Meta token expiring within 7 days;
   // never-expiring token, no run yet, broken state
   assert.strictEqual(boardAlert(null, { at: null }, NOW), null);
   assert.strictEqual(boardAlert({ health: 'ok', finished_at: 'garbage' }, null, NOW), null);
+  // two problems at once: both are in the text, each "Dutch / English" (the board shows the English of both)
+  assert.deepStrictEqual(boardAlert({ status: 'running', started_at: iso(NOW - 40 * H), updated_at: iso(NOW - 39 * H) }, { at: iso(NOW + 2.5 * 864e5) }, NOW),
+    { level: 'red', text: 'EU-run staat stil / The EU run has stopped moving · Meta token verloopt over 2 dagen / Meta token expires in 2 days' });
+  const shown = new Function(`${HTML.match(/^const english = .*$/m)[0]}; return english;`)();
+  assert.strictEqual(shown('EU-run staat stil / The EU run has stopped moving · Meta token verloopt over 2 dagen / Meta token expires in 2 days'), 'The EU run has stopped moving · Meta token expires in 2 days');
+  assert.strictEqual(shown('Run failed: 0 ads checked'), 'Run failed: 0 ads checked', 'a text without a translation stays whole');
 });
 
 test('/api/ads?view=all: everything that passes the rules, filters, sort, paging and totals', async () => {
@@ -274,9 +388,10 @@ test('/api/ads: counts.fresh = inbox products found in the last day', async () =
 
 test('feedback: every decision is logged, reasons and a note added after, undo takes it out; /api/learned sums it up', async () => {
   const env = await seededEnv();
+  jevFor(env);
   const s = await loggedIn(env);
   const inbox = async () => (await s.get('/api/ads?view=inbox&limit=100')).json();
-  const fb = () => env.db.prepare("SELECT ad_id, action, reasons, note, keyword, title FROM feedback WHERE action != 'general' ORDER BY id").all();
+  const fb = () => env.db.prepare("SELECT ad_id, action, reasons, note, keyword, title, currency FROM feedback WHERE action != 'general' ORDER BY id").all();
   const [a, b, c] = (await inbox()).ads;
   assert.strictEqual((await s.post('/api/feedback', { ad_id: a.id, reasons: ['price'] })).status, 404, 'decide first');
   await s.post('/api/hide', { ad_id: a.id, status: 'rejected' });
@@ -302,7 +417,11 @@ test('feedback: every decision is logged, reasons and a note added after, undo t
   assert.strictEqual(l.decisions, 1);
   assert.deepStrictEqual(l.by_action, { rejected: 1, keep: 0, seen: 0 });
   assert.deepStrictEqual(l.reasons.bad.map((x) => [x.key, x.label, x.n]), [['price', 'Too expensive', 1], ['niche', 'Not my niche', 1]]);
-  assert.deepStrictEqual(l.niches, [{ kw: String(a.kw).toLowerCase(), good: 0, bad: 2, weight: 0.33 }], '"not my niche" counts double');
+  // a: Stale Old Winner, found with "hond": Jev says Pets. One "Not my niche" and no yes: Pets goes down.
+  assert.deepStrictEqual(l.niches, [{ niche: 'Pets', good: 0, bad: 1, weight: 0.67 }], 'the niche is Jev\'s category, not the search word');
+  assert.strictEqual(l.approval_rate, 0.33);
+  assert.deepStrictEqual(l.max_prices, [], 'one "too expensive" is not a limit yet');
+  assert.strictEqual(fb()[0].currency, 'EUR', 'the price comes with its currency');
   assert.deepStrictEqual(l.notes.map((n) => n.note), ['Meer dierenproducten graag', 'Te duur  voor NL']);
   assert.strictEqual((await s.get('/api/learned')).status, 200);
   assert.strictEqual((await call(env, '/api/learned')).status, 401, 'PIN needed');
@@ -337,36 +456,65 @@ test('notes: one per product, before or after deciding; notes on the same store 
   assert.strictEqual((await call(env, '/api/note?ad_id=9001')).status, 401, 'PIN needed');
 });
 
-test('tasteOf / fitOf: niches you like go up, rejected niches and too-expensive prices go down, bad stores leave', () => {
+test('tasteOf / fitOf: niches are Jev categories, only "Not my niche" counts against one, against your usual rate; prices per currency', () => {
   const t = tasteOf([
-    { action: 'seen', reasons: '[]', keyword: 'Dog', store: 'https://a.com', price: 20 },
-    { action: 'keep', reasons: '["niche"]', keyword: 'dog', store: 'https://a.com', price: 25 },
-    { action: 'rejected', reasons: '["niche"]', keyword: 'cat', store: 'https://b.com', price: 30 },
-    { action: 'rejected', reasons: '["price","store"]', keyword: 'cat', store: 'https://www.Bad.com/x', price: 60 },
-    { action: 'rejected', reasons: '["price"]', keyword: '', store: '', price: 45 },
-    { action: 'rejected', reasons: 'not json', keyword: 'fish', store: '', price: null },
+    { action: 'seen', reasons: '[]', niche: 'Pets', keyword: 'dress', store: 'https://a.com', price: 20, currency: 'EUR' },
+    { action: 'keep', reasons: '["niche"]', niche: 'Pets', store: 'https://a.com', price: 25, currency: 'EUR' },
+    { action: 'rejected', reasons: '["niche"]', niche: 'Home', store: 'https://b.com', price: 30, currency: 'EUR' },
+    { action: 'rejected', reasons: '["niche","ad"]', niche: 'Home', store: 'https://b.com', price: 31, currency: 'EUR' },
+    { action: 'rejected', reasons: '["price","store"]', niche: 'Pets', store: 'https://www.Bad.com/x', price: 60, currency: 'EUR' },
+    { action: 'rejected', reasons: '["price"]', niche: '', store: '', price: 45, currency: 'eur' },
+    { action: 'rejected', reasons: '["price"]', niche: 'Tech', price: 3000, currency: 'JPY' },
+    { action: 'rejected', reasons: '["price"]', niche: 'Tech', price: 99, currency: '' },
+    { action: 'rejected', reasons: 'not json', niche: 'Fish', store: '', price: null },
+    { action: 'note', reasons: '["niche"]', niche: 'Fish' },
   ]);
-  assert.deepStrictEqual(Object.fromEntries(t.weights), { dog: 3, cat: 0.3, fish: 0.5 });
+  // 2 yes (Pets) against 2 "Not my niche" (Home): a usual rate of 3 in 6. Price, store and weak-ad rejects say nothing about a niche.
+  assert.strictEqual(t.rate, 0.5);
+  assert.deepStrictEqual(Object.fromEntries(t.weights), { Pets: 1.5, Home: 0.5 });
   assert.deepStrictEqual([...t.blocked.keys()], ['bad.com']);
-  assert.strictEqual(t.maxPrice, 45, 'the cheapest product you still found too expensive');
-  assert.strictEqual(fitOf({ keyword: 'DOG ', price: 10 }, t), 3);
-  assert.strictEqual(fitOf({ keyword: 'dog', price: 50 }, t), 1.5, 'too expensive: half');
-  assert.strictEqual(fitOf({ keyword: 'new', price: 10 }, t), 1, 'no opinion yet');
-  assert.strictEqual(tasteOf([]).maxPrice, null);
+  assert.deepStrictEqual(Object.fromEntries(t.maxPrice), { EUR: 45 }, 'per currency; one JPY and one without a currency are no limit');
+  const fit = (r) => fitOf(r, t);
+  assert.strictEqual(fit({ jev: { main: 'Pets' }, price: 10, currency: 'EUR' }), 1.5);
+  assert.strictEqual(fit({ jev: { main: 'Pets' }, keyword: 'cat', price: 50, currency: 'EUR' }), 0.75, 'too expensive: half; the search word plays no part');
+  assert.strictEqual(fit({ jev: { main: 'Home' }, price: 10, currency: 'EUR' }), 0.5);
+  assert.strictEqual(fit({ jev: { main: 'Garden' }, price: 10, currency: 'EUR' }), 1, 'no opinion yet');
+  assert.strictEqual(fit({ price: 3000, currency: 'JPY' }), 1, 'yen are not compared with a limit in euros');
+  assert.strictEqual(fit({ price: 90, currency: 'AUD' }), 1);
+  assert.strictEqual(fit({ price: null, currency: 'EUR' }), 0.75, 'no price while there is a limit: not let through silently');
+  assert.strictEqual(fit({ price: null, currency: '' }), 0.75);
+  assert.strictEqual(fit({ price: null, currency: 'AUD' }), 1, 'no limit in its currency');
+  assert.deepStrictEqual(fitWhy({ jev: { main: 'Home' }, price: 50, currency: 'EUR' }, t).why, [{ text: 'Not your niche: Home', x: 0.5 }, { text: 'Too expensive for you: EUR 45 and up', x: 0.5 }]);
+  assert.deepStrictEqual(fitWhy({ price: 0, currency: 'EUR' }, t).why, [{ text: 'No price to check against your price limit', x: 0.75 }]);
+  // Approving everything teaches no niche: each is near your usual rate (the old keyword weights went to × 3 for all).
+  const all = tasteOf(['Pets', 'Home', 'Pets', 'Home', 'Pets', 'Home'].map((niche) => ({ action: 'seen', reasons: '[]', niche })));
+  assert.ok([...all.weights.values()].every((w) => w > 0.9 && w < 1.1), JSON.stringify([...all.weights]));
+  assert.deepStrictEqual([tasteOf([]).maxPrice.size, tasteOf([]).weights.size], [0, 0]);
 });
 
-test('inbox learns: a liked niche comes first, a bad store leaves (and comes back with unblock)', async () => {
+test('inbox learns: a niche you approve goes up, one you call "Not my niche" goes down, a bad store leaves (and comes back with unblock)', async () => {
   const env = await seededEnv();
+  jevFor(env);
   const s = await loggedIn(env);
   const inbox = async () => (await s.get('/api/ads?view=inbox&limit=100')).json();
   const before = await inbox();
-  const last = before.ads[before.ads.length - 1];
-  const other = before.ads.find((x) => x.kw !== last.kw && x.store && x.store !== last.store);
-  // like the niche of the last product twice, through products of the same keyword
-  env.db.prepare("INSERT INTO feedback (action, reasons, keyword, at) VALUES ('seen', '[\"niche\"]', ?, 'x'), ('keep', '[]', ?, 'x')").run(last.kw, last.kw);
+  const last = [...before.ads].reverse().find((x) => x.jev.main === 'Clothing'); // the lowest Clothing product (search word "dress")
+  assert.strictEqual(last.kw, 'dress');
+  const at = (list, id) => list.ads.findIndex((x) => x.id === id);
+  // Two Clothing products approved, two Pets products rejected as "Not my niche" (decided on another phone: not hidden here)
+  const clothing = before.ads.filter((x) => x.jev.main === 'Clothing' && x.id !== last.id).slice(0, 2).map((x) => x.id);
+  const pets = before.ads.filter((x) => x.jev.main === 'Pets').slice(1, 3).map((x) => x.id);
+  for (const id of clothing) env.db.prepare("INSERT INTO feedback (ad_id, action, reasons, keyword, at) VALUES (?, 'seen', '[]', 'hond', 'x')").run(id);
+  for (const id of pets) env.db.prepare("INSERT INTO feedback (ad_id, action, reasons, keyword, at) VALUES (?, 'rejected', '[\"niche\"]', 'dress', 'x')").run(id);
   const after = await inbox();
-  assert.strictEqual(after.ads[0].kw, last.kw, 'a liked niche jumps up');
-  assert.ok(after.ads[0].fit > 1);
+  const l = after.ads.find((x) => x.id === last.id);
+  assert.ok(at(after, last.id) < at(before, last.id), 'a liked niche moves up');
+  assert.deepStrictEqual([l.fit, l.niche], [1.5, { name: 'Clothing', w: 1.5 }]);
+  assert.deepStrictEqual(l.ranked.why, [{ text: 'Your niche: Clothing', x: 1.5 }]);
+  const stale = after.ads.find((x) => x.id === '9500');
+  assert.deepStrictEqual([stale.fit, stale.ranked.why[0].text], [0.5, 'Not your niche: Pets'], 'the search word that found them plays no part');
+  // A reject for another reason says nothing about the niche
+  const other = before.ads.find((x) => x.kw !== last.kw && x.store && x.store !== last.store && !pets.includes(x.id));
   await s.post('/api/hide', { ad_id: other.id, status: 'rejected' });
   await s.post('/api/feedback', { ad_id: other.id, reasons: ['store'] });
   const host = new URL(other.store).hostname.replace(/^www\./, '');
@@ -376,6 +524,108 @@ test('inbox learns: a liked niche comes first, a bad store leaves (and comes bac
   assert.deepStrictEqual((await (await s.get('/api/learned')).json()).blocked.map((x) => x.store), [host]);
   assert.strictEqual((await s.post('/api/feedback', { unblock: host })).status, 200);
   assert.deepStrictEqual((await (await s.get('/api/learned')).json()).blocked, []);
+});
+
+test('🧠 learns from every decision, not the newest 5000: a store blocked long ago is listed, so it can be brought back', async () => {
+  const env = await seededEnv();
+  const s = await loggedIn(env);
+  await s.post('/api/hide', { ad_id: '9007', status: 'rejected' });
+  await s.post('/api/feedback', { ad_id: '9007', reasons: ['store'] });
+  env.db.prepare("WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 5100) INSERT INTO feedback (ad_id, action, reasons, at) SELECT 'old' || i, 'seen', '[]', 'x' FROM n").run();
+  const inShop7 = async () => (await (await s.get('/api/ads?view=inbox&limit=100')).json()).ads.filter((a) => a.store === 'https://shop7.test/').length;
+  assert.strictEqual(await inShop7(), 0, 'the Inbox keeps it out');
+  const l = await (await s.get('/api/learned')).json();
+  assert.deepStrictEqual([l.decisions, l.blocked], [5101, [{ store: 'shop7.test', n: 1 }]], 'and 🧠 says so');
+  assert.deepStrictEqual(await (await s.post('/api/feedback', { unblock: 'shop7.test' })).json(), { ok: true, unblocked: 1 });
+  assert.deepStrictEqual((await (await s.get('/api/learned')).json()).blocked, []);
+  await s.post('/api/hide', { ad_id: '9007', status: 'none' }); // its own product back from Rejected
+  assert.strictEqual(await inShop7(), 1);
+});
+
+test("Jev's risks rank a product lower in the Inbox (never below × 0.2) and say why; an EU product people or pets take leaves the Inbox", async () => {
+  assert.strictEqual(riskOf(null), null);
+  assert.deepStrictEqual(riskOf({ p: { people: 0.6, animals: 0.7 } }).x, 0.2, '0.3 × 0.3 is below the floor');
+  assert.deepStrictEqual(riskOf({ p: { kids: 0.5, bulky: 0.49 } }), { x: 0.8, why: [{ k: 'kids', label: 'For children', x: 0.8 }], red: [] }, '0.5 is a yes, 0.49 is not');
+  const env = await seededEnv();
+  jevFor(env);
+  jevFor(env, { sizing: 0.9, medical: 0.7 }, ['9000']); // × 0.5 × 0.5
+  jevFor(env, { people: 0.95 }, ['9002']); // a supplement
+  jevFor(env, { sizing: 0.9, medical: 0.8, brand: 0.6, restricted: 0.7, kids: 0.9, skin: 0.9 }, ['9005']); // 0.04: × 0.2
+  jevFor(env, { fragile: 0.6, electric: 0.4 }, ['9001']); // × 0.8
+  const s = await loggedIn(env);
+  const inbox = await (await s.get('/api/ads?view=inbox&limit=100')).json();
+  const all = await (await s.get('/api/ads?view=all&limit=100')).json();
+  const by = (list, id) => list.ads.find((a) => a.id === id);
+  assert.ok(!inbox.ads.some((a) => a.id === '9002'), 'people take it: not in the EU Inbox');
+  assert.deepStrictEqual([inbox.total, inbox.counts.inbox, all.total, all.counts.all], [26, 26, 27, 27], 'Browse still lists it');
+  assert.deepStrictEqual(by(all, '9002').jev.flags, ['people'], 'with its tag');
+  assert.deepStrictEqual(by(inbox, '9000').ranked, { x: 0.25, why: [{ text: 'Sizing returns', x: 0.5 }, { text: 'Medical claim', x: 0.5 }] });
+  assert.deepStrictEqual(by(inbox, '9000').risk.red, ['medical'], 'a red tag on the card');
+  assert.deepStrictEqual([by(inbox, '9005').ranked.x, by(inbox, '9005').risk.red], [0.2, ['restricted', 'medical', 'skin']]);
+  assert.deepStrictEqual(by(inbox, '9001').ranked.why, [{ text: 'Fragile', x: 0.8 }]);
+  assert.deepStrictEqual(by(all, '9000').risk.red, ['medical'], 'the red tag is on the Browse card too');
+  const at = (list, id) => list.ads.findIndex((a) => a.id === id);
+  assert.ok(at(inbox, '9000') > at(all, '9000') + 5, 'the riskiest products go down');
+  for (let i = 1; i < inbox.ads.length; i++) {
+    const [p, q] = [inbox.ads[i - 1], inbox.ads[i]];
+    assert.ok(p.rpd * p.ranked.x >= q.rpd * q.ranked.x, `${p.id} before ${q.id}: reach a day × the factor`);
+  }
+});
+
+test('Why? reasons always land on the decision, also when the note on the product is saved after it', async () => {
+  const env = await seededEnv();
+  const s = await loggedIn(env);
+  await s.post('/api/hide', { ad_id: '9001', status: 'rejected' });
+  await s.post('/api/note', { ad_id: '9001', note: 'too pricey here' }); // the board saves the note as you decide: it can land last
+  assert.strictEqual((await s.post('/api/feedback', { ad_id: '9001', reasons: ['price', 'store'] })).status, 200);
+  const rows = env.db.prepare("SELECT action, reasons, note FROM feedback WHERE ad_id = '9001' ORDER BY id").all().map((r) => [r.action, r.reasons, r.note]);
+  assert.deepStrictEqual(rows, [['rejected', '["price","store"]', ''], ['note', '[]', 'too pricey here']]);
+  assert.deepStrictEqual((await (await s.get('/api/learned')).json()).blocked.map((x) => x.store), ['shop1.test'], 'so "Bad store" works');
+  await s.post('/api/note', { ad_id: '9002', note: 'x' });
+  assert.strictEqual((await s.post('/api/feedback', { ad_id: '9002', reasons: ['wow'] })).status, 404, 'a note is no decision to give reasons to');
+});
+
+test('a brief D1 error on a table of store signals is not kept for 15 minutes: the next request reads it again', async () => {
+  const env = await seededEnv();
+  env.db.prepare("INSERT INTO bestseller (product_key, store, rank, ok, checked_at, history) VALUES ('shop1.test/products/item-1', 'shop1.test', 2, 1, 'x', '[]')").run();
+  const s = await loggedIn(env);
+  const prepare = env.DB.prepare;
+  let fail = true;
+  env.DB.prepare = (sql) => (fail && /FROM bestseller/.test(sql) ? { all: async () => { fail = false; throw new Error('D1 hiccup'); } } : prepare(sql));
+  assert.strictEqual((await s.get('/api/ads')).status, 500, 'no board without its ranks');
+  const j = await (await s.get('/api/ads', NOW + 60000)).json();
+  assert.deepStrictEqual(j.ads.find((a) => a.id === '9001').best, { rank: 2, move: null }, 'a minute later: read again, the rank is there');
+});
+
+test('allow-lists take only their own keys: ?sort=__proto__ is no 500, reasons like "constructor" are not saved or counted', async () => {
+  const env = await seededEnv();
+  const s = await loggedIn(env);
+  const plain = (await (await s.get('/api/ads?view=all&limit=100')).json()).ads.map((a) => a.id);
+  for (const sort of ['__proto__', 'constructor', 'toString', 'hasOwnProperty']) {
+    for (const q of ['view=all', 'view=all&cc=NL', 'view=all&hidden=1', 'scope=world&view=all', 'view=inbox']) assert.strictEqual((await s.get(`/api/ads?${q}&sort=${sort}`)).status, 200, `${q}&sort=${sort}`);
+    assert.deepStrictEqual((await (await s.get(`/api/ads?view=all&limit=100&sort=${sort}`)).json()).ads.map((a) => a.id), plain, `${sort}: by reach a day`);
+    assert.strictEqual((await s.get(`/export.csv?view=all&sort=${sort}`)).status, 200);
+  }
+  await s.post('/api/hide', { ad_id: '9002', status: 'rejected' });
+  await s.post('/api/feedback', { ad_id: '9002', reasons: ['constructor', '__proto__', 'toString', 'price'] });
+  assert.strictEqual(env.db.prepare("SELECT reasons FROM feedback WHERE ad_id = '9002'").get().reasons, '["price"]');
+  env.db.prepare("UPDATE feedback SET reasons = '[\"constructor\",\"valueOf\",\"price\"]' WHERE ad_id = '9002'").run(); // saved before this fix
+  assert.deepStrictEqual((await (await s.get('/api/learned')).json()).reasons.bad, [{ key: 'price', label: 'Too expensive', n: 1 }]);
+});
+
+test('weaker leads are flagged: a big catalogue that hardly copies the ad, and an ad whose product was never found', async () => {
+  const env = await seededEnv();
+  env.db.prepare("UPDATE winners SET data = json_set(data, '$.store_products', 1200) WHERE ad_id IN ('9005', '9006')").run();
+  env.db.prepare("UPDATE winners SET scaled_count = 5 WHERE ad_id = '9006'").run(); // copied 5 times: it is the product that sells
+  env.db.prepare("UPDATE winners SET data = json_set(data, '$.store_products', 249) WHERE ad_id = '9007'").run();
+  // The ad's own headline, linking to the store's home page, no price: the product was never found
+  copyOf(env, '9335', { product_title: 'LAST DAY: 70% OFF EVERYTHING', advertiser_page_id: '997', product_url: 'https://shop3.test/', price: null });
+  const s = await loggedIn(env);
+  const ads = (await (await s.get('/api/ads?view=all&limit=100')).json()).ads;
+  const by = (id) => ads.find((a) => a.id === id);
+  assert.deepStrictEqual(['9005', '9006', '9007', '9008'].map((id) => [by(id).products, by(id).catalogue]), [[1200, true], [1200, false], [249, false], [null, false]]);
+  assert.strictEqual(by('9335').unidentified, true);
+  assert.deepStrictEqual(['9000', '9001'].map((id) => by(id).unidentified), [false, false], 'a price (9000 links to the home page) or a product page is enough');
 });
 
 test('/api/ads: while a run hunts, the run before it comes along', async () => {
@@ -474,8 +724,7 @@ test('a database without tables gives a clear 503', async () => {
   const { d1Binding } = await import('./helpers/sqlite-d1.mjs');
   const { DatabaseSync } = await import('node:sqlite');
   const env = { DB: d1Binding(new DatabaseSync(':memory:')), BOARD_PIN: '482913' };
-  const s = await loggedIn(env);
-  const res = await s.get('/api/ads');
+  const res = await call(env, '/api/ads', { headers: { cookie: `__Host-wh=${await makeToken('482913', NOW, 'any key')}` } });
   assert.strictEqual(res.status, 503);
   assert.match((await res.json()).error, /Database not ready/);
 });
@@ -694,6 +943,114 @@ test('the board in memory gives what the SQL rules give: same products, same ord
   assert.ok(!js.includes('9000') && !js.includes('9003') && js.includes('9005'));
   for (const id of ['9300', '9600', '9700', '9800', '9900']) assert.ok(!js.includes(id), `${id} fails a rule`);
   assert.ok(js.includes('9500'), 'seen 30 days ago at 11 days: 41 days today, still in');
+});
+
+// A winners row like 9003 (shop3.test/products/item-3), with changes.
+const copyOf = (env, id, o) => {
+  const cols = ['product_title', 'advertiser_page_id', 'advertiser', 'active_ads', 'ad_age_days', 'ad_start_date', 'reach_eu', 'product_url', 'store_url', 'ad_library_url', 'image_url', 'keyword', 'currency', 'price', 'scaled_count', 'first_seen', 'last_seen', 'data'];
+  env.db.prepare(`INSERT INTO winners (ad_id, ${cols.join(', ')}) SELECT ?, ${cols.map((c) => (c in o ? '?' : c)).join(', ')} FROM winners WHERE ad_id = '9003'`).run(id, ...cols.filter((c) => c in o).map((c) => o[c]));
+};
+
+test('age today comes from the day the ad started: a 43-day ad is off the board, also when "age when seen + days since" says 42', async () => {
+  const row = { ad_id: 'x', gk: 'x', active_ads: 100, ad_age_days: 10, reach_eu: 100000, ad_start_date: '2026-09-04', last_seen: '2026-09-14T20:00:00Z', data: '{}' };
+  const now = Date.parse('2026-10-17T10:00:00Z'); // 43 days and 10 hours after 4 Sep; 32 days and 14 hours after it was seen at 10
+  assert.strictEqual(products([row], [], [], now).v.length, 0);
+  assert.strictEqual(products([row], [], [], now).k[0].age_now, 43);
+  assert.strictEqual(products([{ ...row, ad_start_date: '' }], [], [], now).k[0].age_now, 42, 'a row without a start date: as before');
+  assert.strictEqual(products([row], [], [], Date.parse('2026-10-15T23:00:00Z')).v.length, 1, '41 days: still on');
+  const env = await seededEnv();
+  copyOf(env, '9334', { product_title: 'Forty Three Days', advertiser_page_id: '998', product_url: 'https://shop3.test/products/forty-three', ad_age_days: 10, ad_start_date: '2026-09-04', last_seen: '2026-09-14T20:00:00.000Z' });
+  const s = await loggedIn(env);
+  const at = Date.parse('2026-10-17T10:00:00Z');
+  assert.ok(!(await (await s.get('/api/ads?view=all&limit=100', at)).json()).ads.some((a) => a.id === '9334'));
+  assert.ok(!env.db.prepare(PREFETCH_SQL).all(new Date(at).toISOString(), new Date(at + 864e5).toISOString(), 1000).some((r) => r.ad_id === '9334'), 'the SQL rule agrees');
+});
+
+test('an ad measured at 5 days stays off the board, also days later when it is old enough: its reach a day is a 5-day figure', async () => {
+  const env = await seededEnv();
+  const s = await loggedIn(env);
+  const later = NOW + 3 * 864e5; // 9300 started 12 Oct: 8 days old by then, still measured at 5
+  const all = await (await s.get('/api/ads?view=all&limit=100', later)).json();
+  assert.ok(!all.ads.some((a) => a.id === '9300'));
+  assert.ok(!env.db.prepare(PREFETCH_SQL).all(new Date(later).toISOString(), new Date(later + 864e5).toISOString(), 1000).some((r) => r.ad_id === '9300'), 'the SQL rule agrees');
+  assert.ok(!all.ads.some((a) => a.id === '9500'), '9500 started 6 Sep: 44 days old by then');
+  // Today the card gets both ages: the one it had when measured (with that day) and today's, if it still runs.
+  const stale = (await (await s.get('/api/ads?view=all&limit=100')).json()).ads.find((a) => a.id === '9500');
+  assert.deepStrictEqual([stale.age, stale.age_seen, stale.last_seen.slice(0, 10)], [41, 11, '2026-09-17']);
+});
+
+test('one product page is one product: two titles or two advertisers, one card, one decision, one note', async () => {
+  const env = await seededEnv();
+  // The same roller (shop3.test/products/item-3) under a sale title from another advertiser, with more reach a day.
+  copyOf(env, '9333', { product_title: 'Pet Hair Remover Roller - 50% OFF TODAY', advertiser_page_id: '999', advertiser: 'Roller Deals', reach_eu: 200000 });
+  const s = await loggedIn(env);
+  const all = await (await s.get('/api/ads?view=all&limit=100')).json();
+  assert.strictEqual(all.total, 27, 'still 27 products');
+  assert.deepStrictEqual(all.ads.filter((a) => a.product === 'https://shop3.test/products/item-3').map((a) => a.id), ['9333'], 'one card: its best ad');
+  // Jev answered under the advertiser + title of the other ad: the product still shows it.
+  env.db.prepare("INSERT INTO world_checks (product_key, people, animals, gymwear, physical, category, input, checked_at, version, main, sub) VALUES ('eu|503|pet hair remover roller', 0.01, 0.01, 0.01, 0.99, 'Home', 'photo', 'x', 2, 'Home', 'Lighting')").run();
+  env.db.prepare("UPDATE state SET updated_at = 'jev' WHERE key = 'last_run'").run(); // the board reads its tables again
+  const roller = (await (await s.get('/api/ads?view=all&limit=100')).json()).ads.find((a) => a.id === '9333');
+  assert.strictEqual(roller.jev.main, 'Home');
+  // Approved through the first ad: the product leaves the Inbox, ✓ holds it once, and it cannot be approved again.
+  assert.strictEqual((await s.post('/api/hide', { ad_id: '9003', status: 'seen' })).status, 200);
+  const inbox = await (await s.get('/api/ads?view=inbox&limit=100')).json();
+  assert.ok(!inbox.ads.some((a) => ['9003', '9333'].includes(a.id)));
+  assert.deepStrictEqual((await (await s.get('/api/ads?view=made')).json()).ads.map((a) => a.id), ['9333']);
+  assert.strictEqual((await s.post('/api/hide', { ad_id: '9333', status: 'seen' })).status, 200);
+  assert.deepStrictEqual(env.db.prepare("SELECT ad_id FROM hidden WHERE status = 'seen'").all().map((r) => r.ad_id), ['9333'], 'one decision for the product');
+  assert.strictEqual(env.db.prepare("SELECT COUNT(*) AS n FROM feedback WHERE action = 'seen'").get().n, 1);
+  // One note: written through one ad, read through the other.
+  await s.post('/api/note', { ad_id: '9003', note: 'Same roller as the sale ad' });
+  assert.strictEqual((await (await s.get('/api/note?ad_id=9333')).json()).note, 'Same roller as the sale ad');
+  // Ads without a product page still group by advertiser + title (9000 and 9100: the store's home page).
+  assert.ok(all.ads.some((a) => a.id === '9000') && !all.ads.some((a) => a.id === '9100'));
+});
+
+test('two old decisions on what is now one product: the latest one counts', async () => {
+  const env = await seededEnv();
+  copyOf(env, '9333', { product_title: 'Pet Hair Remover Roller - 50% OFF TODAY', advertiser_page_id: '999' });
+  env.db.prepare("INSERT INTO hidden (ad_id, status, at) VALUES ('9333', 'rejected', '2026-10-10T00:00:00.000Z'), ('9003', 'seen', '2026-10-12T00:00:00.000Z')").run();
+  const s = await loggedIn(env);
+  const made = await (await s.get('/api/ads?view=made')).json();
+  assert.deepStrictEqual(made.ads.map((a) => [a.id, a.hidden, a.made_at]), [['9003', 'seen', '2026-10-12T00:00:00.000Z']]);
+  const decided = await (await s.get('/api/ads?view=all&hidden=1')).json();
+  assert.deepStrictEqual(decided.ads.map((a) => [a.id, a.hidden]), [['9003', 'seen']], 'one product, not a rejected twin next to it');
+  // the other way round: approved first, rejected later
+  env.db.prepare("UPDATE hidden SET at = '2026-10-14T00:00:00.000Z' WHERE ad_id = '9333'").run();
+  assert.deepStrictEqual((await (await s.get('/api/ads?view=all&hidden=1')).json()).ads.map((a) => [a.id, a.hidden]), [['9003', 'rejected']]);
+  assert.deepStrictEqual((await (await s.get('/api/ads?view=made')).json()).ads, []);
+});
+
+test('learning trains the niche the card showed: one product page, two titles Jev put in two categories', async () => {
+  const env = await seededEnv();
+  // 9003's title says Home to Jev; the sale ad of the same roller (more reach a day, so it is the card) says Pets
+  copyOf(env, '9333', { product_title: 'Pet Hair Remover Roller - 50% OFF TODAY', advertiser_page_id: '999', reach_eu: 200000 });
+  const check = env.db.prepare("INSERT INTO world_checks (product_key, people, animals, gymwear, physical, category, input, checked_at, version, main, sub) VALUES (?, 0.01, 0.01, 0.01, 0.99, ?, 'photo', 'x', 2, ?, '')");
+  check.run('eu|503|pet hair remover roller', 'Home', 'Home');
+  check.run('eu|999|pet hair remover roller - 50% off today', 'Pets', 'Pets');
+  const s = await loggedIn(env);
+  assert.strictEqual((await (await s.get('/api/ads?view=inbox&limit=100')).json()).ads.find((a) => a.id === '9333').jev.main, 'Pets');
+  await s.post('/api/hide', { ad_id: '9333', status: 'seen' });
+  assert.deepStrictEqual((await (await s.get('/api/learned')).json()).niches.map((x) => [x.niche, x.good, x.bad]), [['Pets', 1, 0]]);
+});
+
+test('notes: two products that are one product page now keep both notes; saving replaces only the one in the box', async () => {
+  const env = await seededEnv();
+  copyOf(env, '9333', { product_title: 'Pet Hair Remover Roller - 50% OFF TODAY', advertiser_page_id: '999' });
+  const put = env.db.prepare("INSERT INTO feedback (ad_id, action, reasons, note, store, title, at) VALUES (?, 'note', '[]', ?, 'https://shop3.test/', ?, ?)");
+  put.run('9003', 'Supplier on 1688 at 0.80, MOQ 50', 'Pet Hair Remover Roller', '2026-10-10T00:00:00.000Z');
+  put.run('9333', 'Same roller as the sale ad', 'Pet Hair Remover Roller - 50% OFF TODAY', '2026-10-12T00:00:00.000Z');
+  const s = await loggedIn(env);
+  const got = await (await s.get('/api/note?ad_id=9003')).json();
+  assert.strictEqual(got.note, 'Same roller as the sale ad', 'the newest in the box');
+  assert.deepStrictEqual(got.others.map((n) => n.note), ['Supplier on 1688 at 0.80, MOQ 50'], 'the older one below it, not hidden');
+  const notes = () => env.db.prepare("SELECT ad_id, note FROM feedback WHERE action = 'note' ORDER BY id").all().map((r) => [r.ad_id, r.note]);
+  await s.post('/api/note', { ad_id: '9003', note: 'Same roller, 0.70 at another supplier' });
+  assert.deepStrictEqual(notes(), [['9003', 'Supplier on 1688 at 0.80, MOQ 50'], ['9003', 'Same roller, 0.70 at another supplier']]);
+  assert.strictEqual((await (await s.get('/api/note?ad_id=9333')).json()).note, 'Same roller, 0.70 at another supplier');
+  await s.post('/api/note', { ad_id: '9333', note: '' });
+  assert.deepStrictEqual(notes(), [['9003', 'Supplier on 1688 at 0.80, MOQ 50']], 'empty takes out the note in the box only');
 });
 
 test('D1 reads: the winners are read once, again only after a run saved (or a new ad came in)', async () => {
