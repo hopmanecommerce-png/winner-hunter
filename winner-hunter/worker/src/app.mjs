@@ -434,7 +434,7 @@ export function products(rows, hidden = [], stars = [], now = Date.now()) {
 // Every decision (all of them: an old "Bad store" must stay undoable), for what the board learns.
 const DECIDED_SQL = "SELECT ad_id, action, reasons, store, price, currency FROM feedback WHERE action IN ('seen', 'rejected', 'keep')";
 
-/** The board from D1: winners (cached), seen / rejected and stars (fresh). */
+/** The board from D1: winners (cached, also as rows: every ad as read), seen / rejected and stars (fresh). */
 async function board(env, now) {
   const [rows, h, s, f] = await Promise.all([
     snapshot(env.DB, now),
@@ -443,7 +443,7 @@ async function board(env, now) {
     env.DB.prepare(DECIDED_SQL).all(),
   ]);
   const list = products(rows, h.results, s.results, now);
-  return Object.assign(list, { taste: tasteOf(withFacts(f.results, list.byAd)) });
+  return Object.assign(list, { rows, taste: tasteOf(withFacts(f.results, list.byAd)) });
 }
 
 /**
@@ -1353,7 +1353,9 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
     if (path === '/api/launch' || path === '/launch.js') {
       if (!ok) return json({ error: 'Log in first' }, 401);
       if (path === '/launch.js') return method === 'GET' ? text(LAUNCH_JS, 200, { 'Content-Type': 'text/javascript; charset=utf-8' }) : json({ error: 'Method not allowed' }, 405);
-      const deps = { products: async () => (await board(env, now)).k, toAd };
+      // The board's products, and its ads (each with its product page and its old advertiser + title key), so a launch
+      // card saved under the old key of an EU product is still found as that product's card.
+      const deps = { board: async () => { const b = await board(env, now); return { products: b.k, rows: b.rows }; }, toAd, pageKey: productKey };
       if (method === 'GET') return json(await launchList(env, url.searchParams.get('pick') === '1', deps));
       if (method !== 'POST') return json({ error: 'Method not allowed' }, 405);
       const { j, err } = await readJson(req, url, 8000);

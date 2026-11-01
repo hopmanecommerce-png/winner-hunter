@@ -38,7 +38,8 @@ After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, o
   run, store size and risk flags, with **Go** / **No go**. Under it the checklist: sourcing, margin (worked out as you
   type; VAT 21% and payment fees 3% unless you fill in your own), compliance, competitors and ads, store, creatives,
   launch (budget, kill and scale rule). It saves as you type (D1 table `launches`). **📌 Pin** marks the product you
-  launch now, one at a time; a No go loses the pin.
+  launch now, one at a time; a No go loses the pin. One card per product, as the board groups it (an EU product by its
+  product page). A card started before that keeps its old advertiser + title key in D1 and is still that product's card.
 - **Browse**: everything that passes, most reach per day first, with search, sort and filters. **★**: your kept products.
   **✓**: every product you approved, the last one first, with the day you approved it (also after it ages out of
   the rules). The ✓ count jumps each time you tap **✓ Approved**.
