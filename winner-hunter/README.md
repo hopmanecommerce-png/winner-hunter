@@ -13,7 +13,7 @@ GitHub Actions (every night)  →  Cloudflare D1 (the database)  →  Board (Clo
 - Only ads that pass **all four hard rules** (no points, no score): **Shopify store**, advertiser has **75+ active ads**,
   ad live **7 to 42 days**, **500+ EU reach per day**. Anything else is never saved and never shown.
 - **Inbox** (start screen): every product you have not decided on, one at a time, best first. **✗ Reject**, **★ Keep**
-  or **✓ Made ad** (buttons, swipe left/right, or keys R / K / D). Each one leaves the inbox; **Undo** brings it back.
+  or **✓ Approved** (buttons, swipe left/right, or keys R / D). Each one leaves the inbox; **Undo** brings it back.
   When none are left: **🎉 Inbox zero**. "New today" = found in the last 24 hours.
   The Inbox card shows only the data and one link: **Open in Facebook Ad Library**.
 - **📝 Note** (under the Inbox card, key N): write about the ad, the competitor or the product. It saves as you type and
@@ -24,8 +24,8 @@ GitHub Actions (every night)  →  Cloudflare D1 (the database)  →  Board (Clo
 - **🧠**: what the board learned, your notes, and a box to tell the board something. Everything is in the D1
   table `feedback`; ask Claude "learn from my Winner Hunter feedback" to turn it into better keywords and rules.
 - **Browse**: everything that passes, most reach per day first, with search, sort and filters. **★**: your kept products.
-  **✓**: every product you made an ad for, the last one first, with the day you made it (also after it ages out of
-  the rules). The ✓ count jumps each time you tap **✓ Made ad**.
+  **✓**: every product you approved, the last one first, with the day you approved it (also after it ages out of
+  the rules). The ✓ count jumps each time you tap **✓ Approved**.
 - **🏆 Store best seller**: proof that a product sells. Once a day (after the hunt) every board product gets its rank in
   its own store's best-seller list (Shopify's sales order, top 50) and how it moved in a week: "#2 best seller in its
   store · ↑3 in 8d". The Inbox puts sellers first (× 1.5 in the store's top 10, × 1.2 in its top 50); Browse can sort
@@ -38,7 +38,7 @@ GitHub Actions (every night)  →  Cloudflare D1 (the database)  →  Board (Clo
 - Per product: photo, price/discount, a ✓ per rule (active ads, days live, reach per day), ads for this product,
   the store's product count, shop. **▶ Bekijk ad** opens the ad itself (video, images, text, button) on the board, at once: `ad-prefetch.yml` opens every board ad ahead of time (every 8 hours and after each hunt).
   Tap a card for more: ad text, checklist and the buttons **Ad ↗ · Product ↗ · Store ↗ · Search 1688 ↗**.
-- **✓ Made ad** moves a product to **✓**; **✗ Reject** (not for me) hides it; **Undo** brings it back.
+- **✓ Approved** moves a product to **✓**; **✗ Reject** (not for me) hides it; **Undo** brings it back.
 - **CSV** downloads what you are looking at.
 - A "store photo" label means: photo from the shop's page, not the product photo of the ad.
 

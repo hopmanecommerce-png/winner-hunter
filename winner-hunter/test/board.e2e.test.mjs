@@ -103,7 +103,7 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     await page.fill('input[name=pin]', '482913');
     await Promise.all([page.waitForURL(base + '/'), page.click('button[type=submit]')]);
     await page.waitForSelector('.card');
-    assert.strictEqual(await page.locator('[data-view]').count(), 4, 'Inbox, Browse, ✓ Made ad and 🧠');
+    assert.strictEqual(await page.locator('[data-view]').count(), 4, 'Inbox, Browse, ✓ Approved and 🧠');
     assert.strictEqual(await page.getAttribute('[data-view=inbox]', 'aria-pressed'), 'true', 'Inbox is the start view');
     assert.strictEqual(await page.locator('.card').count(), 1, 'one product at a time');
     assert.strictEqual(await page.locator('.card.open').count(), 1, 'with its details open');
@@ -193,10 +193,10 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     assert.strictEqual(page.url(), base + '/', 'back closes the sheet, stays on the board');
     // ✓ Made ad: gone from the board to the ✓ tab, with an Undo
     const id = await page.locator('.card').first().getAttribute('data-id');
-    assert.strictEqual(await page.locator('.card').first().locator('[data-act=seen]').innerText(), 'Made ad');
+    assert.strictEqual(await page.locator('.card').first().locator('[data-act=seen]').innerText(), 'Approved');
     await page.locator('.card').first().locator('[data-act=seen]').click();
     await page.waitForSelector('#toast:not([hidden])');
-    assert.strictEqual(await page.textContent('#toastMsg'), 'Moved to ✓ Made ad');
+    assert.strictEqual(await page.textContent('#toastMsg'), 'Moved to ✓ Approved');
     assert.strictEqual(await page.textContent('#nmade'), '1', 'the ✓ count follows');
     assert.strictEqual(env.db.prepare('SELECT status FROM hidden WHERE ad_id = ?').get(id).status, 'seen');
     const gone = (x) => { const c = document.querySelector(`.card[data-id="${x}"]`); return !c || c.classList.contains('gone'); };
@@ -256,7 +256,7 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     assert.ok(await page.$eval('#nmade', (el) => el.classList.contains('bump')), 'and jumps, so you see where it went');
     // Why? strip: the reasons for a yes; one tap saves it
     await page.waitForSelector('#why:not([hidden])');
-    assert.match(await page.textContent('#why .wh'), /✓ Made ad/);
+    assert.match(await page.textContent('#why .wh'), /✓ Approved/);
     assert.deepStrictEqual(await page.locator('#why [data-r]').allInnerTexts(), ['Wow product', 'Good margin', 'Strong ad', 'My niche', 'Easy to ship']);
     await page.click('#why [data-r=wow]');
     await page.waitForFunction(() => document.querySelector('#why [data-r=wow]').getAttribute('aria-pressed') === 'true');
@@ -334,7 +334,7 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     assert.strictEqual(await page.getAttribute('[data-view=made]', 'aria-pressed'), 'true');
     assert.ok(await page.locator('#q').isHidden() && await page.locator('#radar').isHidden());
     assert.strictEqual(await page.locator('.card .tag.made').count(), nMade);
-    assert.match(await page.locator('.card .tag.made').first().innerText(), /✓ Made 17 Oct/i);
+    assert.match(await page.locator('.card .tag.made').first().innerText(), /✓ Approved 17 Oct/i);
     assert.ok((await page.getAttribute('#csv', 'href')).startsWith('/export.csv?view=made'));
     assert.strictEqual(await page.evaluate(() => day('2025-03-02T12:00:00Z')), 'Mar 2025', 'another year: month and year');
     await page.waitForFunction(imagesInView);
@@ -370,7 +370,7 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     await page.waitForFunction((x) => !document.querySelector(`.card[data-id="${x}"]`), rmId);
     assert.strictEqual(await page.textContent('#nmade'), String(nMade - 1), 'the count goes down at once');
     await page.evaluate(() => { PENDING_MADE--; });
-    assert.strictEqual(await page.textContent('#toastMsg'), 'Removed from ✓ Made ad');
+    assert.strictEqual(await page.textContent('#toastMsg'), 'Removed from ✓ Approved');
     assert.strictEqual(env.db.prepare('SELECT 1 FROM hidden WHERE ad_id = ?').get(rmId), undefined);
     await page.waitForFunction((n) => document.querySelector('#nmade').textContent === String(n - 1), nMade);
     // it was decided in the Inbox on this phone: it is back there without a reload
