@@ -3,7 +3,7 @@
  *   GET  /            board (or the PIN screen)        POST /login   PIN form → cookie
  *   GET  /api/ads     ads of a view, counts, last run, alert banner   POST /api/hide  seen / rejected / none, starred / unstarred
  *   GET  /export.csv  the current view as CSV           GET  /logout
- *   GET  /api/ad/:id  the ad itself (text, video/images, CTA) (adview.mjs; the board no longer uses it)
+ *   GET  /api/ad/:id  the ad itself (text, video/images, CTA) (adview.mjs; the board no longer uses it: off unless AD_VIEWER = "on")
  *   GET  /api/markets EU reach a day per country over the board's products (Market Radar); ?scope=world: facts per market outside the EU
  *   ?scope=world on /api/ads and /export.csv: the products outside the EU (world.mjs), judged by proof signals, not reach
  * All SQL is parameterized; sort orders come from a fixed list.
@@ -13,6 +13,7 @@ import { tiktokDecide, tiktokList } from './tiktok.mjs';
 import { adView } from './adview.mjs';
 import { TRAITS, AD_TRAITS, CHOICES, AD_CHOICES, SEP, YES_AT, VERSION } from './jev-questions.mjs';
 import { MARKET_RULES } from './market-rules.mjs';
+import { LAUNCH_JS, launchList, launchPost } from './launch.mjs';
 
 const COOKIE = '__Host-wh';
 const MAX_AGE = 90 * 864e2; // seconds
@@ -89,7 +90,8 @@ FROM (SELECT w.*, ${KEY} AS gk, ${RPD} AS rpd, ROW_NUMBER() OVER (PARTITION BY $
 WHERE rn = 1 AND ('eu|' || gk) NOT IN (SELECT product_key FROM world_checks WHERE COALESCE(version, 1) >= ${VERSION}) ORDER BY rpd DESC LIMIT ?2`;
 export const EU_LEFT_SQL = EU_TODO_SQL.replace(/^SELECT .*? AS ads, data\n/, 'SELECT COUNT(*) AS n\n').replace(' ORDER BY rpd DESC LIMIT ?2', '');
 const CHECK_SQL = 'SELECT product_key, people, animals, gymwear, physical, category, category_conf, input, checked_at, main, sub, main_conf, sub_conf, product_score, ad_score, answers, used FROM world_checks';
-const VERSION_SQL = `SELECT (SELECT MAX(rowid) FROM winners) AS r, (SELECT updated_at FROM state WHERE key = 'last_run') AS u, (SELECT updated_at FROM state WHERE key = 'world_run') AS wu, (SELECT updated_at FROM state WHERE key = 'world_check') AS jc`;
+// world_data, not world_run: the hunt outside the EU saves its progress every few minutes, but only changes the board's table once.
+const VERSION_SQL = `SELECT (SELECT MAX(rowid) FROM winners) AS r, (SELECT updated_at FROM state WHERE key = 'last_run') AS u, (SELECT updated_at FROM state WHERE key = 'world_data') AS wu, (SELECT updated_at FROM state WHERE key = 'world_check') AS jc`;
 const SNAP_MS = 15 * 60000; // read again after this long anyway
 const SNAPS = new WeakMap(); // per D1 binding
 let LAST = null; // on Cloudflare (one database): shared by the requests this isolate serves
@@ -1329,7 +1331,7 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
         const open = b.v.filter((r) => r.hid === 0);
         return json({ ...marketsOf(open), jev: jevSummary(open) });
       }
-      if (path === '/api/ads' && method === 'GET') return await ads(url, env, now, !!(launch && env.BROWSER && String(env.META_TOKEN || '').trim()));
+      if (path === '/api/ads' && method === 'GET') return await ads(url, env, now, env.AD_VIEWER === 'on' && !!(launch && env.BROWSER && String(env.META_TOKEN || '').trim()));
       if (path === '/api/hide' && method === 'POST') return await hide(req, url, env, now);
       if (path === '/api/feedback' && method === 'POST') return await feedback(req, url, env, now);
       if (path === '/api/learned' && method === 'GET') return await learned(env, now);
@@ -1346,7 +1348,22 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       const out = await tiktokDecide(env, j, now);
       return json(out.body, out.status);
     }
-    if (path.startsWith('/api/ad/')) {
+    // ---- Launch view (launch.mjs): an approved product's launch card, checklist and decision. A block of its own, so the
+    // routes above stay as they are. /launch.js: the margin and decision code the board runs while you type.
+    if (path === '/api/launch' || path === '/launch.js') {
+      if (!ok) return json({ error: 'Log in first' }, 401);
+      if (path === '/launch.js') return method === 'GET' ? text(LAUNCH_JS, 200, { 'Content-Type': 'text/javascript; charset=utf-8' }) : json({ error: 'Method not allowed' }, 405);
+      const deps = { products: async () => (await board(env, now)).k, toAd };
+      if (method === 'GET') return json(await launchList(env, url.searchParams.get('pick') === '1', deps));
+      if (method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+      const { j, err } = await readJson(req, url, 8000);
+      if (err) return err;
+      const out = await launchPost(env, j, now, deps);
+      return json(out.body, out.status);
+    }
+    // Off unless the Worker has AD_VIEWER = "on": the board no longer uses it, and a Meta token left in the Worker by an
+    // older deploy is never sent anywhere.
+    if (path.startsWith('/api/ad/') && env.AD_VIEWER === 'on') {
       if (!ok) return json({ error: 'Log in first' }, 401);
       if (method !== 'GET') return json({ error: 'Method not allowed' }, 405);
       const id = path.slice('/api/ad/'.length);

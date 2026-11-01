@@ -112,7 +112,7 @@ export const RULES = {
 
 /**
  * Checks one ad against the four rules. Every input except `ad` may be missing:
- *   shop    – Shopify check for the landing domain: { shopify, meta:{products,currency…} } | 'pending' | null
+ *   shop    – Shopify check for the landing domain: { shopify, meta:{products,currency…} } | { error } (no answer: pending) | 'pending' | null
  *   cnt     – advertiser active-ad count: { count } | 'pending' | null (count unavailable)
  *   reach   – { eu } | { err } | null
  *   product – Shopify product: { price, compareAt, currency, title } | null
@@ -139,7 +139,9 @@ export function scoreAd(ad, inp, S, now) {
   else if (NON_STORE.test(lh.key)) fail('shopify', `${lh.key} is a marketplace or big brand`);
   else if (shop === 'pending' || shop === undefined) put('shopify', 'pending', `Checking ${lh.key}…`);
   else if (shop && shop.shopify) put('shopify', 'ok', shop.meta && shop.meta.myshopify ? shop.meta.myshopify : `${shop.host || lh.key} runs on Shopify`);
-  else fail('shopify', shop && shop.error ? `${lh.key} did not answer (${shop.error})` : `${lh.key} is not a Shopify store`);
+  // No answer (429, 403, 5xx, timeout) is not "not Shopify": unknown, like a check still running.
+  else if (shop && shop.error) put('shopify', 'pending', `${lh.key} did not answer (${shop.error})`);
+  else fail('shopify', `${lh.key} is not a Shopify store`);
 
   // 2. Advertiser active ads
   const cnt = inp.cnt;

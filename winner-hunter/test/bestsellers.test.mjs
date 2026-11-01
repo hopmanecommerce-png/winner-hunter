@@ -69,6 +69,12 @@ test('storeTop / productId / rankOf: the store list best first, or an error; nev
   assert.deepStrictEqual(await storeTop('nope.test', { doFetch }), { error: 'HTTP 404' });
   assert.deepStrictEqual(await storeTop('x.test', { doFetch: async () => json({ errors: [{ message: 'Access denied' }] }) }), { error: 'api error' });
   assert.deepStrictEqual(await storeTop('x.test', { doFetch: async () => { throw new TypeError('fetch failed'); } }), { error: 'network' });
+  // No answer says nothing about the store's list: asked again, never written down as "no list".
+  assert.deepStrictEqual(await storeTop('x.test', { doFetch: async () => new Response('slow down', { status: 429 }) }), { error: 'HTTP 429', retry: true });
+  assert.deepStrictEqual(await storeTop('x.test', { doFetch: async () => new Response('<html>busy</html>', { status: 503 }) }), { error: 'HTTP 503', retry: true });
+  assert.deepStrictEqual(await storeTop('x.test', { doFetch: async () => { throw new DOMException('This operation was aborted', 'AbortError'); } }), { error: 'timeout', retry: true });
+  const hang = (url, init) => new Promise((ok, no) => init.signal.addEventListener('abort', () => no(init.signal.reason)));
+  assert.deepStrictEqual(await storeTop('x.test', { doFetch: hang, timeout: 5 }), { error: 'timeout', retry: true }, 'our own time limit');
   assert.strictEqual(await productId('https://shop2.test/products/item-2', { doFetch }), '22');
   assert.strictEqual(await productId('https://shop1.test/products/item-1', { doFetch }), null);
   const top = (await storeTop('shop2.test', { doFetch })).top;
@@ -163,6 +169,28 @@ test('bestsellers.mjs: ranks for the board products, kept per day; the board sho
   assert.strictEqual(bestOf({ ok: 1, rank: null, history: 'not json' }).rank, null);
 });
 
+test('bestsellers.mjs: a store that times out or answers 5xx keeps its last rank and is asked again the same day', async () => {
+  const env = await seededEnv();
+  const db = d1Client({ accountId: 'a', databaseId: 'd', token: 't' }, { doFetch: d1Rest(env.db).doFetch, retryMs: 0 });
+  await refresh({ db, doFetch: stores(WEEK1).doFetch, now: () => NOW, log: () => {} });
+  const row = () => ({ ...env.db.prepare("SELECT rank, ok, checked_at, history FROM bestseller WHERE product_key = 'shop1.test/products/item-1'").get() });
+  const before = row();
+  assert.deepStrictEqual([before.rank, before.ok], [3, 1]);
+  for (const [i, down] of [() => { throw new DOMException('This operation was aborted', 'AbortError'); }, () => new Response('<html>busy</html>', { status: 502 })].entries()) {
+    const w = stores({ ...WEEK1, 'shop1.test': down });
+    const logs = [];
+    const t = await refresh({ db, doFetch: w.doFetch, now: () => NOW + DAY + i * 3600e3, log: (m) => logs.push(m) });
+    assert.deepStrictEqual(row(), before, 'the rank, its day and its history stay as they were');
+    assert.strictEqual(t.later, 1);
+    assert.match(logs[0], / · 1 did not answer \(asked again next run\)$/);
+  }
+  const back = stores(WEEK2);
+  await refresh({ db, doFetch: back.doFetch, now: () => NOW + DAY + 6 * 3600e3, log: () => {} });
+  assert.ok(back.calls.some((u) => /shop1\.test\/api\/.*graphql/.test(u)), 'asked again the same day');
+  assert.deepStrictEqual([row().rank, row().ok], [1, 1]);
+  assert.strictEqual(row().history, '[["2026-10-17",3],["2026-10-18",1]]');
+});
+
 test('the board without the bestseller table (not migrated yet) still works, just without ranks', async () => {
   const env = await seededEnv();
   env.db.exec('DROP TABLE bestseller');
@@ -172,15 +200,14 @@ test('the board without the bestseller table (not migrated yet) still works, jus
   assert.ok((await res.json()).ads.every((a) => a.best === null));
 });
 
-test('workflows: ranks after every hunt (also a red one) and before every test link', () => {
+test('workflows: ranks after every hunt (also a red one); a test link no longer does (it writes nothing to the live database)', () => {
   const flow = (f) => fs.readFileSync(new URL(`../../.github/workflows/${f}.yml`, import.meta.url), 'utf8');
   assert.match(flow('world-hunter'), /- name: Store signals\n\s+if: \$\{\{ !cancelled\(\) \}\}\n\s+run: node winner-hunter\/bestsellers\.mjs/);
   const hunt = flow('winner-hunter');
   assert.match(hunt, /- name: Store best sellers\n\s+if: \$\{\{ !cancelled\(\) \}\}\n\s+run: node winner-hunter\/bestsellers\.mjs/);
-  const prev = fs.readFileSync(new URL('../../.github/workflows/preview-board.yml', import.meta.url), 'utf8');
-  const at = (x) => prev.indexOf(x);
-  assert.ok(at('run: node winner-hunter/migrate.mjs') > 0 && at('run: node winner-hunter/migrate.mjs') < at('run: node winner-hunter/bestsellers.mjs'));
-  assert.ok(at('run: node winner-hunter/bestsellers.mjs') < at('versions upload'));
+  const prev = flow('preview-board');
+  assert.doesNotMatch(prev, /node winner-hunter\/(?:migrate|bestsellers)\.mjs/);
+  assert.match(prev, /versions upload/);
 });
 
 test('all capacity goes outside the EU: only the world hunt runs by itself, four times a day, and its products are checked first', () => {

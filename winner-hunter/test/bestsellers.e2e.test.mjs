@@ -35,7 +35,7 @@ function serve(env) {
 
 async function launch() {
   try {
-    return await chromium.launch();
+    return await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}); // CI: the runner's Chrome
   } catch (e) {
     return chromium.launch({ executablePath: '/opt/pw-browsers/chromium' }).catch(() => null);
   }

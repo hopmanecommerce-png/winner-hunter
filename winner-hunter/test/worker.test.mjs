@@ -778,7 +778,7 @@ function fakeLaunch(result, log = []) {
 const BROWSER = { fetch: () => { throw new Error('not in tests'); } };
 async function viewerEnv() {
   const env = await seededEnv();
-  return Object.assign(env, { META_TOKEN: '  EAAB tok\n', BROWSER });
+  return Object.assign(env, { META_TOKEN: '  EAAB tok\n', BROWSER, AD_VIEWER: 'on' }); // off unless turned on
 }
 const getAd = async (env, path, launch, cookie) => handle(req(path, { headers: cookie ? { cookie } : {} }), env, { html: HTML, now: NOW, launch });
 

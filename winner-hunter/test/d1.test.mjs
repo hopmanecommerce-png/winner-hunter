@@ -102,7 +102,7 @@ test('migration: split into statements, safe to apply twice', () => {
   assert.ok(st.length >= 8 && st.every((s) => /^CREATE (TABLE|INDEX) IF NOT EXISTS/.test(s)));
   const db = memoryDb();
   for (const s of st) db.exec(s);
-  assert.deepStrictEqual(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all().map((r) => r.name), ['ad_views', 'bestseller', 'feedback', 'hidden', 'pin_tries', 'runs', 'sqlite_sequence', 'stars', 'state', 'store_trust', 'tiktok_products', 'winners', 'world_ads', 'world_checks', 'world_items', 'world_pages', 'world_products', 'world_stores'], 'all migrations, ad viewer cache, stars, feedback and store signals included');
+  assert.deepStrictEqual(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all().map((r) => r.name), ['ad_views', 'bestseller', 'feedback', 'hidden', 'launches', 'pin_tries', 'runs', 'sqlite_sequence', 'stars', 'state', 'store_trust', 'tiktok_products', 'winners', 'world_ads', 'world_checks', 'world_items', 'world_pages', 'world_products', 'world_stores'], 'all migrations, ad viewer cache, stars, feedback and store signals, launch cards and PIN tries included');
 });
 
 test('migrate(): all files over the REST client, twice; the ADD COLUMN already there is skipped, other errors throw', async () => {
@@ -123,4 +123,14 @@ test('migrate(): all files over the REST client, twice; the ADD COLUMN already t
   // saveRun writes the status
   await c.saveRun({ id: 'r1', started_at: 'a', finished_at: 'b', note: 'x', status: 'failed' });
   assert.strictEqual(rest.db.prepare('SELECT status FROM runs').get().status, 'failed');
+});
+
+test('the fake D1 refuses more than 100 bound parameters, as D1 does (binding and REST)', async () => {
+  const { d1Binding } = await import('./helpers/sqlite-d1.mjs');
+  const ids = Array.from({ length: 101 }, (_, i) => String(i));
+  const sql = `SELECT COUNT(*) AS n FROM winners WHERE ad_id IN (${ids.map(() => '?').join(', ')})`;
+  await assert.rejects(d1Binding().prepare(sql).bind(...ids).all(), /too many SQL variables/);
+  assert.strictEqual((await d1Binding().prepare(sql.replace(/, \?\)$/, ')')).bind(...ids.slice(1)).first()).n, 0, '100 is fine');
+  const c = d1Client(CFG, { doFetch: d1Rest().doFetch, retryMs: 0 });
+  await assert.rejects(c.query(sql, ids), /Cloudflare D1: D1_ERROR: too many SQL variables/);
 });

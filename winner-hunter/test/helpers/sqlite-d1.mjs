@@ -1,11 +1,15 @@
 // A small D1 stand-in on node:sqlite (Node 22): the Worker binding (prepare/bind/all/first/run/batch)
 // and a fake of the D1 REST API (fetch → POST …/query { sql, params }), both on one in-memory database
-// with the real migration applied.
+// with the real migration applied. Like D1, a query takes at most 100 bound parameters.
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
 const MIGRATIONS = new URL('../../worker/migrations/', import.meta.url);
 const plain = (r) => (r ? { ...r } : r);
+export const MAX_PARAMS = 100;
+const tooMany = (args) => {
+  if ((args || []).length > MAX_PARAMS) throw new Error(`D1_ERROR: too many SQL variables (${args.length}; D1 allows ${MAX_PARAMS} bound parameters)`);
+};
 
 export function memoryDb() {
   const db = new DatabaseSync(':memory:');
@@ -25,14 +29,17 @@ export function d1Binding(db = memoryDb()) {
     }
     _run() {
       log.push({ sql: this.sql, args: this.args });
+      tooMany(this.args);
       return db.prepare(this.sql).run(...this.args);
     }
     async all() {
       log.push({ sql: this.sql, args: this.args });
+      tooMany(this.args);
       return { success: true, results: db.prepare(this.sql).all(...this.args).map(plain) };
     }
     async first(col) {
       log.push({ sql: this.sql, args: this.args });
+      tooMany(this.args);
       const r = plain(db.prepare(this.sql).get(...this.args));
       return r ? (col ? r[col] : r) : null;
     }
@@ -66,8 +73,9 @@ export function d1Rest(db = memoryDb(), { fail } = {}) {
     calls.push({ url, init, body });
     if (fail && fail(body)) return new Response(JSON.stringify({ success: false, errors: [{ code: 7500, message: 'boom' }] }), { status: 500 });
     try {
+      tooMany(body.params);
       const st = db.prepare(body.sql);
-      const isRead = /^\s*(SELECT|WITH)/i.test(body.sql);
+      const isRead = /^\s*(SELECT|WITH)/i.test(body.sql) || /\bRETURNING\b/i.test(body.sql); // RETURNING rows come back as results
       const results = isRead ? st.all(...(body.params || [])).map(plain) : (st.run(...(body.params || [])), []);
       return new Response(JSON.stringify({ success: true, errors: [], result: [{ success: true, results, meta: {} }] }), { status: 200 });
     } catch (e) {

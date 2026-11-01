@@ -7,7 +7,7 @@ import http from 'node:http';
 import { createRequire } from 'node:module';
 import { handle, tokenFor } from '../worker/src/app.mjs';
 import { LIST_SQL } from '../worker/src/tiktok.mjs';
-import { COLS, UPSERT_SQL, validateRows } from '../lib/tiktok.mjs';
+import { COLS, PRUNE_SQL, UPSERT_SQL, validateRows } from '../lib/tiktok.mjs';
 import { seededEnv, NOW } from './helpers/seed.mjs';
 
 const HTML = fs.readFileSync(new URL('../worker/src/board.html', import.meta.url), 'utf8');
@@ -17,13 +17,16 @@ const SHOTS = process.env.SHOTS || '';
 const row = (i, extra = {}) => ({
   id: String(1700000000000000000n + BigInt(i)), title: `Product ${i}`, shop: `Shop ${i}`, url: `https://www.tiktok.com/shop/pdp/${i}`, image_url: null,
   price_min: 10 + i, price_max: 10 + i, rating: 4.5, reviews: 100, sold_us: 100000 - i, creators: 5, plays: 1000000, category: 'Home', blockers: '',
-  meta_status: 'none', meta_url: null, meta_unsure: 0, meta_us: null, meta_au: null, meta_nz: null, updated_at: '2026-11-01T10:00:00Z', ...extra,
+  meta_status: 'none', meta_url: null, meta_unsure: 0, meta_us: null, meta_au: null, meta_nz: null, updated_at: '2026-11-01T10:00:00Z',
+  video_url: null, sold_mixed: 0, price_suspect: 0, ads_mention_n: null, ads_mention_of: null, ads_domain: null, meta_label: null, ...extra,
 });
 const SAMPLE = [
   row(1, { title: 'Rhino Straps', price_min: 55.77, meta_status: 'matched', meta_url: 'https://www.facebook.com/ads/library/?id=1', meta_us: 225, meta_au: 0, meta_nz: 0 }),
   row(2, { title: 'Cheap Holder', price_min: 11.99 }),
   row(3, { title: 'Hair Brush <img src=x onerror=alert(1)>', price_min: 43.97, blockers: 'electric skin' }),
-  row(4, { title: 'Wide Rain Jacket', price_min: 54.98, meta_status: 'matched', meta_url: 'https://www.facebook.com/ads/library/?id=2', meta_us: 199, meta_au: 204, meta_nz: 1, meta_unsure: 1 }),
+  row(4, { title: 'Wide Rain Jacket', price_min: 54.98, meta_status: 'matched', meta_url: 'https://www.facebook.com/ads/library/?id=2', meta_us: 199, meta_au: 204, meta_nz: 1, meta_unsure: 1, ads_mention_n: 3, ads_mention_of: 30, ads_domain: 'amazon.com', sold_mixed: 1, category: 'Clothing', video_url: 'https://www.tiktok.com/@a/video/1' }),
+  row(5, { title: 'Never Judged Lamp', price_min: 30, blockers: null }),
+  row(6, { title: 'Placeholder Serum', price_min: 9878.7, price_suspect: 1 }),
 ];
 const load = (env, rows) => env.DB.prepare(UPSERT_SQL).bind(JSON.stringify(rows)).run();
 const cookieOf = async (env) => `__Host-wh=${await tokenFor(env, NOW)}`;
@@ -33,10 +36,15 @@ const post = (env, cookie, body, headers = { 'content-type': 'application/json' 
 test('validateRows stops on a row the board cannot show, instead of dropping it', () => {
   assert.strictEqual(validateRows(SAMPLE), SAMPLE);
   assert.throws(() => validateRows([]), /No rows/);
-  for (const [extra, why] of [[{ id: 'abc' }, /bad id/], [{ title: ' ' }, /no title/], [{ url: 'https://evil.test/' }, /TikTok page/], [{ url: 'javascript:alert(1)' }, /TikTok page/],
+  for (const [extra, why] of [[{ id: 'abc' }, /bad id/], [{ id: 12345 }, /bad id/], [{ title: ' ' }, /no title/], [{ url: 'https://evil.test/' }, /TikTok page/], [{ url: 'javascript:alert(1)' }, /TikTok page/],
     [{ image_url: 'http://x.test/a.jpg' }, /image_url/], [{ meta_url: 'javascript:alert(1)' }, /meta_url/], [{ sold_us: null }, /sold count/], [{ price_min: -1 }, /price_min/], [{ meta_status: 'maybe' }, /meta_status/]]) {
     assert.throws(() => validateRows([row(1, extra)]), why);
   }
+  // Ids as numbers in rows.json are rounded before anything can check them: two products would become one row.
+  const parsed = JSON.parse(`[${JSON.stringify(row(1)).replace(/"id":"\d+"/, '"id":1729384756102938475')},${JSON.stringify(row(2)).replace(/"id":"\d+"/, '"id":1729384756102938476')}]`);
+  assert.strictEqual(String(parsed[0].id), String(parsed[1].id), 'JSON.parse rounds them to the same number');
+  assert.throws(() => validateRows(parsed), /Row 0 .*bad id \(must be a string of digits, in quotes\)/);
+  assert.throws(() => validateRows([row(1), row(2), row(1, { title: 'Again' })]), /Row 2 .*duplicate id/);
 });
 
 test('/api/tiktok: login needed, biggest sellers first, decisions persist and survive a new import', async () => {
@@ -45,7 +53,7 @@ test('/api/tiktok: login needed, biggest sellers first, decisions persist and su
   assert.strictEqual((await api(env, '')).status, 401);
   const cookie = await cookieOf(env);
   const j = await (await api(env, cookie)).json();
-  assert.deepStrictEqual(j.products.map((p) => p.title.slice(0, 5)), ['Rhino', 'Cheap', 'Hair ', 'Wide ']);
+  assert.deepStrictEqual(j.products.map((p) => p.title.slice(0, 5)), ['Rhino', 'Cheap', 'Hair ', 'Wide ', 'Never', 'Place']);
   assert.strictEqual(j.products[0].us, 225);
   const id = j.products[0].id;
 
@@ -63,6 +71,16 @@ test('/api/tiktok: login needed, biggest sellers first, decisions persist and su
   assert.strictEqual((await post(env, cookie, { id, decision: '' })).status, 200);
   p = (await (await api(env, cookie)).json()).products[0];
   assert.strictEqual(p.d, null);
+});
+
+test('the import removes undecided products that left the file, and keeps your decisions', async () => {
+  const env = await seededEnv();
+  await load(env, SAMPLE);
+  const cookie = await cookieOf(env);
+  await post(env, cookie, { id: SAMPLE[1].id, decision: 'approved' });
+  await env.DB.prepare(PRUNE_SQL).bind(JSON.stringify([SAMPLE[0].id])).run();
+  const left = (await (await api(env, cookie)).json()).products.map((p) => p.id);
+  assert.deepStrictEqual(left.sort(), [SAMPLE[0].id, SAMPLE[1].id].sort());
 });
 
 test('/api/tiktok refuses bad input and other origins', async () => {
@@ -136,39 +154,47 @@ for (const [name, viewport] of [['phone', { width: 390, height: 844 }], ['deskto
         await page.screenshot({ path: `${SHOTS}/tiktok-${name}.png` });
       }
       if (real) {
-        const clean = real.filter((r) => !r.blockers).length;
-        assert.match(await page.textContent('#ttcount'), new RegExp(`^${clean} of ${real.length}`));
+        const clean = real.filter((r) => r.blockers === '').length;
+        assert.match(await page.textContent('#ttcount'), new RegExp(`^${clean.toLocaleString('en-US')} of ${real.length.toLocaleString('en-US')}`));
         return;
       }
-      // Default: no blocker. The XSS title stays hidden until the filter is off, and then stays text.
-      assert.match(await page.textContent('#ttcount'), /^3 of 4 · by units sold/);
+      // Default: Jev read it and flagged no blocker. The XSS title stays hidden until the filter is off, and then stays text.
+      assert.match(await page.textContent('#ttcount'), /^4 of 6 · by units sold/);
       assert.strictEqual(await page.locator('#ttgrid .card').first().locator('.t').textContent(), 'Rhino Straps');
       await page.click('[data-tf="clean"]');
-      assert.match(await page.textContent('#ttcount'), /^4 of 4/);
+      assert.match(await page.textContent('#ttcount'), /^6 of 6/);
+      assert.match(await page.locator('#ttgrid .card', { hasText: 'Never Judged' }).locator('.badges').textContent(), /Not checked/);
       assert.strictEqual(await page.locator('#ttgrid img[src="x"]').count(), 0, 'a title never becomes HTML');
       assert.match(await page.locator('#ttgrid .card', { hasText: 'Hair Brush' }).locator('.badges').textContent(), /Battery or electric/);
       await page.click('[data-tf="clean"]');
       await page.click('[data-tf="p25"]');
-      assert.match(await page.textContent('#ttcount'), /^2 of 4/);
+      assert.match(await page.textContent('#ttcount'), /^2 of 6/, 'the placeholder price stays out of $25+');
       await page.click('[data-tf="gap"]');
-      assert.match(await page.textContent('#ttcount'), /^1 of 4/);
+      assert.match(await page.textContent('#ttcount'), /^1 of 6/);
       await page.click('[data-tf="gap"]');
-      assert.match(await page.locator('#ttgrid .card', { hasText: 'Wide Rain' }).locator('.ttads').textContent(), /US 199 · AU 204 · NZ 1 · match unsure/);
+      const wide = page.locator('#ttgrid .card', { hasText: 'Wide Rain' });
+      assert.match(await wide.locator('.ttads').textContent(), /Shop's Meta ads: US 199 · AU 204 · NZ 1 · 3 of 30 sampled mention this product · ads go to amazon.com · match unsure/);
+      assert.match(await wide.locator('.hero').textContent(), /sold, may include non-US/);
+      assert.strictEqual(await wide.getByText('Videos').getAttribute('href'), 'https://www.tiktok.com/@a/video/1');
+      assert.match(await page.locator('#ttgrid .card', { hasText: 'Rhino' }).getByText('Videos').getAttribute('href'), /tiktok\.com\/search\/video\?q=Rhino%20Straps/);
+      await page.selectOption('#ttcat', 'Clothing');
+      assert.match(await page.textContent('#ttcount'), /^1 of 6/);
+      await page.selectOption('#ttcat', '');
       await page.click('[data-tf="p25"]');
-      await page.fill('#ttq', 'holder');
-      await page.waitForFunction(() => /^1 of 4/.test(document.getElementById('ttcount').textContent));
+      await page.fill('#ttq', 'cheap');
+      await page.waitForFunction(() => /^1 of 6/.test(document.getElementById('ttcount').textContent));
       await page.fill('#ttq', '');
-      await page.waitForFunction(() => /^3 of 4/.test(document.getElementById('ttcount').textContent));
+      await page.waitForFunction(() => /^4 of 6/.test(document.getElementById('ttcount').textContent));
       await page.selectOption('#ttsort', 'low');
       assert.strictEqual(await page.locator('#ttgrid .card').first().locator('.t').textContent(), 'Cheap Holder');
       await page.selectOption('#ttsort', 'sold');
       // Approve: leaves the list, stays approved after a reload, on the tab you left.
       await page.locator('#ttgrid .card', { hasText: 'Rhino Straps' }).locator('[data-td="approved"]').click();
-      await page.waitForFunction(() => /^2 of 4/.test(document.getElementById('ttcount').textContent));
+      await page.waitForFunction(() => /^3 of 6/.test(document.getElementById('ttcount').textContent));
       await page.waitForTimeout(200);
       await page.reload();
       await page.waitForSelector('#ttgrid .card');
-      assert.match(await page.textContent('#ttcount'), /^2 of 4/);
+      assert.match(await page.textContent('#ttcount'), /^3 of 6/);
       await page.click('[data-tf="done"]');
       assert.match(await page.locator('#ttgrid .card').first().textContent(), /Rhino Straps/);
       assert.match(await page.locator('#ttgrid .card').first().textContent(), /✓ Approved/);
