@@ -29,8 +29,15 @@ jobs:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
         run: npm install --no-save --no-package-lock playwright@1.56.1
 
+      # A browser test that finds no browser skips instead of failing: before a deploy, a skipped test is a failure.
       - name: Tests
         working-directory: winner-hunter
         env:
           CHROME_PATH: /usr/bin/google-chrome
-        run: npm test
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/tests.log"
+          if ! grep -Eq '^(# |ℹ )skipped 0$' "$RUNNER_TEMP/tests.log"; then
+            echo "::error::Tests were skipped (no browser?): $(grep -E '# SKIP' "$RUNNER_TEMP/tests.log" | head -5 | tr '\n' ' ')"
+            exit 1
+          fi

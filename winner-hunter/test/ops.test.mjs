@@ -44,12 +44,12 @@ function script(stepText) {
   return out.join('\n');
 }
 const BASH = spawnSync('bash', ['-c', 'true']).status === 0;
-/** Runs a step's script as GitHub does (bash -e, no pipefail unless the script sets it), with an npx that prints `out` and exits `code`. */
-function runStep(text, { out = '', code = 0, env = {} } = {}) {
+/** Runs a step's script as GitHub does (bash -e, no pipefail unless the script sets it), with a `cmd` (npx) that prints `out` and exits `code`. */
+function runStep(text, { cmd = 'npx', out = '', code = 0, env = {} } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wh-step-'));
   try {
     fs.mkdirSync(path.join(dir, 'bin'));
-    fs.writeFileSync(path.join(dir, 'bin', 'npx'), '#!/bin/bash\nprintf "%s\\n" "$FAKE_OUT"\nexit "$FAKE_CODE"\n', { mode: 0o755 });
+    fs.writeFileSync(path.join(dir, 'bin', cmd), '#!/bin/bash\nprintf "%s\\n" "$FAKE_OUT"\nexit "$FAKE_CODE"\n', { mode: 0o755 });
     fs.writeFileSync(path.join(dir, 'step.sh'), text);
     for (const f of ['summary.md', 'output']) fs.writeFileSync(path.join(dir, f), '');
     const r = spawnSync('bash', ['-e', path.join(dir, 'step.sh')], { encoding: 'utf8', env: { PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`, RUNNER_TEMP: dir,
@@ -88,9 +88,20 @@ test('the deploy waits for the tests, and the tests run on every pull request', 
   const tests = wf('tests.yml');
   assert.match(tests, /^on:\n(?:  .*\n)*  pull_request:/m);
   assert.match(tests, /^on:\n(?:  .*\n)*  workflow_call:/m);
-  assert.match(step(job(tests, 'test'), /name: Tests\n/), /run: npm test$/m);
   assert.match(step(job(tests, 'test'), /name: Tests\n/), /CHROME_PATH: \/usr\/bin\/google-chrome/, 'the browser tests run, in the runner\'s Chrome');
   assert.doesNotMatch(tests, /secrets\./, 'no secrets in the tests');
+});
+
+test('the tests step: red on a failing test, and red on a skipped one (a browser test without a browser skips)', { skip: !BASH && 'no bash' }, () => {
+  const run = script(step(job(wf('tests.yml'), 'test'), /name: Tests\n/));
+  assert.match(run, /^npm test /m);
+  const tap = (fail, skipped) => `ok 1 - board on an iPhone${skipped ? ' # SKIP Chromium not available' : ''}\n# tests 1\n# pass ${1 - fail - skipped}\n# fail ${fail}\n# skipped ${skipped}`;
+  assert.strictEqual(runStep(run, { cmd: 'npm', out: tap(0, 0) }).status, 0);
+  assert.strictEqual(runStep(run, { cmd: 'npm', out: 'ℹ tests 1\nℹ pass 1\nℹ skipped 0' }).status, 0, 'the spec reporter too');
+  assert.notStrictEqual(runStep(run, { cmd: 'npm', out: tap(1, 0), code: 1 }).status, 0, 'a failing test');
+  const skipped = runStep(run, { cmd: 'npm', out: tap(0, 1) });
+  assert.notStrictEqual(skipped.status, 0, 'a skipped test');
+  assert.match(skipped.log, /::error::Tests were skipped \(no browser\?\): ok 1 - board on an iPhone # SKIP Chromium not available/);
 });
 
 test('a failed wrangler deploy ends red; a deploy without a board address too; the address stays out of a public log', { skip: !BASH && 'no bash' }, () => {
