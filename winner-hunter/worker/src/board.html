@@ -9,6 +9,7 @@
 <title>Winner Hunter</title>
 <link rel="stylesheet" nonce="__NONCE__" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <script nonce="__NONCE__" src="/launch.js" id="lnkit" defer></script>
+<script nonce="__NONCE__" src="/sourcing.js" id="sxkit" defer></script>
 <style nonce="__NONCE__">
   :root {
     color-scheme: dark;
@@ -682,6 +683,93 @@
     .lnprod { grid-template-columns: 88px minmax(0, 1fr); }
     .lnth.big { width: 88px; height: 88px; }
   }
+</style>
+<style nonce="__NONCE__">
+  /* 🔎 Sourcing (sourcing.mjs): the supplier panel on a launch card, between the decision and the checklist. */
+  .sx { min-width: 0; }
+  .sxbox { background: var(--card); border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+  .sxbox.on { border-color: rgba(76, 195, 138, .45); }
+  .sxbox > summary, .sxfold > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 12px; }
+  .sxbox > summary { min-height: 56px; padding: 8px 16px; }
+  .sxbox > summary::-webkit-details-marker, .sxfold > summary::-webkit-details-marker { display: none; }
+  .sxbox > summary::after, .sxfold > summary::after { content: ''; width: 6px; height: 6px; border: solid var(--faint); border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); margin: 0 4px 4px 0; flex: none; }
+  .sxbox[open] > summary::after, .sxfold[open] > summary::after { transform: rotate(225deg); margin-bottom: 0; }
+  .sxic { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line2); display: grid; place-items: center; font-size: 13px; flex: none; }
+  .sxbox.on .sxic { border-color: rgba(76, 195, 138, .5); background: rgba(76, 195, 138, .16); }
+  .sxtt { flex: 1; min-width: 0; display: grid; gap: 2px; font-size: 15px; font-weight: 500; }
+  .sxtt small { font-size: 12px; font-weight: 400; color: var(--muted); overflow-wrap: anywhere; }
+  .sxbox.on .sxtt small { color: var(--win); }
+  .sxbody { padding: 0 16px 16px; display: grid; gap: 20px; min-width: 0; }
+  .sxsec { display: grid; gap: 8px; min-width: 0; }
+  .sxsec h4 { margin: 0; font-size: 13px; font-weight: 600; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+  .sxsec h4 small { font-weight: 400; color: var(--muted); }
+  .sxhint, .sxmuted { margin: 0; font-size: 12px; line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }
+  .sxlinks { display: flex; flex-wrap: wrap; align-items: center; gap: 0 14px; font-size: 13px; min-width: 0; }
+  .sxlinks span { flex: 0 0 100%; font-size: 12px; color: var(--muted); }
+  .sxlinks a { color: var(--ink); font-weight: 500; text-decoration: none; padding: 8px 0; }
+  .sxlinks a:hover { text-decoration: underline; }
+  .sxf { display: grid; gap: 4px; min-width: 0; font-size: 12px; color: var(--muted); }
+  .sxf input, .sxf textarea, .sxadd textarea, .sxmsgt { width: 100%; min-width: 0; height: 44px; border-radius: 10px; border: 1px solid var(--line2); background: var(--card2); color: var(--ink); padding: 0 12px; font: inherit; font-size: 16px; }
+  .sxf textarea, .sxadd textarea, .sxmsgt { height: auto; min-height: 64px; padding: 10px 12px; resize: vertical; line-height: 1.4; }
+  .sxmsgt { min-height: 240px; font-size: 14px; }
+  .sxadd textarea { min-height: 92px; }
+  .sxf input:focus, .sxf textarea:focus, .sxadd textarea:focus, .sxmsgt:focus { outline: none; border-color: var(--acc); }
+  .sxf [aria-invalid="true"] { border-color: var(--bad); }
+  .sxf .selw, .sxf select.chip { width: 100%; }
+  .sxf select.chip { height: 44px; font-size: 16px; font-weight: 400; color: var(--ink); }
+  .sxrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); align-items: end; gap: 12px; min-width: 0; }
+  .sxhint a { color: var(--ink); font-weight: 500; text-decoration: none; }
+  .sxhint a:hover { text-decoration: underline; }
+  .sxadd { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+  .sxacts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sxbtn { flex: none; min-height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line2); background: var(--card2); color: var(--ink); font: 500 13px var(--sans); cursor: pointer; }
+  .sxbtn:disabled { opacity: .5; cursor: default; }
+  .sxbtn.sxgo { border-color: rgba(76, 195, 138, .4); background: rgba(76, 195, 138, .12); color: var(--win); }
+  .sxbtn.sxon { border-color: var(--win); background: rgba(76, 195, 138, .26); color: var(--win); }
+  .sxbtn.sxghost { background: none; color: var(--muted); }
+  .sxlist, .sxcjl { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0; }
+  .sxs { display: grid; gap: 6px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+  .sxs.on { border-color: rgba(76, 195, 138, .6); }
+  .sxs1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .sxp { flex: none; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--line2); font: 600 11px var(--mono); color: var(--muted); }
+  .sxn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+  .sxn a, .sxn b { color: var(--ink); font-weight: 500; text-decoration: none; }
+  .sxbest { flex: none; font-size: 11px; font-weight: 600; color: var(--win); }
+  .sxs2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+  .sxs2 b { font-size: 20px; font-weight: 600; }
+  .sxs2 span, .sxs3 { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .sxflags { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .sxflags li { padding: 4px 8px; border-radius: 8px; border: 1px solid rgba(217, 164, 65, .4); font-size: 12px; overflow-wrap: anywhere; }
+  .sxflags li.red { border-color: rgba(229, 72, 77, .5); }
+  .sxnote { margin: 0; font-size: 13px; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .sxedit { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--line); min-width: 0; }
+  .sxwide { grid-column: 1 / -1; }
+  .sxempty { font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .sxfold { border-top: 1px solid var(--line); min-width: 0; }
+  .sxfold > summary { min-height: 48px; font-size: 14px; font-weight: 500; }
+  .sxfold > summary span { flex: 1; min-width: 0; }
+  .sxfold > summary small { font-size: 12px; font-weight: 400; color: var(--muted); }
+  .sxchecks { display: grid; padding-bottom: 8px; }
+  .sxcheck { display: flex; align-items: flex-start; gap: 12px; min-height: 44px; padding: 8px 0; font-size: 14px; line-height: 1.35; cursor: pointer; overflow-wrap: anywhere; }
+  .sxcheck input { width: 22px; height: 22px; margin: 0; accent-color: var(--win); flex: none; }
+  .sxmsg { display: grid; gap: 12px; padding-bottom: 8px; min-width: 0; }
+  .sxsegs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sxseg { display: inline-flex; padding: 3px; border-radius: 10px; border: 1px solid var(--line); background: var(--card2); }
+  .sxseg button { min-height: 34px; padding: 0 12px; border: 0; border-radius: 8px; background: none; color: var(--muted); font: 500 13px var(--sans); cursor: pointer; }
+  .sxseg button[aria-pressed="true"] { color: var(--ink); background: rgba(217, 164, 65, .14); }
+  .sxcj { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+  .sxcjh { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 14px; }
+  .sxcjh span { font-size: 12px; color: var(--muted); }
+  .sxcjp { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 8px 12px; align-items: start; min-width: 0; }
+  .sxth { width: 40px; height: 40px; border-radius: 8px; overflow: hidden; background: var(--card2); display: grid; place-items: center; }
+  .sxth img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .sxth i { font-style: normal; font-size: 11px; color: var(--muted); }
+  .sxcjt { min-width: 0; display: grid; gap: 2px; font-size: 13px; }
+  .sxcjt a { color: var(--ink); font-weight: 500; text-decoration: none; overflow-wrap: anywhere; }
+  .sxcjt small { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .sxcja { grid-column: 2; display: flex; flex-wrap: wrap; gap: 8px; }
+  @media (pointer: coarse) { .sxbtn, .sxseg button { min-height: 44px; } }
+  @media (min-width: 760px) { .sxedit { grid-template-columns: repeat(3, minmax(0, 1fr)); } .sxlinks span { flex: 0 0 auto; min-width: 64px; } }
 </style>
 </head>
 <body>
@@ -2411,6 +2499,367 @@ addEventListener('load', () => { if (!LN.list) lnLoad().catch(() => {}); }); // 
 
 // Desktop: cards lean toward the pointer (CSS variables through the CSSOM: the CSP blocks style attributes).
 if (st.scope === 'tiktok') { document.body.classList.add('tt'); ttLoad(); } else { load(); loadMarkets(); }
+</script>
+<script nonce="__NONCE__">
+'use strict';
+// ---- 🔎 Sourcing (sourcing.mjs): the supplier match pipeline, a panel on the launch card in 🚀 Launch, between the
+// decision and the checklist. A script of its own, so the launch view's code stays as it is: after each render of that
+// view it puts its panel back (one element, kept with its folds and what you typed in it). The links, the comparison and
+// the messages come from /sourcing.js (window.SOURCING), the code the Worker runs too. Changes save one after the other;
+// choosing a supplier also changes the launch card (its Sourcing step), which then renders again with the new numbers.
+const SX = { key: '', data: null, cache: new Map(), el: null, edit: 0, busy: 0, chain: Promise.resolve(), cj: null, quotes: new Map(), to: 'agent', lang: 'en', folds: new Set() };
+const sxReady = new Promise((ok, no) => {
+  if (window.SOURCING) { ok(); return; }
+  $('sxkit').addEventListener('load', () => (window.SOURCING ? ok() : no(new Error('the sourcing code did not run'))), { once: true });
+  $('sxkit').addEventListener('error', () => no(new Error('the sourcing code did not load')), { once: true });
+});
+const sx$ = (id) => (SX.el ? SX.el.querySelector('#' + id) : null);
+const sxEur = (v) => (v == null ? '–' : (v < 0 ? '−' : '') + money(Math.abs(v), 'EUR'));
+const sxMoney = (v, c) => (v == null ? '' : (window.SOURCING.SIGN[c] || '') + Number(v).toFixed(2).replace(/\.00$/, ''));
+const sxLink = (u, t) => (safe(u) ? `<a href="${safe(u)}" target="_blank" rel="noopener noreferrer">${esc(t)} ↗</a>` : '');
+const sxDate = (iso) => { const [y, m, d] = String(iso).split('-').map(Number); return `${d} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1]} ${y}`; };
+
+// After each render of the launch view: the panel under the decision card of the card in focus.
+function sxMount() {
+  const card = document.querySelector('#lnbox > .lncard');
+  const l = card && lnFocus();
+  if (!l || !window.SOURCING) return;
+  if (!SX.el) sxCreate();
+  if (card.nextElementSibling !== SX.el) card.after(SX.el);
+  if (SX.key !== l.key) sxSwitch(l.key);
+}
+function sxCreate() {
+  const el = document.createElement('section');
+  el.className = 'sx';
+  el.id = 'sxpanel';
+  el.setAttribute('aria-label', 'Sourcing');
+  el.innerHTML = '<details class="sxbox" id="sxbox"><summary><span class="sxic" aria-hidden="true">🔎</span><span class="sxtt">Sourcing<small id="sxsum">Find, compare, vet and sample a supplier</small></span></summary><div class="sxbody" id="sxbody"></div></details>';
+  el.addEventListener('click', sxClick);
+  el.addEventListener('change', sxChange);
+  el.addEventListener('input', sxInput);
+  el.addEventListener('toggle', (e) => { const d = e.target; if (d.dataset && d.dataset.sxFold) { if (d.open) SX.folds.add(d.dataset.sxFold); else SX.folds.delete(d.dataset.sxFold); } }, true);
+  SX.el = el;
+}
+function sxSwitch(key) {
+  Object.assign(SX, { key, data: SX.cache.get(key) || null, edit: 0, cj: null, quotes: new Map() });
+  sxRenderAll();
+  sxLoad(key);
+}
+async function sxLoad(key) {
+  try {
+    await SX.chain; // saves on their way land first
+    const res = await fetch('/api/sourcing?key=' + encodeURIComponent(key), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    if (res.status === 401) { location.reload(); return; }
+    // 503: its tables are not there yet. A test link (Preview board) makes no tables; the deploy after the merge does.
+    if (res.status === 503) throw new Error('its tables are made by the deploy after the merge (a test link makes none)');
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+    sxTake(j);
+  } catch (e) {
+    if (SX.key === key && !SX.data && sx$('sxbody')) sx$('sxbody').innerHTML = `<p class="sxmuted">Could not load the sourcing: ${esc(e.message)}</p>`;
+  }
+}
+// An answer from the server: the panel follows, and so does a launch card that changed with it (a supplier chosen).
+function sxTake(j) {
+  if (!j || !j.key) return;
+  SX.cache.set(j.key, j);
+  const i = j.launch && Array.isArray(LN.list) ? LN.list.findIndex((x) => x.key === j.launch.key) : -1;
+  if (i >= 0) LN.list[i] = j.launch;
+  if (j.key === SX.key) {
+    const first = !SX.data;
+    SX.data = j;
+    if (first) sxRenderAll(); else sxRenderData();
+  }
+  if (i >= 0 && st.view === 'launch' && LN.focus === j.launch.key) lnRender(); // the panel comes back after it
+}
+// Saves go out one after the other, so an older one never lands after a newer one. key: the card it is about.
+function sxPost(key, body) {
+  SX.busy++;
+  const run = async () => {
+    const res = await fetch('/api/sourcing', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ key }, body)) });
+    if (res.status === 401) { location.reload(); throw new Error('Log in first'); }
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+    return j;
+  };
+  const p = SX.chain.then(run);
+  SX.chain = p.then(() => {}, () => {});
+  p.then(() => { SX.busy--; }, () => { SX.busy--; });
+  return p;
+}
+
+function sxRenderAll() {
+  const body = sx$('sxbody');
+  if (!body) return;
+  const d = SX.data;
+  if (!d) { body.innerHTML = '<p class="sxmuted">Loading…</p>'; return; }
+  const K = window.SOURCING;
+  const info = (k, label, ph, mode, max) => `<label class="sxf"><span>${esc(label)}</span><input type="text" data-sx-info="${k}" inputmode="${mode}" maxlength="${max}" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false"></label>`;
+  const list = (k, title) => `<details class="sxfold" data-sx-fold="${k}"${SX.folds.has(k) ? ' open' : ''}><summary><span>${esc(title)}</span><small id="sxn-${k}"></small></summary>
+    <div class="sxchecks">${K.LISTS[k].map((i) => `<label class="sxcheck"><input type="checkbox" data-sx-check="${k}" value="${esc(i.k)}"><span>${esc(i.label)}</span></label>`).join('')}</div></details>`;
+  body.innerHTML = `<div class="sxsec"><h4>Find it</h4>
+      ${info('zh', 'Chinese search words for 1688 (optional)', 'e.g. 姿势矫正器', 'text', 100)}
+      <p class="sxhint" id="sxzhhint"></p>
+      <div id="sxlinks"></div>
+      <p class="sxhint">1688, AliExpress and Alibaba search by photo only in their own app: save the photo, then tap the camera in their search bar.</p>
+      <div id="sxcj"></div></div>
+    <div class="sxsec"><h4>Suppliers <small>cheapest at the customer's door first</small></h4>
+      <div class="sxadd"><textarea id="sxpaste" rows="2" maxlength="2000" aria-label="A supplier link, or the text an app shares" placeholder="Paste a supplier link, or what the 1688 / AliExpress app shares"></textarea><button class="sxbtn sxgo" data-sx="add">Add</button></div>
+      <ol class="sxlist" id="sxlist"></ol></div>
+    ${list('vet', 'Vet the supplier')}${list('sample', 'Sample order')}
+    <details class="sxfold" data-sx-fold="msg"${SX.folds.has('msg') ? ' open' : ''}><summary><span>First message</span><small>English · 中文</small></summary><div class="sxmsg">
+      <div class="sxsegs"><div class="sxseg" role="group" aria-label="Message to"><button data-sx-to="agent">Agent</button><button data-sx-to="supplier">Supplier</button></div>
+        <div class="sxseg" role="group" aria-label="Language"><button data-sx-lang="en">English</button><button data-sx-lang="zh">中文</button></div></div>
+      <div class="sxrow"><label class="sxf"><span>Your name (optional)</span><input type="text" id="sxname" maxlength="60" autocomplete="off"></label>
+        <label class="sxf"><span>Units for a first test</span><input type="text" id="sxqty" inputmode="numeric" maxlength="6" placeholder="50" autocomplete="off"></label></div>
+      <textarea id="sxmsgt" class="sxmsgt" rows="12" readonly aria-label="The message"></textarea>
+      <div class="sxacts"><button class="sxbtn sxgo" data-sx="copy">Copy the message</button></div></div></details>
+    <div class="sxsec"><h4>Numbers</h4>
+      <div class="sxrow">${info('weight_g', 'Packed weight (g)', 'grams', 'numeric', 7)}${info('eur_cny', '¥ for €1', String(K.FX.CNY), 'decimal', 8)}${info('eur_usd', '$ for €1', String(K.FX.USD), 'decimal', 8)}</div>
+      <p class="sxhint" id="sxfees"></p></div>`;
+  sx$('sxname').value = store.get('wh-sx-name') || '';
+  sx$('sxqty').value = store.get('wh-sx-qty') || '';
+  sxRenderData(true);
+}
+// Everything that follows the data; a field you are typing in keeps what you typed (all: on a new render, every field).
+function sxRenderData(all) {
+  const d = SX.data;
+  if (!d || !sx$('sxlist')) return;
+  const K = window.SOURCING;
+  const f = (lnFocus() || {}).facts || {};
+  const chosen = d.suppliers.find((s) => s.id === d.sourcing.supplier_id);
+  sx$('sxbox').classList.toggle('on', !!chosen);
+  sx$('sxsum').textContent = chosen ? `Chosen: ${K.PLATFORMS[chosen.platform].label}, ${sxEur(chosen.x.landed)} at the door`
+    : d.suppliers.length ? `${d.suppliers.length} supplier${d.suppliers.length === 1 ? '' : 's'}, none chosen yet` : 'No supplier yet: find, compare, vet, sample';
+  const links = K.searchLinks(f, d.sourcing.zh);
+  const group = (by, label) => {
+    const xs = links.filter((x) => x.by === by);
+    return xs.length ? `<div class="sxlinks"><span>${esc(label)}</span>${xs.map((x) => sxLink(x.url, x.label)).join('')}</div>` : '';
+  };
+  sx$('sxlinks').innerHTML = group('name', 'By name') + group('photo', 'By photo');
+  const tr = links.find((x) => x.k === 'translate');
+  sx$('sxzhhint').innerHTML = `1688 finds more with Chinese words${tr ? `: ${sxLink(tr.url, 'translate the name')}, or ask your agent` : ''}.`;
+  sxRenderCj();
+  sxRenderList();
+  for (const k of Object.keys(K.LISTS)) {
+    const t = d.sourcing.checks[k] || {};
+    for (const c of SX.el.querySelectorAll(`[data-sx-check="${k}"]`)) c.checked = t[c.value] === true;
+    sx$('sxn-' + k).textContent = `${K.LISTS[k].filter((i) => t[i.k] === true).length}/${K.LISTS[k].length}`;
+  }
+  for (const x of SX.el.querySelectorAll('[data-sx-info]')) {
+    if (!all && x === document.activeElement) continue;
+    x.value = d.sourcing[x.dataset.sxInfo] ?? '';
+    x.removeAttribute('aria-invalid');
+  }
+  const fe = d.fees;
+  const E = K.EU_FEES;
+  const fees = [fe.duty ? `€${fe.duty} duty` : `€${E.duty} duty from ${sxDate(E.duty_from)}`, fe.handling ? `€${fe.handling} handling` : `€${E.handling} handling from ${sxDate(E.handling_from)}`].join(' + ');
+  sx$('sxfees').textContent = `At the door: one unit, its shipping to NL, and the EU import fees on an order from China (${fees}); EU stock pays none. €1 = ¥${d.fx.CNY} = $${d.fx.USD}.`;
+  sxRenderMsg();
+}
+function sxRenderList() {
+  const d = SX.data;
+  const ol = sx$('sxlist');
+  if (!d || !ol) return;
+  ol.innerHTML = d.suppliers.length ? d.suppliers.map((s) => sxItem(s, s.id === d.sourcing.supplier_id)).join('')
+    : '<li class="sxempty">No supplier yet. Search above, then paste the links you like here: the price, MOQ and rating come along when the 1688 or AliExpress app shares them.</li>';
+}
+// One candidate: what an order costs at the customer's door, its facts, what to look at, and Choose.
+function sxItem(s, on) {
+  const K = window.SOURCING;
+  const x = s.x;
+  const name = s.title || host(s.url) || 'Supplier';
+  const cost = [x.unit != null ? `${sxEur(x.unit)} unit` : '', x.ship != null ? `${sxEur(x.ship)} shipping` : '', x.fees ? `${sxEur(x.fees)} EU fees` : ''].filter(Boolean).join(' + ');
+  const own = s.currency && s.currency !== 'EUR' && s.unit_price != null ? ` (${sxMoney(s.unit_price, s.currency)}${s.ship_price != null ? ' + ' + sxMoney(s.ship_price, s.currency) : ''})` : '';
+  const facts = [s.moq != null ? `MOQ ${s.moq}` : '', s.rating != null ? `★ ${s.rating}` : '', s.kind === 'factory' ? 'Factory' : s.kind === 'trader' ? 'Trader' : '', s.repeat_rate != null ? `${s.repeat_rate}% repeat buyers` : '',
+    s.lead_days != null ? `${s.lead_days} days` : '', s.weight_g != null ? `${s.weight_g} g` : '', s.origin === 'eu' ? 'EU stock' : ''].filter(Boolean).join(' · ');
+  const flags = s.flags.filter((g) => g.level !== 'green');
+  return `<li class="sxs${on ? ' on' : ''}" data-sx-id="${esc(s.id)}">
+    <div class="sxs1"><span class="sxp">${esc(K.PLATFORMS[s.platform].label)}</span><span class="sxn">${safe(s.url) ? sxLink(s.url, name) : `<b>${esc(name)}</b>`}</span>${s.best ? '<span class="sxbest">Cheapest</span>' : ''}</div>
+    <div class="sxs2"><b>${x.landed == null ? 'No price yet' : esc(sxEur(x.landed))}</b>${x.landed == null ? '' : '<span>at the door</span>'}</div>
+    ${cost ? `<div class="sxs3">${esc(cost + own)}</div>` : ''}${facts ? `<div class="sxs3">${esc(facts)}</div>` : ''}
+    ${flags.length ? `<ul class="sxflags" aria-label="To look at">${flags.map((g) => `<li class="${esc(g.level)}">${esc(g.text)}</li>`).join('')}</ul>` : ''}
+    ${s.notes ? `<p class="sxnote">${esc(s.notes)}</p>` : ''}
+    <div class="sxacts"><button class="sxbtn ${on ? 'sxon' : 'sxgo'}" data-sx="choose" aria-pressed="${on}">${on ? '✓ Chosen' : 'Choose'}</button><button class="sxbtn" data-sx="edit" aria-expanded="${SX.edit === s.id}">Edit</button><button class="sxbtn sxghost" data-sx="remove">Remove</button></div>
+    ${SX.edit === s.id ? sxForm(s) : ''}</li>`;
+}
+function sxForm(s) {
+  return `<div class="sxedit">${window.SOURCING.FIELDS.map((f) => {
+    const v = s[f.k];
+    if (f.t === 'choice') return `<label class="sxf"><span>${esc(f.label)}</span><span class="selw"><select class="chip" data-sx-f="${f.k}"><option value="">Not set</option>${f.options.map(([o, t]) => `<option value="${esc(o)}"${v === o ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></span></label>`;
+    if (f.long) return `<label class="sxf sxwide"><span>${esc(f.label)}</span><textarea data-sx-f="${f.k}" rows="2" maxlength="1000">${esc(v ?? '')}</textarea></label>`;
+    const wide = f.t === 'url' || f.k === 'title';
+    const mode = f.t === 'url' ? 'url' : f.t === 'text' ? 'text' : f.t === 'int' ? 'numeric' : 'decimal';
+    return `<label class="sxf${wide ? ' sxwide' : ''}"><span>${esc(f.label)}</span><input type="text" inputmode="${mode}" data-sx-f="${f.k}" value="${esc(v ?? '')}" maxlength="${wide ? 500 : 12}" autocomplete="off" spellcheck="false"></label>`;
+  }).join('')}<div class="sxacts sxwide"><button class="sxbtn sxgo" data-sx="save">Save</button><button class="sxbtn" data-sx="cancel">Cancel</button></div></div>`;
+}
+// CJ Dropshipping: only with the Worker's CJ_API_KEY secret. Products like this one, then one product's cost, stock and freight.
+function sxRenderCj() {
+  const box = sx$('sxcj');
+  if (!box || !SX.data) return;
+  if (!SX.data.cj.on) { box.innerHTML = '<p class="sxhint">CJ Dropshipping’s cost, stock and freight to NL, DE and FR can show here: add a CJ_API_KEY secret to the board’s Worker (README, Sourcing).</p>'; return; }
+  const r = SX.cj;
+  box.innerHTML = `<div class="sxcj"><div class="sxcjh"><b>CJ Dropshipping</b><span>cost, stock and freight to NL, DE and FR</span></div>
+    <div class="sxacts"><button class="sxbtn" data-sx="cj-photo">Find by photo</button><button class="sxbtn" data-sx="cj-name">Find by name</button></div>
+    ${r && r.note ? `<p class="sxhint">${esc(r.note)}</p>` : ''}${r ? (r.results.length ? `<ol class="sxcjl">${r.results.map(sxCjItem).join('')}</ol>` : '<p class="sxhint">CJ found nothing like it.</p>') : ''}</div>`;
+}
+function sxCjItem(p) {
+  const q = SX.quotes.get(p.pid);
+  const facts = [sxMoney(p.price, 'USD'), p.weight_g != null ? `${p.weight_g} g` : '', p.stock != null ? `${fmt(p.stock)} in stock` : ''].filter(Boolean).join(' · ');
+  const quote = q ? `<small>${esc(`${sxMoney(q.price, 'USD')} a unit${q.weight_g != null ? `, ${q.weight_g} g` : ''} · ${fmt(q.stock.total)} in stock${q.stock.eu ? `, ${fmt(q.stock.eu)} in the EU` : ', none in the EU'}`)}</small>
+    <small>${esc(q.freight.length ? q.freight.map((f) => `${f.to} ${sxMoney(f.usd, 'USD')}${f.days ? ` (${f.days} d)` : ''}${f.from !== 'CN' ? ` from ${f.from}` : ''}`).join(' · ') : 'No freight from CJ to NL, DE or FR')}</small>` : '';
+  return `<li class="sxcjp" data-sx-pid="${esc(p.pid)}"><span class="sxth">${safe(p.img) ? `<img src="${safe(p.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : '<i>CJ</i>'}</span>
+    <div class="sxcjt">${sxLink(p.url, p.name || p.sku || p.pid)}${facts ? `<small>${esc(facts)}</small>` : ''}${quote}</div>
+    <div class="sxcja"><button class="sxbtn" data-sx="cj-quote">${q ? 'Freight again' : 'Freight'}</button><button class="sxbtn sxgo" data-sx="cj-add">Add as supplier</button></div></li>`;
+}
+// The first message, from the card and the chosen supplier (or the first with a link): to an agent or to that supplier.
+function sxRenderMsg() {
+  const t = sx$('sxmsgt');
+  const d = SX.data;
+  if (!t || !d) return;
+  const l = lnFocus() || {};
+  const f = l.facts || {};
+  const pick = d.suppliers.find((s) => s.id === d.sourcing.supplier_id) || d.suppliers.find((s) => s.url);
+  const qty = parseInt(sx$('sxqty').value, 10);
+  t.value = window.SOURCING.messageOf({ to: SX.to, lang: SX.lang, title: l.title || f.title, link: pick ? pick.url : '', photo: f.img, page: f.product || f.store, zh: d.sourcing.zh,
+    name: sx$('sxname').value, qty: qty > 0 ? qty : 50, battery: (Array.isArray(f.risks) ? f.risks : []).some((r) => r && r.k === 'electric') });
+  for (const b of SX.el.querySelectorAll('[data-sx-to]')) b.setAttribute('aria-pressed', String(b.dataset.sxTo === SX.to));
+  for (const b of SX.el.querySelectorAll('[data-sx-lang]')) b.setAttribute('aria-pressed', String(b.dataset.sxLang === SX.lang));
+}
+
+async function sxClick(e) {
+  const b = e.target.closest('button');
+  if (!b || b.disabled || !SX.data) return;
+  if (b.dataset.sxTo || b.dataset.sxLang) {
+    if (b.dataset.sxTo) SX.to = b.dataset.sxTo; else SX.lang = b.dataset.sxLang;
+    sxRenderMsg();
+    return;
+  }
+  const act = b.dataset.sx;
+  if (!act) return;
+  const key = SX.key;
+  const li = b.closest('[data-sx-id]');
+  const id = li ? Number(li.dataset.sxId) : 0;
+  if (act === 'edit' || act === 'cancel') { SX.edit = act === 'edit' && SX.edit !== id ? id : 0; sxRenderList(); return; }
+  if (act === 'copy') { sxCopy(); return; }
+  if (act === 'remove' && !b.dataset.sure) { // a second tap, so a slip never loses a supplier
+    b.dataset.sure = '1';
+    b.textContent = 'Tap again to remove';
+    setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = 'Remove'; } }, 3000);
+    return;
+  }
+  const label = b.textContent;
+  const cj = act.startsWith('cj-');
+  b.disabled = true;
+  if (cj) b.textContent = 'Asking CJ…';
+  try {
+    if (act === 'add') await sxAdd(key);
+    else if (act === 'save') await sxSave(key, id, li);
+    else if (act === 'choose') await sxChoose(key, id, b.getAttribute('aria-pressed') === 'true');
+    else if (act === 'remove') {
+      const j = await sxPost(key, { id, remove: true });
+      if (SX.edit === id) SX.edit = 0;
+      sxTake(j);
+      toast('Supplier removed', '');
+    } else if (act === 'cj-photo' || act === 'cj-name') {
+      const j = await sxPost(key, { cj: { find: act.slice(3) } });
+      if (SX.key === key) SX.cj = j.cj && j.cj.find;
+      sxTake(j);
+    } else if (act === 'cj-quote' || act === 'cj-add') {
+      const pid = b.closest('[data-sx-pid]').dataset.sxPid;
+      const j = await sxPost(key, { cj: { pid, add: act === 'cj-add' } });
+      if (SX.key === key && j.cj && j.cj.quote) SX.quotes.set(pid, j.cj.quote);
+      sxTake(j);
+      if (act === 'cj-add') toast('Added from CJ, with its freight to NL', '');
+    }
+  } catch (err) {
+    toast(cj ? err.message : 'Could not save: ' + err.message, '');
+  } finally {
+    if (b.isConnected) { b.disabled = false; b.textContent = label; }
+  }
+}
+async function sxAdd(key) {
+  const t = sx$('sxpaste');
+  const paste = t.value.trim();
+  if (!paste) { toast('Paste a supplier link first', ''); t.focus(); return; }
+  const j = await sxPost(key, { add: { paste } });
+  if (t.value.trim() === paste) t.value = '';
+  if (SX.key === key && j.added) SX.edit = j.added; // its form opens: fill in what the link did not say
+  sxTake(j);
+  toast('Supplier added: fill in what the link did not say', '');
+}
+async function sxSave(key, id, li) {
+  const K = window.SOURCING;
+  const raw = {};
+  for (const x of li.querySelectorAll('[data-sx-f]')) raw[x.dataset.sxF] = x.value;
+  const wrong = K.badFields(raw);
+  for (const x of li.querySelectorAll('[data-sx-f]')) { if (wrong.includes(x.dataset.sxF)) x.setAttribute('aria-invalid', 'true'); else x.removeAttribute('aria-invalid'); }
+  if (wrong.length) { toast('Not saved: check the marked fields', ''); return; }
+  const j = await sxPost(key, { id, set: raw });
+  if (SX.key === key) SX.edit = 0;
+  sxTake(j);
+  toast(j.launch ? 'Saved: the launch card follows the new numbers' : 'Saved', '');
+}
+// Choose (or drop) the supplier you go with. The launch card's own saves on their way land first: the server then merges
+// the supplier's numbers into its Sourcing step, and the card renders again with them.
+async function sxChoose(key, id, on) {
+  lnFlush();
+  await LN.chain;
+  const j = await sxPost(key, { choose: on ? null : id });
+  sxTake(j);
+  if (on) { toast('No supplier chosen: the launch card keeps its numbers', ''); return; }
+  const s = j.sourcing;
+  const l = (LN.list || []).find((x) => x.key === key);
+  const own = l && l.steps && l.steps.margin && l.steps.margin.v && l.steps.margin.v.cogs != null;
+  toast(`On the launch card: ${sxEur(s.supplier_cost)} a unit${s.ship_cost != null ? ` + ${sxEur(s.ship_cost)} shipping` : ''}${own ? '. Its Margin step has its own COGS, which counts instead' : ''}`, '');
+}
+async function sxChange(e) {
+  const x = e.target;
+  if (!SX.data) return;
+  const key = SX.key;
+  if (x.dataset.sxCheck) {
+    try {
+      sxTake(await sxPost(key, { check: { list: x.dataset.sxCheck, k: x.value, on: x.checked } }));
+    } catch (err) {
+      if (x.isConnected) x.checked = !x.checked;
+      toast('Could not save: ' + err.message, '');
+    }
+    return;
+  }
+  if (!x.dataset.sxInfo) return;
+  const K = window.SOURCING;
+  const k = x.dataset.sxInfo;
+  if (K.badFields({ [k]: x.value }, K.INFO).length) { x.setAttribute('aria-invalid', 'true'); return; }
+  x.removeAttribute('aria-invalid');
+  if (String(SX.data.sourcing[k] ?? '') === x.value.trim()) return; // nothing changed
+  try {
+    const j = await sxPost(key, { info: { [k]: x.value } });
+    sxTake(j);
+    if (j.launch) toast('Saved: the launch card follows the new rate', '');
+  } catch (err) {
+    toast('Could not save: ' + err.message, '');
+  }
+}
+function sxInput(e) {
+  const x = e.target;
+  if (x.id !== 'sxname' && x.id !== 'sxqty') return;
+  store.set(x.id === 'sxname' ? 'wh-sx-name' : 'wh-sx-qty', x.value);
+  sxRenderMsg();
+}
+async function sxCopy() {
+  const t = sx$('sxmsgt');
+  if (!t) return;
+  try {
+    await navigator.clipboard.writeText(t.value);
+    toast('Message copied', '');
+  } catch (e) {
+    t.focus();
+    t.select();
+    toast(document.execCommand && document.execCommand('copy') ? 'Message copied' : 'Select the message and copy it', '');
+  }
+}
+new MutationObserver(sxMount).observe($('lnbox'), { childList: true });
+sxReady.then(sxMount, () => {});
 </script>
 </body>
 </html>
