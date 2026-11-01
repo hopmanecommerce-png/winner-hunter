@@ -12,7 +12,7 @@ import { riskKit, RISK_JS, verdict, auto, blocks, blockedBy, finish, fromAd, fro
 import { TRAITS } from '../worker/src/jev-questions.mjs';
 import { screenEU, classify } from '../lib/world.mjs';
 import { seededEnv, NOW } from './helpers/seed.mjs';
-import { googleEnv, GLOW } from './helpers/google-seed.mjs';
+import { googleEnv, GLOW, BRIGHT } from './helpers/google-seed.mjs';
 import { APPROVED, NOT_APPROVED, cardOf, idOf, loadApproved } from './helpers/risk-seed.mjs';
 
 const ORIGIN = 'https://winner-hunter.example.workers.dev';
@@ -131,7 +131,7 @@ test('restricted words in English, Dutch and German block by the name alone; com
     ['Detox Foot Pads', 'pseudo'], ['Afslankpleisters', 'pseudo'], ['Weight Loss Patch', 'pseudo'], ['Lymphdrainage Öl', 'pseudo'],
     ['Mosquito Repellent Spray', 'biocide'], ['Muggenspray DEET', 'biocide'], ['Hand Sanitizer 500ml', 'biocide'], ['Weed Killer Spray', 'biocide'],
     ['Disney Princess Dress', 'brand'], ['Pokémon Pikachu Lamp', 'brand'], ['Stanley Quencher Dupe', 'brand'], ['Labubu Keychain', 'brand'], ['1:1 Replica Watch', 'brand'],
-    ['Bamboo Fiber Kids Plate Set', 'bamboo'], ['Bambusfaser Becher', 'bamboo'], ['Gift Card €50', 'digital'], ['Cadeaubon 25 euro', 'digital'], ['Sex Toy for Couples', 'adult'],
+    ['Bamboo Fiber Kids Plate Set', 'bamboo'], ['Bambusfaser Becher', 'bamboo'], ['Sex Toy for Couples', 'adult'],
     // brought in by the 36 approvals: essential oils, hair growth, pet supplements and magnesium in Dutch and German
     ['Ätherische Öle Set 6 x 10 ml', 'cosmetics'], ['Ätherisches Öl Lavendel', 'cosmetics'], ['Etherische oliën set', 'cosmetics'], ['Essentiële olie eucalyptus', 'cosmetics'],
     ['Rozemarijn Haargroei Olie', 'cosmetics'], ['Haarwuchsmittel für Männer', 'cosmetics'], ['Oud Parfum voor Heren', 'cosmetics'],
@@ -173,14 +173,14 @@ test('sizes in English, Dutch and German, glued words too; a wireless bra needs 
   }
 });
 
-test('everything the hunt\'s EU screen takes off the board is Block on the radar; its tools and look-alikes are not (two differences on purpose)', () => {
+test('everything the hunt\'s EU screen takes off the board is Block on the radar, but what is not physical; its tools and look-alikes are not (three differences on purpose)', () => {
   // The titles of world.test.mjs: screenEU() and classify() take these off the board.
   const off = ['Vitamin C Face Serum', 'Retinol Night Cream', 'Teeth Whitening Strips', 'Purple Toothpaste', 'Hair Growth Oil', 'Collagen face mask', 'Gel Polish Kit', 'Gezichtscrème met SPF',
     'Nachtcreme mit Retinol', 'Crème de nuit anti-rides', 'Zonnebrandcrème SPF50', 'Eau de Parfum Oud 100ml', 'Parfum Homme Intense', 'TENS Unit Pain Relief', 'Knee Pain Brace', 'Sciatica Cushion',
     'Plantar Fasciitis Insoles', 'Rugpijn kussen', 'Rückenschmerzen Gürtel', 'Ceinture mal de dos', 'Blood Pressure Monitor', 'Anti-Snoring Mouthpiece', 'Acne Patches 72pcs', 'Flea and Tick Collar for Dogs',
-    'Flohhalsband für Katzen', 'Dog Dewormer Tablets', 'Collier anti-puces chien', 'Calming Chews for Dogs', 'Collagen Capsules', 'Protein bar box', 'Gift Card', 'Collagen Capsules for Face',
+    'Flohhalsband für Katzen', 'Dog Dewormer Tablets', 'Collier anti-puces chien', 'Calming Chews for Dogs', 'Collagen Capsules', 'Protein bar box', 'Collagen Capsules for Face',
     'Vitamin D3 Capsules', 'Food Grade Collagen Powder', 'Mushroom Coffee with Collagen', 'Collagen Coffee Creamer', 'Amla Superfruit Capsules', 'Collagen gummies', 'Vitamin C Powder', 'Kollagen Pulver',
-    'Creatine monohydrate powder', 'Shipping & Order Protection', 'Geschenkgutschein 50'];
+    'Creatine monohydrate powder'];
   for (const t of off) {
     assert.ok(screenEU(t).out || classify(t).out, `${t}: off the EU board`);
     assert.strictEqual(verdict(name(t)).level, 'block', t);
@@ -196,6 +196,11 @@ test('everything the hunt\'s EU screen takes off the board is Block on the radar
   assert.deepStrictEqual([verdict(name('Pain-free hair removal IPL')).level, reasonKeys(verdict(name('Pain-free hair removal IPL')))[0]], ['block', 'device']);
   assert.strictEqual(screenEU('Grain free dog food').out, '');
   assert.deepStrictEqual([verdict(name('Grain free dog food')).level, reasonKeys(verdict(name('Grain free dog food')))], ['docs', ['pet_eat']], 'Connor keeps pet food (2026-10-31)');
+  // Taken off by the hunt (not a product), only a note here: not physical is never a block (Connor, 2026-11-01)
+  for (const t of ['Gift Card', 'Shipping & Order Protection', 'Geschenkgutschein 50']) {
+    assert.strictEqual(classify(t).out, 'not a product', t);
+    assert.deepStrictEqual([verdict(name(t)).level, verdict(name(t)).reasons.map((r) => [r.k, r.level])], ['ok', [['digital', 'info']]], t);
+  }
 });
 
 test('ordinary winners are not blocked by a word that only looks alike', () => {
@@ -212,7 +217,7 @@ test('ordinary winners are not blocked by a word that only looks alike', () => {
 // Jev's answers, your checks, payments, customs
 // ---------------------------------------------------------------------------
 
-test('Jev\'s answers: its traits are reasons; "not physical" blocks; a category counts only where Jev gave no answer; the TikTok tab\'s blockers; a launch card\'s risks', () => {
+test('Jev\'s answers: its traits are reasons; "not physical" is a note, not a block; a category counts only where Jev gave no answer; the TikTok tab\'s blockers; a launch card\'s risks', () => {
   assert.deepStrictEqual(RISK_TRAITS.slice().sort(), TRAITS.filter((t) => t.group === 'rules' || t.group === 'blockers').map((t) => t.k).sort(), 'the same questions as jev-questions.mjs');
   assert.deepStrictEqual(BLOCKERS, TRAITS.filter((t) => t.group === 'blockers').map((t) => t.k));
   const jev = (p, main = '', sub = '') => name('Product', { p, main, sub });
@@ -222,6 +227,7 @@ test('Jev\'s answers: its traits are reasons; "not physical" blocks; a category 
   assert.deepStrictEqual(keys(jev({ skin: 0.5 })), ['cosmetics'], '0.5 is a yes');
   assert.deepStrictEqual(keys(jev({ skin: 0.49, face: 0.8 })), ['cosmetics']);
   assert.deepStrictEqual(keys(jev({ physical: 0.2 })), ['digital']);
+  assert.deepStrictEqual([verdict(jev({ physical: 0.2 })).level, blocks(jev({ physical: 0.2 }))], ['ok', []], 'not physical: a note, not a block');
   assert.deepStrictEqual(keys(jev({ physical: 0.9, brand: 0.7, electric: 0.9, kids: 0.8, foodcontact: 0.6, medical: 0.7, restricted: 0.9, sizing: 0.9, fragile: 0.8, bulky: 0.7 })),
     ['brand', 'claims', 'ce', 'kids', 'food', 'ship', 'sizing', 'fragile', 'bulky'], 'blockers first, return risks after');
   assert.strictEqual(verdict(jev({ medical: 0.95 })).level, 'docs', "Jev's medical answer (it may be the ad): a claims caution, not a block");
@@ -244,7 +250,8 @@ test('Jev\'s answers: its traits are reasons; "not physical" blocks; a category 
   // A launch card: its risk keys are Jev's yes answers
   const facts = { source: 'eu', id: '9001', title: 'Pod', product: 'https://pod.test/products/pod', jev: { main: 'Home', sub: '' }, risks: [{ k: 'electric' }, { k: 'brand' }] };
   assert.deepStrictEqual(verdict(fromFacts(facts)).reasons.map((r) => r.k), ['brand', 'ce']);
-  assert.deepStrictEqual(verdict(fromFacts({ ...facts, risks: [{ k: 'digital' }] })).reasons.map((r) => r.k), ['digital']);
+  const notPhysical = verdict(fromFacts({ ...facts, risks: [{ k: 'digital' }] }));
+  assert.deepStrictEqual([notPhysical.level, notPhysical.reasons.map((r) => r.k)], ['ok', ['digital']], "a launch card's \"not a physical product\": a note");
   assert.strictEqual(keyOf(fromFacts(facts)), 'page:pod.test/products/pod');
   assert.strictEqual(keyOf(fromFacts({ source: 'tiktok', id: '17', title: 'X', risks: [{ k: 'kids' }], jev: { main: 'Baby and kids', sub: '' } })), 'tiktok:17');
   assert.strictEqual(verdict(fromFacts({ source: 'tiktok', id: '17', title: 'X', risks: [{ k: 'kids' }], jev: { main: 'Baby and kids', sub: '' } })).level, 'docs');
@@ -423,6 +430,42 @@ test('the Google tab: ?risk=hide leaves out what the radar blocks there too, cou
   assert.ok(!hid.ads.some((a) => a.id === lamp.id));
   assert.strictEqual((await google()).total, 3, 'without ?risk: as it was');
   assert.ok(!(await eu()).includes('9950'), 'the same product on the EU tab: your call follows it');
+});
+
+test('not physical is never a block (Connor, 2026-11-01): OK with a Digital note; ?risk=hide keeps it on the EU, Outside EU and Google tabs, in the Inbox and the CSV', async () => {
+  // The words (English, Dutch, German), Jev's answer, its category, a TikTok row, a launch card: a note, nothing that blocks
+  const digital = ['Gift Card €50', 'Cadeaubon 25 euro', 'Geschenkgutschein 50', 'Shipping & Order Protection', 'Digital Planner 2027', 'Online Course: Start a Store', 'E-book Keto Recipes']
+    .map((t) => name(t)).concat([name('Product', { p: { physical: 0.1 } }), name('Product', { main: 'Other', sub: 'Services and digital' }),
+      fromTikTok({ id: '2', title: 'Gift Card $25', url: 'https://www.tiktok.com/shop/pdp/2', blockers: '' }),
+      fromFacts({ source: 'eu', id: '9', title: 'Pod', product: 'https://pod.test/products/pod', jev: { main: 'Home', sub: '' }, risks: [{ k: 'digital' }] })]);
+  for (const x of digital) {
+    const v = verdict(x);
+    assert.deepStrictEqual([v.level, v.reasons.map((r) => [r.k, r.level, r.short]), blocks(x), v.pay], ['ok', [['digital', 'info', 'Digital']], [], ''], x.title);
+    assert.strictEqual(blockedBy(blocks(x), { level: 'block' }), true, `${x.title}: your call Block still blocks it`);
+  }
+  // Beside another reason it changes nothing: a brand still blocks, a blade still needs papers
+  assert.deepStrictEqual(['Disney Gift Card', 'Chef Knife Online Course'].map((t) => [verdict(name(t)).level, verdict(name(t)).reasons.map((r) => r.k)]),
+    [['block', ['brand', 'digital']], ['docs', ['blade', 'digital']]]);
+  // On the board: Jev says P1 (EU), P2 (outside the EU) and the projection lamp (Google) are not physical. Each stays.
+  const env = await googleEnv();
+  await loadApproved(env, NOW, { approve: 'none', others: true });
+  env.db.prepare("UPDATE world_checks SET physical = 0.05, answers = json_set(answers, '$.p.physical', 0.05) WHERE product_key IN ('eu|801|pet hair remover roller', 'beamr.test/products/mini-projector')").run();
+  env.db.prepare("INSERT INTO world_checks (product_key, people, animals, gymwear, physical, category, input, checked_at, version, main, sub, answers) VALUES (?, 0.01, 0.01, 0.01, 0.05, 'Other', 'photo', 'x', 2, 'Other', 'Services and digital', ?)")
+    .run('google|' + BRIGHT, JSON.stringify({ p: { people: 0.01, animals: 0.01, gymwear: 0.01, physical: 0.05 }, choices: {} }));
+  const s = await session(env);
+  const eu = await s.get('/api/ads?view=all&limit=100&risk=hide');
+  const world = await s.get('/api/ads?scope=world&view=all&limit=100&risk=hide');
+  const google = await s.get('/api/ads?scope=google&view=all&limit=100&risk=hide');
+  assert.deepStrictEqual([eu.risk.hidden, world.risk.hidden, google.risk.hidden], [10, 2, 0], 'only the restricted ones are hidden, as before');
+  for (const a of [eu.ads.find((x) => x.id === '8001'), world.ads.find((x) => x.id === '7002'), google.ads.find((x) => x.product === 'https://' + BRIGHT)]) {
+    assert.ok(a, 'kept with ?risk=hide');
+    const v = verdict(fromAd(a));
+    assert.notStrictEqual(v.level, 'block', a.title);
+    assert.deepStrictEqual(v.reasons.filter((r) => r.k === 'digital').map((r) => [r.level, r.from]), [['info', ['jev']]], `${a.title}: Jev's answer, a note`);
+  }
+  assert.ok((await s.get('/api/ads?view=inbox&limit=100&risk=hide')).ads.some((a) => a.id === '8001'), 'in the Inbox too');
+  const csv = (await (await s.call('/export.csv?view=all&risk=hide')).text()).split('\r\n').slice(1).map((l) => l.split(',')[0]);
+  assert.ok(csv.includes('8001'), 'and in the CSV');
 });
 
 test('your check moves a product: your call OK brings a blocked one back, a trademark conflict hides one; /api/ads sends the checks of its page; the CSV follows ?risk=hide', async () => {
