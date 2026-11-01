@@ -584,9 +584,9 @@ test('google-hunter.yml: a missing secret ends red and names it; credits must be
 // ---------------------------------------------------------------------------
 // The migration
 // ---------------------------------------------------------------------------
-const MIGRATION = fs.readFileSync(new URL('../worker/migrations/0057_google_ads.sql', import.meta.url), 'utf8');
+const MIGRATION = fs.readFileSync(new URL('../worker/migrations/0021_google_ads.sql', import.meta.url), 'utf8');
 
-test('migration 0057: only new tables and indexes (nothing dropped, deleted or altered), safe to apply twice, the full set too', async () => {
+test('migration 0021: only new tables and indexes (nothing dropped, deleted or altered), safe to apply twice, the full set too', async () => {
   const st = statements(MIGRATION);
   assert.ok(st.length >= 6);
   assert.ok(st.every((s) => /^CREATE (TABLE|INDEX) IF NOT EXISTS google_/.test(s)), 'additive only');

@@ -172,7 +172,7 @@ about 10–25 keywords in 3 regions, depending on how many big advertisers they 
    `CF_API_TOKEN` (or `CF_D1_TOKEN`) and `CF_ACCOUNT_ID` are already there for the other hunts. `TYPESAFE_API_KEY` is
    optional (Jev's answers).
 3. Merge this PR. A workflow only appears under Actions from the main branch. Deploying the board makes the tables
-   (`0057_google_ads.sql`) and puts the Google tab online.
+   (`0021_google_ads.sql`) and puts the Google tab online.
 4. **First a dry run:** Actions → **Google Hunter** → Run workflow, tick **Dry run**, credits **50**. The summary lists the
    products with their rule marks. A dry run only reads D1: it does not even make the tables, and saves nothing.
 5. Then a real run (no tick). The products show under **Google** on the board.
