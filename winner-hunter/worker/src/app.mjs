@@ -10,6 +10,7 @@
  */
 
 import { tiktokDecide, tiktokList } from './tiktok.mjs';
+import { AI_JS, aiList, aiPost } from './ai.mjs';
 import { adView } from './adview.mjs';
 import { TRAITS, AD_TRAITS, CHOICES, AD_CHOICES, SEP, YES_AT, VERSION } from './jev-questions.mjs';
 import { MARKET_RULES } from './market-rules.mjs';
@@ -1347,6 +1348,19 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       const { j, err } = await readJson(req, url);
       if (err) return err;
       const out = await tiktokDecide(env, j, now);
+      return json(out.body, out.status);
+    }
+    // ---- AI read (ai.mjs): a cheap Claude model's read of each card, collapsed and experimental (ai-check.mjs fills D1
+    // table ai_checks). A block of its own: nothing else here uses it. /ai.js: the board's code that shows it.
+    if (path === '/api/ai' || path === '/ai.js') {
+      if (!ok) return json({ error: 'Log in first' }, 401);
+      if (path === '/ai.js') return method === 'GET' ? text(AI_JS, 200, { 'Content-Type': 'text/javascript; charset=utf-8' }) : json({ error: 'Method not allowed' }, 405);
+      const deps = { rows: () => snapshot(env.DB, now) };
+      if (method === 'GET') return json(await aiList(env, url.searchParams.get('ids'), deps));
+      if (method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+      const { j, err } = await readJson(req, url);
+      if (err) return err;
+      const out = await aiPost(env, j, now, deps);
       return json(out.body, out.status);
     }
     // ---- Launch view (launch.mjs): an approved product's launch card, checklist and decision. A block of its own, so the
