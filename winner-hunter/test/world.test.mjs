@@ -7,7 +7,7 @@ import { d1Client, migrate } from '../lib/d1.mjs';
 import { MARKETS, LANGS, euFacts, sameThing, resetCooling, parseWorldKeywords, searchesOf, libraryUrl, readLibrary, toRow, classify, checkStore, fetchProduct, suggestProduct, addUp, MIN_DAYS } from '../lib/world.mjs';
 import { hunt, ADS_SQL, saveTokenCheck } from '../world.mjs';
 import { openLibrary } from '../lib/adlibrary.mjs';
-import { handle, makeToken, products, proofOf, worldRow, worldMarketsOf, worldAlert, PROOF, WORLD_MARKETS } from '../worker/src/app.mjs';
+import { handle, tokenFor, products, proofOf, worldRow, worldMarketsOf, worldAlert, PROOF, WORLD_MARKETS } from '../worker/src/app.mjs';
 import { MARKET_RULES } from '../worker/src/market-rules.mjs';
 import { d1Binding, d1Rest, memoryDb } from './helpers/sqlite-d1.mjs';
 import { seededEnv } from './helpers/seed.mjs';
@@ -258,7 +258,7 @@ test('a night: searched in every market, saved, products on the board, EU check,
 test('a decision on a product outside the EU never reaches an EU winner with the same ad', async () => {
   const env = await seededEnv();
   const at = Date.UTC(2026, 9, 17, 8, 0); // the seeded EU board's day
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, at)}`;
+  const cookie = `__Host-wh=${await tokenFor(env, at)}`;
   const [p] = addUp([row('9000', 'AU')], ctx());
   assert.strictEqual(p.ad_id, 'w9000');
   put(env.db, { ...P('pod.test/products/pillow', p.ad_id) });
@@ -421,7 +421,7 @@ const seedWorld = (mem) => {
   mem.prepare("INSERT INTO store_trust (store, status, score, reviews, profile) VALUES ('a.test', 'page', 4.5, 800, 'a.test')").run();
 };
 const authed = async (env, path, init = {}) => {
-  const res = await handle(new Request('https://board.test' + path, { ...init, headers: { cookie: `__Host-wh=${await makeToken('1234', NOW)}`, ...(init.headers || {}) } }), env, { html: '<html></html>', now: NOW });
+  const res = await handle(new Request('https://board.test' + path, { ...init, headers: { cookie: `__Host-wh=${await tokenFor(env, NOW)}`, ...(init.headers || {}) } }), env, { html: '<html></html>', now: NOW });
   return res;
 };
 const J = async (env, path, init) => (await authed(env, path, init)).json();

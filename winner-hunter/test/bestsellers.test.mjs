@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { productKey, storeTop, productId, rankOf, addDay, movement } from '../lib/bestsellers.mjs';
 import { refresh, WANTED_SQL } from '../bestsellers.mjs';
 import { storeTrust, trustIdIn, trustPage, businessUnitIn, UA } from '../lib/trust.mjs';
-import { handle, makeToken, productKey as boardKey, movement as boardMovement, bestOf, sellsBoost } from '../worker/src/app.mjs';
+import { handle, tokenFor, productKey as boardKey, movement as boardMovement, bestOf, sellsBoost } from '../worker/src/app.mjs';
 import { d1Client } from '../lib/d1.mjs';
 import { d1Rest } from './helpers/sqlite-d1.mjs';
 import { seededEnv, NOW } from './helpers/seed.mjs';
@@ -125,7 +125,7 @@ test('bestsellers.mjs: ranks for the board products, kept per day; the board sho
   assert.ok(!w2.calls.some((u) => u.endsWith('.js')), 'product ids remembered');
   assert.strictEqual(row('shop1.test/products/item-1').history, '[["2026-10-17",3],["2026-10-25",1]]');
 
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, later)}`;
+  const cookie = `__Host-wh=${await tokenFor(env, later)}`;
   const get = async (path) => (await handle(new Request('https://wh.example.workers.dev' + path, { headers: { cookie } }), env, { html: '', now: later })).json();
   const all = await get('/api/ads');
   const best = (id) => all.ads.find((a) => a.id === id).best;
@@ -166,7 +166,7 @@ test('bestsellers.mjs: ranks for the board products, kept per day; the board sho
 test('the board without the bestseller table (not migrated yet) still works, just without ranks', async () => {
   const env = await seededEnv();
   env.db.exec('DROP TABLE bestseller');
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, NOW)}`;
+  const cookie = `__Host-wh=${await tokenFor(env, NOW)}`;
   const res = await handle(new Request('https://wh.example.workers.dev/api/ads', { headers: { cookie } }), env, { html: '', now: NOW });
   assert.strictEqual(res.status, 200);
   assert.ok((await res.json()).ads.every((a) => a.best === null));
@@ -271,7 +271,7 @@ test('bestsellers.mjs + board: Trustpilot per store every 3 days; the card gets 
   assert.ok(s3.calls.some((u) => /widget\.trustpilot/.test(u)), 'after 3 days: checked again');
 
   const later = NOW + 3 * DAY;
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, later)}`;
+  const cookie = `__Host-wh=${await tokenFor(env, later)}`;
   const ads = (await (await handle(new Request('https://wh.example.workers.dev/api/ads', { headers: { cookie } }), env, { html: '', now: later })).json()).ads;
   const trust = (id) => ads.find((a) => a.id === id).trust;
   assert.deepStrictEqual(trust('9001'), { status: 'widget', score: 4.2, reviews: 1252, profile: 'shop1.test' });
@@ -331,7 +331,7 @@ test('bestsellers.mjs: one token a run, a new one once when Trustpilot stops tak
   assert.ok(!again.calls.some((u) => /trustpilot\.com\/review\/shop1\.test/.test(u)), 'a Trustpilot answer holds its 3 days');
 
   // The board: the score from the page; "not on Trustpilot"
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, NOW)}`;
+  const cookie = `__Host-wh=${await tokenFor(env, NOW)}`;
   const ads = (await (await handle(new Request('https://wh.example.workers.dev/api/ads', { headers: { cookie } }), env, { html: '', now: NOW })).json()).ads;
   const trust = (id) => ads.find((a) => a.id === id).trust;
   assert.deepStrictEqual(trust('9001'), { status: 'page', score: 4.6, reviews: 980, profile: 'shop1.test' });

@@ -26,6 +26,6 @@ migrations_dir = "migrations"
 binding = "BROWSER"
 
 # Secrets (not in this file): BOARD_PIN and META_TOKEN, set by the deploy workflow from the GitHub secrets.
-# Optional: BOARD_SECRET (32+ random characters), the cookie's key next to the PIN; set it once with
-# `npx wrangler secret put BOARD_SECRET`. Without it the cookie is keyed by the PIN alone (a copied cookie gives the PIN
-# away offline). Setting or changing it logs every phone out once.
+# Optional: BOARD_SECRET (32+ random characters), the cookie's key next to the PIN, set with
+# `npx wrangler secret put BOARD_SECRET`. Without it the board makes a random key at the first login and keeps it in D1
+# (state 'cookie_key'). Setting or changing it logs every phone out.

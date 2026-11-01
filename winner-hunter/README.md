@@ -62,12 +62,12 @@ Add these 4 secrets in GitHub: **Settings → Secrets and variables → Actions 
 | `META_TOKEN` | Meta access token for the Ad Library API. Optional extra: `META_TOKEN_2`, `META_TOKEN_3` (other Meta apps, used when one hits its hourly limit). |
 | `CF_API_TOKEN` | Cloudflare API token. Make it at dash.cloudflare.com → My Profile → API Tokens → Create Token → Custom token, with **Account → D1 → Edit** and **Account → Workers Scripts → Edit**. |
 | `CF_ACCOUNT_ID` | Your Cloudflare account ID (Cloudflare dashboard → Workers & Pages, right side). |
-| `BOARD_PIN` | The PIN for the board. Use 6+ digits. 10 tries per address (IPv6: per /64) per 15 minutes. |
+| `BOARD_PIN` | The PIN for the board. Use 6+ digits. 10 tries per address (IPv6: per /64) and 30 per network (IPv6 /48, IPv4 /24) per 15 minutes. |
 
-Optional, on the Worker itself (not a GitHub secret): `BOARD_SECRET`, 32+ random characters
-(`cd winner-hunter/worker && npx wrangler secret put BOARD_SECRET`). The login cookie is then keyed by it and the PIN, so
-a copied cookie no longer gives the PIN away; changing it logs every phone out. Without it the cookie is keyed by the PIN
-alone, as before.
+The login cookie is keyed by the PIN and a random key the board makes at the first login and keeps in D1 (`state` row
+`cookie_key`): no one can make a cookie to try PINs, and a copied cookie does not give the PIN away. To log every phone
+out: change `BOARD_PIN`, or delete that row. Optional: a Worker secret `BOARD_SECRET` (32+ random characters,
+`cd winner-hunter/worker && npx wrangler secret put BOARD_SECRET`) takes the place of the key in D1.
 
 Then, in **Actions**:
 

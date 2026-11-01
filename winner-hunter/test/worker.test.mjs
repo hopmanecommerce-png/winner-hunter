@@ -4,7 +4,7 @@ import { TRAITS, AD_TRAITS, CHOICES, AD_CHOICES } from '../worker/src/jev-questi
 import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
-import { handle, makeToken, csvCell, toCsv, boardAlert, PREFETCH_SQL, tasteOf, fitOf, fitWhy, riskOf, ipKey, products } from '../worker/src/app.mjs';
+import { handle, makeToken, tokenFor, cookieKey, csvCell, toCsv, boardAlert, PREFETCH_SQL, tasteOf, fitOf, fitWhy, riskOf, ipKey, netKey, products } from '../worker/src/app.mjs';
 import { landingUrl, cleanAd } from '../worker/src/adview.mjs';
 import { seededEnv, NOW } from './helpers/seed.mjs';
 
@@ -14,7 +14,7 @@ const req = (path, init = {}) => new Request(ORIGIN + path, init);
 const call = (env, path, init, now = NOW) => handle(req(path, init), env, { html: HTML, now });
 
 async function loggedIn(env) {
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, NOW)}`;
+  const cookie = `__Host-wh=${await tokenFor(env, NOW)}`;
   return {
     get: (path, now) => call(env, path, { headers: { cookie } }, now),
     post: (path, body, headers = {}) => call(env, path, { method: 'POST', headers: Object.assign({ cookie, 'content-type': 'application/json', origin: ORIGIN }, headers), body: typeof body === 'string' ? body : JSON.stringify(body) }),
@@ -72,12 +72,13 @@ test('the cookie is required and checked: missing, forged, expired, other PIN', 
   assert.strictEqual((await call(env, '/export.csv')).status, 401);
   assert.strictEqual((await call(env, '/api/hide', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"ad_id":"9000","status":"seen"}' })).status, 401);
   const exp = Math.floor(NOW / 1000) + 1000;
-  for (const cookie of [`__Host-wh=${exp}.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`, `__Host-wh=${await makeToken('111111', NOW)}`, 'wh=' + (await makeToken('482913', NOW))]) {
+  const key = await cookieKey(env, NOW, true);
+  for (const cookie of [`__Host-wh=${exp}.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`, `__Host-wh=${await makeToken('111111', NOW, key)}`, 'wh=' + (await makeToken('482913', NOW, key)), `__Host-wh=${await makeToken('482913', NOW)}`]) {
     assert.strictEqual((await call(env, '/api/ads', { headers: { cookie } })).status, 401, cookie);
   }
-  const old = `__Host-wh=${await makeToken('482913', NOW - 91 * 864e5)}`;
+  const old = `__Host-wh=${await makeToken('482913', NOW - 91 * 864e5, key)}`;
   assert.strictEqual((await call(env, '/api/ads', { headers: { cookie: old } })).status, 401, 'expired after 90 days');
-  const ok = `__Host-wh=${await makeToken('482913', NOW - 89 * 864e5)}`;
+  const ok = `__Host-wh=${await makeToken('482913', NOW - 89 * 864e5, key)}`;
   assert.strictEqual((await call(env, '/api/ads', { headers: { cookie: ok } })).status, 200);
 });
 
@@ -111,6 +112,17 @@ test('PIN lockout: an IPv6 address counts by its /64, so a phone cannot hop to a
   assert.strictEqual((await login(env, '482913', '2001:db8:1:3::1')).status, 303, 'the next /64 is someone else');
 });
 
+test('PIN lockout: 30 tries per network too (IPv6 /48, IPv4 /24), so a free /48 of 65,536 /64s is no way around it', async () => {
+  assert.deepStrictEqual(['2001:db8:1:2::1', '2001:db8::7', '1.2.3.4', '::ffff:1.2.3.4', ''].map(netKey), ['2001:db8:1::/48', '2001:db8:0::/48', '1.2.3.0/24', '1.2.3.0/24', 'unknown/net']);
+  const env = await seededEnv();
+  for (let i = 0; i < 30; i++) assert.strictEqual((await login(env, '1' + i, `2001:db8:1:${i.toString(16)}::1`)).status, 401, `a new /64 each time: ${i}`);
+  assert.strictEqual((await login(env, '482913', '2001:db8:1:ff::1')).status, 429, 'a 31st /64 in the same /48');
+  assert.strictEqual((await login(env, '482913', '2001:db8:2::1')).status, 303, 'another /48');
+  for (let i = 1; i <= 30; i++) assert.strictEqual((await login(env, '1' + i, `9.8.7.${i}`)).status, 401);
+  assert.strictEqual((await login(env, '482913', '9.8.7.200')).status, 429, 'a 31st address in the same /24');
+  assert.strictEqual((await login(env, '482913', '9.8.6.1')).status, 303);
+});
+
 test('PIN lockout fails closed: a try that cannot be counted is not compared, not even the right PIN', async () => {
   const env = await seededEnv();
   const prepare = env.DB.prepare;
@@ -137,28 +149,41 @@ test('PIN lockout stays cheap: a wrong PIN reads no table, old windows are remov
     const plan = env.db.prepare('EXPLAIN QUERY PLAN ' + l.sql).all(...l.args).map((x) => x.detail).join('; ');
     assert.doesNotMatch(plan, /SCAN/, `${l.sql}: ${plan}`);
   }
-  assert.strictEqual(env.db.prepare('SELECT COUNT(*) AS n FROM pin_tries').get().n, 151, 'the 150 windows that are over are gone; the 150 open ones and this one stay');
+  assert.strictEqual(env.db.prepare('SELECT COUNT(*) AS n FROM pin_tries').get().n, 152, 'the 150 windows that are over are gone; the 150 open ones and this address and network stay');
   assert.strictEqual((await login(env, '482913')).status, 303);
   assert.strictEqual(env.db.prepare("SELECT COUNT(*) AS n FROM pin_tries WHERE ip = '1.2.3.4'").get().n, 0, 'the right PIN clears its own tries');
 });
 
-test('the cookie: BOARD_SECRET keys it next to the PIN; without it the PIN-only cookies keep working; no cookie lives longer than 90 days', async () => {
+test('the cookie is keyed with a server key (BOARD_SECRET, else a random key the first login keeps in D1), never with the PIN alone', async () => {
   const env = await seededEnv();
-  const ads = (cookie, e = env) => call(e, '/api/ads', { headers: { cookie: '__Host-wh=' + cookie } });
-  // No BOARD_SECRET (as deployed today): the cookies phones have still open the board.
-  assert.strictEqual((await ads(await makeToken('482913', NOW))).status, 200);
-  // A cookie made with the PIN alone can carry any expiry: one valid for longer than the board gives is refused.
-  assert.strictEqual((await ads(await makeToken('482913', NOW + 365 * 864e5))).status, 401);
-  // With BOARD_SECRET: the login gives a cookie keyed by it; a PIN-only cookie (or one under another secret) is refused.
+  const ads = (cookie, e = env, now = NOW) => call(e, '/api/ads', { headers: { cookie: '__Host-wh=' + cookie } }, now);
+  const cookieOf = (res) => res.headers.get('set-cookie').match(/^__Host-wh=([^;]+)/)[1];
+  // Anyone can make the PIN-only cookie for a PIN guess. It never opens the board, so the login's limit cannot be gone
+  // around: locked out at /login, 100 guesses by cookie (the right PIN among them) get nowhere.
+  for (let i = 0; i < 10; i++) await login(env, '9' + i);
+  assert.strictEqual((await login(env, '482913')).status, 429);
+  for (let p = 482863; p < 482963; p++) assert.strictEqual((await ads(await makeToken(String(p), NOW))).status, 401, String(p));
+  // The first login makes the key, once; its cookie opens the board; the next login uses the same key.
+  assert.strictEqual(env.db.prepare("SELECT COUNT(*) AS n FROM state WHERE key = 'cookie_key'").get().n, 0, 'no key before the first login');
+  const first = cookieOf(await login(env, '482913', '5.5.5.5'));
+  const key = env.db.prepare("SELECT value FROM state WHERE key = 'cookie_key'").get().value;
+  assert.ok(key.length >= 40);
+  assert.strictEqual(first, await makeToken('482913', NOW, key));
+  assert.strictEqual((await ads(first)).status, 200);
+  assert.strictEqual(cookieOf(await login(env, '482913', '6.6.6.6')), first, 'the next login: the same key');
+  // No cookie lives longer than the 90 days the board gives, also with the key.
+  assert.strictEqual((await ads(await makeToken('482913', NOW + 365 * 864e5, key))).status, 401);
+  // A new PIN logs every phone out, and so does deleting the key (a key read is kept 5 minutes).
+  assert.strictEqual((await ads(first, Object.assign({}, env, { BOARD_PIN: '111111' }))).status, 401);
+  env.db.prepare("DELETE FROM state WHERE key = 'cookie_key'").run();
+  assert.strictEqual((await ads(first, env, NOW + 6 * 60000)).status, 401, 'key gone: logged out');
+  // BOARD_SECRET (a Worker secret) takes the place of the key in D1; a new one logs every phone out.
   const sec = Object.assign({}, env, { BOARD_SECRET: 's3cret-' + 'x'.repeat(32) });
-  const res = await login(sec, '482913', '5.5.5.5');
-  assert.strictEqual(res.status, 303);
-  const fromLogin = res.headers.get('set-cookie').match(/^__Host-wh=([^;]+)/)[1];
-  assert.strictEqual(fromLogin, await makeToken('482913', NOW, sec.BOARD_SECRET));
-  assert.strictEqual((await ads(fromLogin, sec)).status, 200);
-  assert.strictEqual((await ads(await makeToken('482913', NOW), sec)).status, 401, 'PIN-only cookie: refused once the secret is set');
-  assert.strictEqual((await ads(fromLogin, Object.assign({}, sec, { BOARD_SECRET: 'another-' + 'y'.repeat(32) }))).status, 401, 'a new secret takes every cookie back');
-  assert.strictEqual((await ads(fromLogin, Object.assign({}, sec, { BOARD_PIN: '111111' }))).status, 401, 'so does a new PIN');
+  const viaSecret = cookieOf(await login(sec, '482913', '7.7.7.7'));
+  assert.strictEqual(viaSecret, await makeToken('482913', NOW, sec.BOARD_SECRET));
+  assert.strictEqual((await ads(viaSecret, sec)).status, 200);
+  assert.strictEqual((await ads(viaSecret, Object.assign({}, sec, { BOARD_SECRET: 'another-' + 'y'.repeat(32) }))).status, 401);
+  assert.strictEqual(env.db.prepare("SELECT COUNT(*) AS n FROM state WHERE key = 'cookie_key'").get().n, 0, 'with BOARD_SECRET no key is kept in D1');
 });
 
 test('/api/ads: All is the default view (no Top 20): ads that pass the rules, one per product, by reach per day; no score', async () => {
@@ -699,8 +724,7 @@ test('a database without tables gives a clear 503', async () => {
   const { d1Binding } = await import('./helpers/sqlite-d1.mjs');
   const { DatabaseSync } = await import('node:sqlite');
   const env = { DB: d1Binding(new DatabaseSync(':memory:')), BOARD_PIN: '482913' };
-  const s = await loggedIn(env);
-  const res = await s.get('/api/ads');
+  const res = await call(env, '/api/ads', { headers: { cookie: `__Host-wh=${await makeToken('482913', NOW, 'any key')}` } });
   assert.strictEqual(res.status, 503);
   assert.match((await res.json()).error, /Database not ready/);
 });
@@ -996,6 +1020,37 @@ test('two old decisions on what is now one product: the latest one counts', asyn
   env.db.prepare("UPDATE hidden SET at = '2026-10-14T00:00:00.000Z' WHERE ad_id = '9333'").run();
   assert.deepStrictEqual((await (await s.get('/api/ads?view=all&hidden=1')).json()).ads.map((a) => [a.id, a.hidden]), [['9003', 'rejected']]);
   assert.deepStrictEqual((await (await s.get('/api/ads?view=made')).json()).ads, []);
+});
+
+test('learning trains the niche the card showed: one product page, two titles Jev put in two categories', async () => {
+  const env = await seededEnv();
+  // 9003's title says Home to Jev; the sale ad of the same roller (more reach a day, so it is the card) says Pets
+  copyOf(env, '9333', { product_title: 'Pet Hair Remover Roller - 50% OFF TODAY', advertiser_page_id: '999', reach_eu: 200000 });
+  const check = env.db.prepare("INSERT INTO world_checks (product_key, people, animals, gymwear, physical, category, input, checked_at, version, main, sub) VALUES (?, 0.01, 0.01, 0.01, 0.99, ?, 'photo', 'x', 2, ?, '')");
+  check.run('eu|503|pet hair remover roller', 'Home', 'Home');
+  check.run('eu|999|pet hair remover roller - 50% off today', 'Pets', 'Pets');
+  const s = await loggedIn(env);
+  assert.strictEqual((await (await s.get('/api/ads?view=inbox&limit=100')).json()).ads.find((a) => a.id === '9333').jev.main, 'Pets');
+  await s.post('/api/hide', { ad_id: '9333', status: 'seen' });
+  assert.deepStrictEqual((await (await s.get('/api/learned')).json()).niches.map((x) => [x.niche, x.good, x.bad]), [['Pets', 1, 0]]);
+});
+
+test('notes: two products that are one product page now keep both notes; saving replaces only the one in the box', async () => {
+  const env = await seededEnv();
+  copyOf(env, '9333', { product_title: 'Pet Hair Remover Roller - 50% OFF TODAY', advertiser_page_id: '999' });
+  const put = env.db.prepare("INSERT INTO feedback (ad_id, action, reasons, note, store, title, at) VALUES (?, 'note', '[]', ?, 'https://shop3.test/', ?, ?)");
+  put.run('9003', 'Supplier on 1688 at 0.80, MOQ 50', 'Pet Hair Remover Roller', '2026-10-10T00:00:00.000Z');
+  put.run('9333', 'Same roller as the sale ad', 'Pet Hair Remover Roller - 50% OFF TODAY', '2026-10-12T00:00:00.000Z');
+  const s = await loggedIn(env);
+  const got = await (await s.get('/api/note?ad_id=9003')).json();
+  assert.strictEqual(got.note, 'Same roller as the sale ad', 'the newest in the box');
+  assert.deepStrictEqual(got.others.map((n) => n.note), ['Supplier on 1688 at 0.80, MOQ 50'], 'the older one below it, not hidden');
+  const notes = () => env.db.prepare("SELECT ad_id, note FROM feedback WHERE action = 'note' ORDER BY id").all().map((r) => [r.ad_id, r.note]);
+  await s.post('/api/note', { ad_id: '9003', note: 'Same roller, 0.70 at another supplier' });
+  assert.deepStrictEqual(notes(), [['9003', 'Supplier on 1688 at 0.80, MOQ 50'], ['9003', 'Same roller, 0.70 at another supplier']]);
+  assert.strictEqual((await (await s.get('/api/note?ad_id=9333')).json()).note, 'Same roller, 0.70 at another supplier');
+  await s.post('/api/note', { ad_id: '9333', note: '' });
+  assert.deepStrictEqual(notes(), [['9003', 'Supplier on 1688 at 0.80, MOQ 50']], 'empty takes out the note in the box only');
 });
 
 test('D1 reads: the winners are read once, again only after a run saved (or a new ad came in)', async () => {

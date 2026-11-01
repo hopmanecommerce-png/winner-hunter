@@ -23,6 +23,7 @@ export const MIN_AGE_DAYS = 7; // measured when last seen, and today
 export const MAX_AGE_DAYS = 42; // ad age today: the whole days since it started (ad_start_date)
 export const MIN_REACH_PER_DAY = 500;
 const PIN_TRIES = 10; // PIN tries per IP (IPv6: per /64) per 15 minutes, counted before the PIN is compared
+const NET_TRIES = 30; // and per network around it (IPv6: /48, IPv4: /24)
 const PIN_WINDOW = 15 * 60000;
 const STALE_HOURS = 36; // the EU hunt only runs by hand: a run older than this no longer shows a banner, unless it hangs
 const WORLD_STALE_HOURS = 24; // the hunt outside the EU runs every 6 hours
@@ -443,11 +444,15 @@ async function board(env, now) {
   return Object.assign(list, { taste: tasteOf(withFacts(f.results, list.byAd)) });
 }
 
-/** Decisions with what the board knows of their product now: Jev's category (its niche) and, for older rows, its currency. */
+/**
+ * Decisions with what the board knows of their product now: Jev's category (its niche: the answer its card shows, so
+ * learning trains the category you saw) and, for older rows, its currency. Call after products(): it sets the cards' answers.
+ */
 function withFacts(fb, byAd) {
   return fb.map((f) => {
     const g = byAd.get(f.ad_id);
-    return Object.assign({}, f, { niche: (g && g.jev && g.jev.main) || '', currency: f.currency || (g && g.any && g.any.currency) || '' });
+    const shown = g && (g.best || g.any);
+    return Object.assign({}, f, { niche: (shown && shown.jev && shown.jev.main) || '', currency: f.currency || (shown && shown.currency) || '' });
   });
 }
 
@@ -733,26 +738,54 @@ function same(a, b) {
   return d === 0;
 }
 
-// The cookie: "<expiry>.<HMAC(pin + expiry)>". Its key comes from BOARD_SECRET (a long random Worker secret) and
-// BOARD_PIN: changing either logs every phone out, so a new BOARD_SECRET also takes back every cookie given out.
-// Without BOARD_SECRET the key comes from BOARD_PIN alone, as before: the cookies phones have keep working, but one
-// copied cookie is then enough to try every PIN offline. Set it once: npx wrangler secret put BOARD_SECRET (32+ random characters).
-const secretOf = (env) => String(env.BOARD_SECRET || '');
+// The cookie: "<expiry>.<HMAC(pin + expiry)>", keyed with a server key and BOARD_PIN. The server key is BOARD_SECRET when
+// that Worker secret is set, else a random key the board makes at the first login and keeps in D1 (state 'cookie_key').
+// Neither is in the code: with a key from the PIN alone (before 2026-11) anyone could make the cookie for a PIN guess
+// and try PINs on any page without the login's limit, and one copied cookie gave the PIN away offline. Those cookies no
+// longer open the board: every phone logs in once more. Changing BOARD_PIN or BOARD_SECRET, or deleting state
+// 'cookie_key', logs every phone out (a key read from D1 is kept up to 5 minutes).
+const KEY_ROW = 'cookie_key';
+const KEY_MS = 5 * 60000;
+const KEYS = new WeakMap(); // per D1 binding
+let KEPT = null; // on Cloudflare, as LAST
+/** The server key for the cookie; '' when the board has none yet. make: the first login makes it. */
+export async function cookieKey(env, now = Date.now(), make = false) {
+  if (env.BOARD_SECRET) return String(env.BOARD_SECRET);
+  const shared = typeof navigator !== 'undefined' && navigator.userAgent === 'Cloudflare-Workers';
+  const kept = KEYS.get(env.DB) || (shared ? KEPT : null);
+  if (kept && now >= kept.at && now - kept.at < KEY_MS) return kept.key;
+  const read = async () => String((await env.DB.prepare(`SELECT value FROM state WHERE key = '${KEY_ROW}'`).first('value')) || '');
+  let key = await read();
+  if (!key && make) {
+    await env.DB.prepare('INSERT OR IGNORE INTO state (key, value, updated_at) VALUES (?, ?, ?)').bind(KEY_ROW, b64url(crypto.getRandomValues(new Uint8Array(32))), new Date(now).toISOString()).run();
+    key = await read(); // two first logins at the same moment: both use the one that was saved
+  }
+  if (key) {
+    const e = { key, at: now };
+    KEYS.set(env.DB, e);
+    if (shared) KEPT = e;
+  }
+  return key;
+}
 async function sign(pin, exp, secret = '') {
   const key = await crypto.subtle.importKey('raw', await sha256(secret ? `winner-hunter-board|${secret}|${pin}` : 'winner-hunter-board|' + pin), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   return b64url(await crypto.subtle.sign('HMAC', key, enc.encode(`board|${pin}|${exp}`)));
 }
+/** A cookie value for this PIN and server key (without a key: the old PIN-only cookie, which no longer opens the board). */
 export async function makeToken(pin, now = Date.now(), secret = '') {
   const exp = Math.floor(now / 1000) + MAX_AGE;
   return `${exp}.${await sign(pin, exp, secret)}`;
 }
+/** The cookie POST /login gives (for tests and tools). */
+export const tokenFor = async (env, now = Date.now()) => makeToken(env.BOARD_PIN, now, await cookieKey(env, now, true));
 async function authed(req, env, now) {
   const m = (req.headers.get('cookie') || '').match(/(?:^|;\s*)__Host-wh=([0-9]+)\.([A-Za-z0-9_-]{20,100})(?:;|$)/);
   if (!m || !env.BOARD_PIN) return false;
   const exp = Number(m[1]) * 1000;
-  // Expired, or valid for longer than the board ever gives a cookie (made with a key that got out): no.
+  // Expired, or valid for longer than the board ever gives a cookie: no.
   if (exp < now || exp > now + MAX_AGE * 1000 + 5 * 60000) return false;
-  return same(m[2], await sign(env.BOARD_PIN, m[1], secretOf(env)));
+  const key = await cookieKey(env, now);
+  return !!key && same(m[2], await sign(env.BOARD_PIN, m[1], key));
 }
 
 function secure(res, { nonce = '', html = false } = {}) {
@@ -810,6 +843,13 @@ export function ipKey(ip) {
   const b = tail ? tail.split(':') : [];
   const groups = s.includes('::') ? [...a, ...Array(Math.max(0, 8 - a.length - b.length)).fill('0'), ...b] : a;
   return groups.slice(0, 4).map((g) => (parseInt(g, 16) || 0).toString(16)).join(':') + '::/64';
+}
+/** The network around it, which one person can easily hold whole (a free tunnel gives a /48): IPv6 its /48, IPv4 its /24. */
+export function netKey(ip) {
+  const k = ipKey(ip);
+  if (k.endsWith('::/64')) return k.split(':').slice(0, 3).join(':') + '::/48';
+  const v4 = /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}$/.exec(k);
+  return v4 ? v4[1] + '.0/24' : k + '/net';
 }
 
 const stateOf = (row) => {
@@ -1003,17 +1043,20 @@ async function login(req, env, now) {
   const ct = req.headers.get('content-type') || '';
   if (!/application\/x-www-form-urlencoded|multipart\/form-data/.test(ct)) return pinPage(nonce, 'Enter your PIN.', 400);
   const ip = ipKey(req.headers.get('cf-connecting-ip'));
-  // Counted before the PIN is compared. A try that cannot be counted (D1 down, no table) is not compared: no lockout,
-  // no login. A phone with its cookie still opens the board.
+  const net = netKey(req.headers.get('cf-connecting-ip'));
+  // Counted before the PIN is compared, for the address and for its network. A try that cannot be counted (D1 down, no
+  // table) is not compared: no lockout, no login. A phone with its cookie still opens the board.
   let n = NaN;
+  let w = NaN;
   try {
-    const row = await env.DB.prepare(PIN_TRY_SQL).bind(ip, now, now - PIN_WINDOW).first();
-    n = Number(row && row.n);
+    const [a, b] = await Promise.all([ip, net].map((k) => env.DB.prepare(PIN_TRY_SQL).bind(k, now, now - PIN_WINDOW).first()));
+    n = Number(a && a.n);
+    w = Number(b && b.n);
   } catch (e) {
     console.error(e);
   }
-  if (!(n >= 1)) return pinPage(nonce, 'The board cannot check PINs right now. Try again in a minute.', 503);
-  if (n > PIN_TRIES) return pinPage(nonce, 'Too many wrong PINs. Try again in 15 minutes.', 429);
+  if (!(n >= 1 && w >= 1)) return pinPage(nonce, 'The board cannot check PINs right now. Try again in a minute.', 503);
+  if (n > PIN_TRIES || w > NET_TRIES) return pinPage(nonce, 'Too many wrong PINs. Try again in 15 minutes.', 429);
   const form = await req.formData().catch(() => null);
   const pin = String((form && form.get('pin')) || '').slice(0, 64);
   // Compare hashes in constant time, so the answer time says nothing about the PIN.
@@ -1023,8 +1066,15 @@ async function login(req, env, now) {
     await env.DB.prepare('DELETE FROM pin_tries WHERE since < ?').bind(now - PIN_WINDOW).run().catch(() => {});
     return pinPage(nonce, 'Wrong PIN.', 401);
   }
-  await env.DB.prepare('DELETE FROM pin_tries WHERE ip = ?').bind(ip).run().catch(() => {});
-  return redirect('/', `${COOKIE}=${await makeToken(env.BOARD_PIN, now, secretOf(env))}; Path=/; Max-Age=${MAX_AGE}; HttpOnly; Secure; SameSite=Lax`);
+  await env.DB.prepare('DELETE FROM pin_tries WHERE ip = ?').bind(ip).run().catch(() => {}); // the network's count runs out by itself
+  let key = '';
+  try {
+    key = await cookieKey(env, now, true);
+  } catch (e) {
+    console.error(e);
+  }
+  if (!key) return pinPage(nonce, 'The board cannot sign you in right now. Try again in a minute.', 503);
+  return redirect('/', `${COOKIE}=${await makeToken(env.BOARD_PIN, now, key)}; Path=/; Max-Age=${MAX_AGE}; HttpOnly; Secure; SameSite=Lax`);
 }
 
 async function ads(url, env, now, viewer) {
@@ -1178,10 +1228,18 @@ async function note(req, url, env, now) {
   if (!me) return json({ error: 'Unknown ad' }, 404);
   const ids = rows.filter((w) => w.gk === me.gk).map((w) => w.ad_id); // every ad of this product
   if (post) {
+    // The box holds the product's newest note: that one (and any saved after it) is replaced. Two products that are one
+    // product page now can each have an older note: those stay, and show below the box.
+    let newest = 0;
+    for (let i = 0; i < ids.length; i += 90) {
+      const part = ids.slice(i, i + 90);
+      const row = await env.DB.prepare(`SELECT MAX(id) AS id FROM feedback WHERE action = 'note' AND ad_id IN (${part.map(() => '?').join(', ')})`).bind(...part).first();
+      newest = Math.max(newest, Number(row && row.id) || 0);
+    }
     const steps = [];
     for (let i = 0; i < ids.length; i += 90) {
       const part = ids.slice(i, i + 90);
-      steps.push(env.DB.prepare(`DELETE FROM feedback WHERE action = 'note' AND ad_id IN (${part.map(() => '?').join(', ')})`).bind(...part));
+      steps.push(env.DB.prepare(`DELETE FROM feedback WHERE action = 'note' AND id >= ? AND ad_id IN (${part.map(() => '?').join(', ')})`).bind(newest, ...part));
     }
     if (text) {
       steps.push(env.DB.prepare("INSERT INTO feedback (ad_id, action, reasons, note, keyword, store, advertiser, title, price, currency, at) VALUES (?, 'note', '[]', ?, ?, ?, ?, ?, ?, ?, ?)")
@@ -1194,7 +1252,8 @@ async function note(req, url, env, now) {
   const mine = new Set(ids);
   const own = results.find((f) => f.action === 'note' && mine.has(f.ad_id));
   const shop = storeOf(me.store_url);
-  const others = results.filter((f) => !mine.has(f.ad_id) && ((shop && storeOf(f.store) === shop) || (me.advertiser && f.advertiser === me.advertiser)))
+  const earlier = results.filter((f) => f !== own && f.action === 'note' && mine.has(f.ad_id)); // older notes on this product
+  const others = earlier.concat(results.filter((f) => !mine.has(f.ad_id) && ((shop && storeOf(f.store) === shop) || (me.advertiser && f.advertiser === me.advertiser))))
     .slice(0, 5).map((f) => ({ title: f.title || '', note: f.note, at: f.at }));
   return json({ note: own ? own.note : '', others });
 }
