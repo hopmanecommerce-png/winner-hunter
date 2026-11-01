@@ -1,0 +1,77 @@
+# Lasso stores (winner-hunter/lasso.mjs, docs/research/lasso-stores.md): the Shopify stores that use Lasso's hosted
+# checkout, found with urlscan.io's free search and checked live (script, checkout, best sellers). A discovery source.
+# Off by default: run it by hand (Actions → Lasso stores → Run workflow), or set the repository variable LASSO_STORES = on
+# for a weekly run (Mondays). With D1 secrets it writes the table lasso_stores; with ads = on (or the variable LASSO_ADS = on)
+# it also puts each store's active ads outside the EU into world_ads, which the next World Hunter run turns into products
+# in the 🌍 Inbox under its usual rules.
+# The list is this run's artifact "lasso-stores" (14 days). This repository is public: any signed-in GitHub user can
+# download an artifact, so the summary only has counts.
+# Secrets: CF_API_TOKEN (CF_D1_TOKEN, a D1-only token, is used instead when it is there) and CF_ACCOUNT_ID, to save;
+# without them the run only makes the artifact. Optional: URLSCAN_API_KEY (a free urlscan.io account: more searches a day).
+name: Lasso stores
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Days back on urlscan.io (at most 30 without an urlscan key)'
+        required: false
+        default: '30'
+      ads:
+        description: 'Also put their ads outside the EU into the hunt: on / off'
+        required: false
+        default: 'off'
+      extra:
+        description: 'More domains to check (a.com b.com)'
+        required: false
+        default: ''
+  schedule:
+    - cron: '41 4 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lasso-stores
+  cancel-in-progress: false
+
+jobs:
+  lasso:
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.LASSO_STORES == 'on' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CF_API_TOKEN: ${{ secrets.CF_D1_TOKEN || secrets.CF_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID || '8934aca9-51d3-4f87-9c62-e897843149a1' }}
+      URLSCAN_API_KEY: ${{ secrets.URLSCAN_API_KEY }}
+      LASSO_DAYS: ${{ inputs.days || '30' }}
+      LASSO_ADS: ${{ inputs.ads || vars.LASSO_ADS || 'off' }}
+      LASSO_EXTRA: ${{ inputs.extra }}
+      LASSO_OUT: lasso-out
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+
+      - name: Database tables
+        if: ${{ env.CF_API_TOKEN != '' && env.CF_ACCOUNT_ID != '' }}
+        run: node winner-hunter/migrate.mjs
+
+      # The Ad Library page only answers a real browser: the runner's Google Chrome (only for ads = on).
+      - name: Install Playwright
+        if: ${{ env.LASSO_ADS == 'on' }}
+        working-directory: winner-hunter
+        run: npm install --no-save --no-package-lock playwright-core@1.56.1
+
+      - name: Lasso stores
+        run: node winner-hunter/lasso.mjs
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: ${{ !cancelled() }}
+        with:
+          name: lasso-stores
+          path: lasso-out/
+          retention-days: 14
+          if-no-files-found: ignore
