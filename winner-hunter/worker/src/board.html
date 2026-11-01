@@ -8,6 +8,7 @@
 <meta name="color-scheme" content="dark">
 <title>Winner Hunter</title>
 <link rel="stylesheet" nonce="__NONCE__" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<script nonce="__NONCE__" src="/launch.js" id="lnkit" defer></script>
 <style nonce="__NONCE__">
   :root {
     color-scheme: dark;
@@ -579,6 +580,106 @@
   .ttads a:hover { text-decoration: underline; }
   #ttgrid .t a { color: inherit; text-decoration: none; }
   #ttcat { max-width: 136px; }
+  /* 🚀 Launch (launch.mjs): an approved product's launch card, decision and checklist. The hunt's lists step aside. */
+  body:not(.lnv) #lnbox, .tt #lnbox { display: none !important; }
+  .lnv .wrap > .tools, .lnv #csv, .lnv #grid, .lnv #loadmore { display: none !important; }
+  .lnbox { max-width: 760px; margin: 16px auto 0; display: grid; gap: 16px; min-width: 0; }
+  .lnhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+  .lnhead h2 { margin: 0; font-size: 26px; font-weight: 600; }
+  .lnhead p { flex: 1 1 100%; margin: 0; color: var(--muted); font-size: 14px; }
+  .lnsaved { margin-left: auto; min-height: 1em; font: 500 12px var(--sans); color: var(--faint); }
+  .lncard { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+  .lncard.go { border-color: rgba(76, 195, 138, .5); }
+  .lncard.no { border-color: rgba(229, 72, 77, .45); }
+  .lntop { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--muted); }
+  .lntop > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .lnpin { flex: none; height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line2); background: var(--card2); color: var(--ink); font: 500 13px var(--sans); cursor: pointer; white-space: nowrap; }
+  .lnpin[aria-pressed="true"] { border-color: var(--acc); color: var(--acc); background: rgba(217, 164, 65, .1); }
+  .lnpin:disabled { opacity: .45; cursor: default; }
+  .lnprod { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; align-items: start; }
+  .lnth { width: 40px; height: 40px; border-radius: 8px; overflow: hidden; background: var(--card2); display: grid; place-items: center; flex: none; }
+  .lnth.big { width: 64px; height: 64px; }
+  .lnth img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .lnth i { font-style: normal; color: var(--muted); font-weight: 600; }
+  .lnpt { min-width: 0; display: grid; gap: 4px; }
+  .lnpt h3 { margin: 0; font-size: 17px; font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .lnpt small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .lnlinks { display: flex; flex-wrap: wrap; gap: 0 16px; font-size: 13px; }
+  .lnlinks a { color: var(--ink); font-weight: 500; text-decoration: none; padding: 8px 0; }
+  .lnlinks a:hover { text-decoration: underline; }
+  #lndec { display: grid; gap: 12px; min-width: 0; }
+  .lnnums .m b { font-size: 16px; }
+  .lnnums .m.good b { color: var(--win); }
+  .lnnums .m.low b { color: var(--bad); }
+  .lnflags { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .lnflags li { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(217, 164, 65, .4); font-size: 13px; line-height: 1.3; overflow-wrap: anywhere; }
+  .lnflags li::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--acc); flex: none; }
+  .lnflags li.red { border-color: rgba(229, 72, 77, .5); }
+  .lnflags li.red::before { background: var(--bad); }
+  .lnflags li.green { border-color: rgba(76, 195, 138, .45); }
+  .lnflags li.green::before { background: var(--win); }
+  .lnprog { display: grid; gap: 8px; font-size: 12px; color: var(--muted); }
+  .lnmeter { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .lnmeter i { height: 6px; border-radius: 3px; background: var(--line2); }
+  .lnmeter i.on { background: var(--win); }
+  .lndec button[aria-pressed="true"] { border-width: 2px; }
+  .lndec .ok[aria-pressed="true"] { background: rgba(76, 195, 138, .26); border-color: var(--win); }
+  .lndec .no[aria-pressed="true"] { background: rgba(229, 72, 77, .16); border-color: var(--bad); }
+  .lnsteps { display: grid; gap: 8px; }
+  .lnstep { background: var(--card); border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+  .lnstep summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 16px; }
+  .lnstep summary::-webkit-details-marker { display: none; }
+  .lnstep summary::after { content: ''; width: 6px; height: 6px; border: solid var(--faint); border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); margin: 0 4px 4px 0; flex: none; }
+  .lnstep[open] summary::after { transform: rotate(225deg); margin-bottom: 0; }
+  .lnn { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line2); display: grid; place-items: center; font: 500 12px var(--num); flex: none; }
+  .lnstep.done .lnn { background: rgba(76, 195, 138, .16); border-color: rgba(76, 195, 138, .5); color: var(--win); }
+  .lnst { flex: 1; min-width: 0; font-size: 15px; font-weight: 500; }
+  .lnstep summary small { color: var(--muted); font: 400 12px var(--num); }
+  .lnbody { padding: 0 16px 16px; display: grid; gap: 12px; min-width: 0; }
+  .lnhint { margin: 0; color: var(--muted); font-size: 13px; }
+  .lnfields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-width: 0; }
+  .lnf { display: grid; gap: 4px; min-width: 0; font-size: 12px; color: var(--muted); }
+  .lnf.wide, .lnfields .lncheck { grid-column: 1 / -1; }
+  .lnf input, .lnf textarea, .lnnote textarea { width: 100%; min-width: 0; height: 44px; border-radius: 10px; border: 1px solid var(--line2); background: var(--card2); color: var(--ink); padding: 0 12px; font: inherit; font-size: 16px; }
+  .lnf textarea, .lnnote textarea { height: auto; min-height: 64px; padding: 10px 12px; resize: vertical; line-height: 1.4; }
+  .lnf input:focus, .lnf textarea:focus, .lnnote textarea:focus { outline: none; border-color: var(--acc); }
+  .lnf [aria-invalid="true"] { border-color: var(--bad); }
+  .lnf .selw, .lnf select.chip { width: 100%; }
+  .lnf select.chip { height: 44px; font-size: 16px; font-weight: 400; }
+  .lnnote { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+  .lncheck { display: flex; align-items: center; gap: 12px; min-height: 44px; font-size: 15px; color: var(--ink); cursor: pointer; }
+  .lncheck input { width: 22px; height: 22px; margin: 0; accent-color: var(--win); flex: none; }
+  .lndone { border-top: 1px solid var(--line); padding-top: 4px; font-weight: 500; }
+  .lnout { margin: 0; display: grid; border-top: 1px solid var(--line); }
+  .lnout div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .lnout dt { color: var(--muted); }
+  .lnout dd { margin: 0; text-align: right; font: 500 14px var(--sans); }
+  .lnmuted { margin: 0; color: var(--muted); font-size: 13px; }
+  .lnsug { display: grid; gap: 8px; }
+  .lnsug p { margin: 0; display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--muted); }
+  .lnsug p span { flex: 1; min-width: 0; }
+  .lnuse, .lnremove, .lnstart { flex: none; height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line2); background: var(--card2); color: var(--ink); font: 500 13px var(--sans); cursor: pointer; }
+  .lnremove { justify-self: start; background: none; color: var(--muted); }
+  .lnstart { height: 44px; justify-self: stretch; font-size: 14px; }
+  .lnother, .lnpick { display: grid; gap: 8px; min-width: 0; }
+  .lnother h3, .lnpick h3 { margin: 8px 0 0; font-size: 14px; font-weight: 500; color: var(--muted); }
+  .lnrow { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; min-height: 56px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); text-align: left; font: inherit; }
+  button.lnrow { cursor: pointer; }
+  button.lnrow:hover { border-color: var(--line2); }
+  .lnrt { min-width: 0; display: grid; gap: 2px; }
+  .lnrt b { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lnrt small { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .lnrs { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .lnrs.go { color: var(--win); }
+  .lnrs.no { color: var(--bad); }
+  .lnbtn { height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid rgba(76, 195, 138, .4); background: rgba(76, 195, 138, .12); color: var(--win); font: 500 14px var(--sans); cursor: pointer; }
+  .lnbtn:disabled { opacity: .5; cursor: default; }
+  @media (pointer: coarse) { .lnpin, .lnuse, .lnremove { min-height: 44px; } }
+  @media (min-width: 760px) {
+    .lnfields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .lnprod { grid-template-columns: 88px minmax(0, 1fr); }
+    .lnth.big { width: 88px; height: 88px; }
+  }
 </style>
 </head>
 <body>
@@ -618,6 +719,7 @@
         <button data-view="all" aria-pressed="false">Browse <small id="nall"></small></button>
         <button data-view="made" aria-pressed="false" aria-label="Approved" title="Products you approved"><i class="ok"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i> <small id="nmade"></small></button>
         <button data-view="learned" aria-pressed="false" aria-label="What the board learned" title="What the board learned"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2z"/><path d="M22 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8z"/></svg></button>
+        <button id="lnseg" aria-pressed="false" aria-label="Launch" title="Launch an approved product: checklist and go or no-go"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5c2.9 2.4 4.4 5.8 4.4 10.1L14.6 17H9.4l-1.8-4.4c0-4.3 1.5-7.7 4.4-10.1z"/><circle cx="12" cy="9.5" r="1.7"/><path d="M7.6 12.6 5 15.8l3.2.5M16.4 12.6l2.6 3.2-3.2.5M10.6 19.8 12 22l1.4-2.2"/></svg> <small id="nlaunch"></small></button>
       </div>
       <label class="search" id="allrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg>
         <input id="q" type="search" placeholder="Search products…" aria-label="Search" maxlength="80" enterkeyhint="search"></label>
@@ -697,6 +799,7 @@
     <div class="empty" id="ttempty" hidden></div>
     <div class="loadmore" id="ttload"><button id="ttmore" hidden>Show more</button></div>
   </section>
+  <section class="lnbox" id="lnbox" aria-label="Launch" hidden></section>
 </div>
 <div class="toast" id="toast" role="status" hidden><span id="toastMsg"></span><button id="undo">Undo</button></div>
 
@@ -1593,6 +1696,7 @@ let seq = 0;
 async function load(append) {
   if (st.scope === 'tiktok') return;
   if (st.view === 'learned') { seq++; loadLearned(); return; }
+  if (st.view === 'launch') { seq++; lnView(); return; }
   const my = ++seq;
   const madeSeq = MADE_SEQ;
   if (!append) {
@@ -1917,6 +2021,354 @@ const more = () => { if (loading || $('moreBtn').hidden) return; st.offset = ADS
 $('moreBtn').addEventListener('click', more);
 // Endless scroll: the next page loads before you reach the end.
 if ('IntersectionObserver' in window) new IntersectionObserver((es) => { if (es.some((x) => x.isIntersecting)) more(); }, { rootMargin: '900px 0px' }).observe($('loadmore'));
+// ---- 🚀 Launch: from an approved product to a test campaign today. One launch card per product (launch.mjs): the
+// decision on top (margin, break-even ROAS, how long its ads run, store size, risk flags: Go or No go in ten seconds)
+// and the seven-step checklist under it. The numbers are worked out as you type by the code the server runs too
+// (/launch.js: window.LAUNCH). Each step saves on its own, one save after the other.
+const LN = { list: null, focus: '', pick: null, picking: false, open: new Set(), timers: new Map(), chain: Promise.resolve(), saving: 0 };
+const lnReady = new Promise((ok, no) => {
+  if (window.LAUNCH) { ok(); return; }
+  $('lnkit').addEventListener('load', () => (window.LAUNCH ? ok() : no(new Error('the launch code did not run'))), { once: true });
+  $('lnkit').addEventListener('error', () => no(new Error('the launch code did not load')), { once: true });
+});
+lnReady.catch(() => {}); // said when the view opens
+const LN_SRC = { eu: 'EU', world: 'Outside EU', tiktok: 'TikTok' };
+const lnEur = (v) => (v == null ? '–' : (v < 0 ? '−' : '') + money(Math.abs(v), 'EUR'));
+const lnFocus = () => (LN.list || []).find((l) => l.key === LN.focus) || null;
+const lnImg = (f) => (safe(f.img) ? `<img src="${safe(f.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<i>${esc(String(f.title || '?').slice(0, 1))}</i>`);
+const lnA = (u, t) => (safe(u) ? `<a href="${safe(u)}" target="_blank" rel="noopener noreferrer">${esc(t)} ↗</a>` : '');
+const lnFill = (s, cur) => `${s.items.filter((f) => cur.v && cur.v[f.k] !== undefined).length}/${s.items.length}`;
+const lnSaved = (t) => { const el = $('lnsaved'); if (el) el.textContent = t; };
+const lnCount = () => { $('nlaunch').textContent = (LN.list || []).filter((l) => l.decision !== 'no').length || ''; };
+
+async function lnLoad() {
+  await LN.chain; // saves on their way land first
+  const res = await fetch('/api/launch', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+  if (res.status === 401) { location.reload(); return; }
+  const j = await res.json();
+  if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+  LN.list = j.launches;
+  if (!lnFocus()) LN.focus = LN.list.length ? LN.list[0].key : ''; // the launch pin comes first
+  if (!LN.list.length) LN.picking = true;
+  lnCount();
+}
+// The view, as 🧠: the hunt's controls and cards step aside (body.lnv), the launch cards come in.
+async function lnView() {
+  for (const b of document.querySelectorAll('[data-view]')) b.setAttribute('aria-pressed', 'false');
+  $('lnseg').setAttribute('aria-pressed', 'true');
+  document.body.classList.remove('inbox');
+  document.body.classList.add('lnv');
+  $('grid').classList.remove('one');
+  $('grid').innerHTML = '';
+  for (const id of ['allrow', 'allrow2', 'count', 'empty', 'moreBtn', 'ibox', 'dock', 'zero', 'pnote', 'learn']) $(id).hidden = true;
+  radar();
+  $('lnbox').hidden = false;
+  const shown = LN.list && window.LAUNCH ? JSON.stringify(LN.list) : '';
+  if (shown) lnRender();
+  else $('lnbox').innerHTML = '<div class="sload"><i class="spin"></i>Loading…</div>';
+  try {
+    await lnReady;
+    await lnLoad();
+    if (st.view !== 'launch') return;
+    if (JSON.stringify(LN.list) !== shown) lnRender(); // unchanged: no new render, so a field you tapped keeps its keyboard
+    if (LN.picking && !LN.pick) lnPick();
+  } catch (e) {
+    if (st.view === 'launch') $('lnbox').innerHTML = `<p class="lnmuted">Could not load the launch cards: ${esc(e.message)}</p>`;
+  }
+}
+function lnLeave() {
+  if (!document.body.classList.contains('lnv')) return;
+  lnFlush();
+  document.body.classList.remove('lnv');
+  $('lnbox').hidden = true;
+  $('lnseg').setAttribute('aria-pressed', 'false');
+}
+
+function lnRender() {
+  const l = lnFocus();
+  const others = (LN.list || []).filter((x) => x !== l);
+  $('lnbox').innerHTML = `<div class="lnhead"><h2>Launch</h2><small class="lnsaved" id="lnsaved" aria-live="polite"></small>
+      <p>${l ? 'One product, from the supplier to a test campaign. Everything saves as you type.' : 'Pick an approved product: its launch card holds the checklist and the numbers for a go or a no-go.'}</p></div>
+    ${l ? lnCardHtml(l) + lnStepsHtml(l) : ''}
+    ${others.length ? `<section class="lnother" aria-label="Other launch cards"><h3>Other launch cards</h3>${others.map(lnRowHtml).join('')}</section>` : ''}
+    <section class="lnpick" aria-label="Start a launch">${lnPickHtml()}</section>`;
+}
+// The decision card: the product, its four numbers, the risk flags, the steps done, Go or No go.
+function lnCardHtml(l) {
+  const f = l.facts;
+  const price = f.price != null ? money(f.price, f.cur) + (f.source === 'tiktok' ? ' on TikTok' : ' in their shop') : '';
+  const extra = f.source === 'tiktok' ? (f.sold != null ? fmt(f.sold) + ' sold in the US' : '') : f.rpd ? fmt(f.rpd) + ' reach / day' : f.proof ? `${f.proof.n}/${f.proof.of} proof` : '';
+  const no = l.decision === 'no';
+  return `<article class="lncard${l.decision ? ' ' + l.decision : ''}" data-key="${esc(l.key)}">
+    <div class="lntop"><span>${esc((LN_SRC[f.source] || '') + (f.approved_at ? ' · approved ' + day(f.approved_at) : ''))}</span>
+      <button class="lnpin" data-ln="pin" aria-pressed="${l.pinned}"${no ? ' disabled' : ''} title="${no ? 'A no-go cannot be the launch pin' : 'The launch pin: the product you launch now, one at a time'}">${l.pinned ? '📌 Launching' : '📌 Pin'}</button></div>
+    <div class="lnprod"><span class="lnth big">${lnImg(f)}</span>
+      <div class="lnpt"><h3>${esc(l.title || f.title)}</h3><small>${esc([price, host(f.store) || f.adv, extra].filter(Boolean).join(' · '))}</small>
+        <div class="lnlinks">${f.source === 'tiktok' ? lnA(f.product, 'TikTok') + lnA(f.ad, 'Meta ads') : lnA(f.ad, 'Ad') + lnA(f.product || f.store, 'Shop')}</div></div></div>
+    <div id="lndec">${lnDecHtml(l)}</div>
+    <div class="tri lndec" role="group" aria-label="Launch decision">
+      <button class="no" data-ld="no" aria-pressed="${no}"><span class="tl">${ICON.x}No go</span></button>
+      <button class="ok" data-ld="go" aria-pressed="${l.decision === 'go'}"><span class="tl">${ICON.check}Go</span></button>
+    </div>
+  </article>`;
+}
+function lnDecHtml(l) {
+  const s = window.LAUNCH.summaryOf(l);
+  const m = s.margin;
+  const f = l.facts;
+  const cell = (cls, v, label, tip) => `<div class="m${cls ? ' ' + cls : ''}" title="${esc(tip)}"><b>${esc(v)}</b><span>${esc(label)}</span></div>`;
+  const roas = s.be_roas == null ? (m ? 'low' : '') : s.be_roas < 2 ? 'good' : s.be_roas >= 3 ? 'low' : '';
+  const flags = s.flags.length ? s.flags.map((x) => `<li class="${esc(x.level)}">${esc(x.text)}</li>`).join('') : '<li class="green">No risk flags</li>';
+  return `<div class="meta m4 lnnums" data-level="${esc(s.level)}">
+      ${cell(m ? (m.contribution > 0 ? 'good' : 'low') : '', m ? lnEur(m.contribution) : '–', m ? `margin · ${m.pct}%` : 'margin', 'What one order leaves you before ads: price − VAT − fees − COGS − shipping')}
+      ${cell(roas, s.be_roas == null ? '–' : s.be_roas + '×', 'break-even ROAS', 'Below this ROAS the ads cost more than an order leaves')}
+      ${cell('', s.ad_days == null ? '–' : s.ad_days + 'd', f.source === 'world' ? 'oldest ad' : 'ads live', f.source === 'tiktok' ? 'TikTok gives no ad dates' : 'How long its ads ran when the launch started')}
+      ${cell('', s.store_products == null ? '–' : fmt(s.store_products), 'store products', 'A small store lives on this product; a big one sells everything')}
+    </div>
+    <ul class="lnflags" aria-label="Risk flags">${flags}</ul>
+    <div class="lnprog"><span>${esc(s.done)} of ${esc(s.of)} steps done</span><span class="lnmeter" aria-hidden="true">${Array.from({ length: s.of }, (_, i) => `<i class="${i < s.done ? 'on' : ''}"></i>`).join('')}</span></div>`;
+}
+// The checklist: a fold per step; the margin step shows its numbers as you type, the launch step suggests its rules.
+function lnStepsHtml(l) {
+  const K = window.LAUNCH;
+  return `<section class="lnsteps" aria-label="Launch checklist">${K.STEPS.map((s, i) => {
+    const cur = (l.steps && l.steps[s.k]) || { done: false, note: '', v: {} };
+    return `<details class="lnstep${cur.done ? ' done' : ''}" data-step="${s.k}"${LN.open.has(s.k) ? ' open' : ''}>
+      <summary><span class="lnn">${cur.done ? '✓' : i + 1}</span><span class="lnst">${esc(s.title)}</span><small data-fill>${esc(lnFill(s, cur))}</small></summary>
+      <div class="lnbody">
+        <p class="lnhint">${esc(s.hint)}</p>
+        ${lnHelp(l, s.k)}
+        <div class="lnfields">${s.items.map((f) => lnField(l, s.k, f, cur.v ? cur.v[f.k] : undefined)).join('')}</div>
+        ${s.k === 'margin' ? `<div id="lncalc">${lnCalcHtml(l)}</div>` : ''}
+        ${s.k === 'launch' ? `<div class="lnsug" id="lnsug">${lnSugHtml(l)}</div>` : ''}
+        <label class="lnnote"><span>Notes</span><textarea data-note rows="2" maxlength="1000" placeholder="Anything to remember for this step">${esc(cur.note || '')}</textarea></label>
+        <label class="lncheck lndone"><input type="checkbox" data-done${cur.done ? ' checked' : ''}><span>Step done</span></label>
+      </div>
+    </details>`;
+  }).join('')}<button class="lnremove" data-ln="remove">Remove this launch card</button></section>`;
+}
+function lnField(l, k, f, val) {
+  if (f.t === 'tick') return `<label class="lncheck"><input type="checkbox" data-f="${f.k}"${val === true ? ' checked' : ''}><span>${esc(f.label)}</span></label>`;
+  if (f.t === 'choice') return `<label class="lnf wide"><span>${esc(f.label)}</span><span class="selw"><select class="chip" data-f="${f.k}"><option value="">Not set</option>${f.options.map(([v, t]) => `<option value="${esc(v)}"${val === v ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></span></label>`;
+  const wide = f.t === 'url' || f.t === 'text';
+  const ph = esc(lnPh(l, k, f));
+  if (f.long) return `<label class="lnf wide"><span>${esc(f.label)}</span><textarea data-f="${f.k}" rows="2" maxlength="500" placeholder="${ph}">${esc(val ?? '')}</textarea></label>`;
+  const kind = f.t === 'url' ? 'type="url" inputmode="url" spellcheck="false"' : f.t === 'text' ? 'type="text"' : `type="text" inputmode="${f.t === 'int' ? 'numeric' : 'decimal'}"`;
+  return `<label class="lnf${wide ? ' wide' : ''}"><span>${esc(f.label)}</span><input ${kind} data-f="${f.k}" value="${esc(val ?? '')}" placeholder="${ph}" maxlength="${wide ? 500 : 12}" autocomplete="off"></label>`;
+}
+function lnPh(l, k, f) {
+  const src = (l.steps.sourcing && l.steps.sourcing.v) || {};
+  if (k === 'margin' && f.k === 'cogs') return src.unit != null ? `${src.unit} from Sourcing` : 'Unit cost';
+  if (k === 'margin' && f.k === 'ship') return src.ship != null ? `${src.ship} from Sourcing` : '0';
+  if (k === 'margin' && f.k === 'price' && l.facts.price != null) return `They ask ${money(l.facts.price, l.facts.cur)}`;
+  if (f.def != null) return String(f.def);
+  if (k === 'launch' && f.k === 'kill') return 'When do you stop the ad?';
+  if (k === 'launch' && f.k === 'scale') return 'When do you raise the budget?';
+  return f.t === 'url' ? 'https://' : f.t === 'money' ? '0.00' : '';
+}
+// Searches for the step's work: the supplier, trademarks and the ad rules, the competitors' ads.
+function lnHelp(l, k) {
+  const f = l.facts;
+  const q = encodeURIComponent(l.title || f.title || '');
+  const links = {
+    sourcing: [lnA(src1688(f.zh || f.title || ''), 'Search 1688'), lnA('https://www.aliexpress.com/wholesale?SearchText=' + q, 'Search AliExpress')],
+    compliance: [lnA('https://www.tmdn.org/tmview/#/tmview/results?page=1&pageSize=30&criteria=C&basicSearch=' + q, 'Trademarks (TMview)'), lnA('https://transparency.meta.com/policies/ad-standards/', "Meta's ad rules")],
+    research: [lnA(f.ad, f.source === 'tiktok' ? 'Its Meta ads' : 'Its ad'), lnA('https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&media_type=all&search_type=keyword_unordered&q=' + q, 'Search the Ad Library'), lnA(f.product || f.store, f.source === 'tiktok' ? 'On TikTok' : 'Their shop')],
+  }[k];
+  return links ? `<div class="lnlinks">${links.join('')}</div>` : '';
+}
+function lnCalcHtml(l) {
+  const K = window.LAUNCH;
+  const m = K.marginOf(K.marginInputs(l.steps));
+  if (!m) return '<p class="lnmuted">Fill in the selling price and the unit cost (here or in Sourcing): the numbers show as you type.</p>';
+  const row = (k, label, v) => `<div><dt>${esc(label)}</dt><dd data-out="${k}">${esc(v)}</dd></div>`;
+  return `<dl class="lnout">${row('be_roas', 'Break-even ROAS', m.be_roas == null ? 'none: every order loses money' : m.be_roas + '×')}
+    ${row('profit', 'Profit per order', m.profit == null ? 'add a target CPA' : `${lnEur(m.profit)} at a ${lnEur(m.cpa)} CPA`)}
+    ${row('contribution', 'Margin before ads', `${lnEur(m.contribution)} (${m.pct}%)`)}
+    ${row('be_cpa', 'Max CPA to break even', lnEur(m.be_cpa))}
+    ${row('taxes', 'VAT + payment fees', `${lnEur(m.vat)} + ${lnEur(m.fees)}`)}</dl>`;
+}
+function lnSugHtml(l) {
+  const s = window.LAUNCH.summaryOf(l);
+  if (!s.kill) return '<p class="lnmuted">With the margin filled in, a kill rule and a scale rule are suggested here.</p>';
+  return `<p><span>${esc(s.kill)}</span><button class="lnuse" data-use="kill">Use</button></p><p><span>${esc(s.scale)}</span><button class="lnuse" data-use="scale">Use</button></p>`;
+}
+function lnRowHtml(l) {
+  const s = window.LAUNCH.summaryOf(l);
+  const state = l.decision === 'go' ? 'Go' : l.decision === 'no' ? 'No go' : l.pinned ? '📌 Launching' : `${s.done}/${s.of}`;
+  const sub = [LN_SRC[l.facts.source], s.be_roas != null ? 'break-even ROAS ' + s.be_roas : '', `${s.done} of ${s.of} steps`].filter(Boolean).join(' · ');
+  return `<button class="lnrow" data-focus="${esc(l.key)}"><span class="lnth">${lnImg(l.facts)}</span><span class="lnrt"><b>${esc(l.title || l.facts.title)}</b><small>${esc(sub)}</small></span><span class="lnrs${l.decision ? ' ' + l.decision : ''}">${esc(state)}</span></button>`;
+}
+function lnPickHtml() {
+  if (!LN.picking) return '<button class="lnstart" data-ln="pick">+ Start a launch from an approved product</button>';
+  if (!LN.pick) return '<p class="lnmuted">Loading the approved products…</p>';
+  if (!LN.pick.length) return '<p class="lnmuted">No approved product without a launch card. Approve one (✓ in the Inbox, or Approved on the TikTok tab) and it shows here.</p>';
+  return `<h3>Approved products: start a launch card</h3>${LN.pick.map((c) => {
+    const f = c.facts;
+    const sub = [LN_SRC[f.source], f.approved_at ? 'approved ' + day(f.approved_at) : '', f.age != null ? `ads ${f.age}d` : '', f.sold != null ? fmt(f.sold) + ' sold' : ''].filter(Boolean).join(' · ');
+    return `<div class="lnrow"><span class="lnth">${lnImg(f)}</span><span class="lnrt"><b>${esc(f.title)}</b><small>${esc(sub)}</small></span><button class="lnbtn" data-start="${esc(c.key)}">Start</button></div>`;
+  }).join('')}`;
+}
+async function lnPick() {
+  try {
+    const res = await fetch('/api/launch?pick=1', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    if (res.status === 401) { location.reload(); return; }
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+    LN.pick = j.candidates;
+  } catch (e) {
+    LN.picking = false;
+    toast('Could not load the approved products: ' + e.message, '');
+  }
+  const box = st.view === 'launch' && document.querySelector('#lnbox .lnpick');
+  if (box) box.innerHTML = lnPickHtml();
+}
+
+// Saves go out one after the other, so an older save never lands after a newer one.
+function lnPost(body) {
+  LN.saving++;
+  lnSaved('Saving…');
+  const run = async () => {
+    const res = await fetch('/api/launch', { method: 'POST', credentials: 'same-origin', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+    return j;
+  };
+  const p = LN.chain.then(run);
+  LN.chain = p.then(() => {}, () => {});
+  p.then(() => { if (--LN.saving === 0) lnSaved('Saved ✓'); }, (e) => { LN.saving--; lnSaved(''); toast('Could not save: ' + e.message, ''); });
+  return p;
+}
+function lnSaveStep(key, k) {
+  const l = (LN.list || []).find((x) => x.key === key);
+  const step = l && l.steps[k];
+  if (step) lnPost({ key, step: k, done: step.done, note: step.note, v: step.v }).catch(() => {});
+}
+// One timer per card and step: typing saves 0.7 s after the last key; a tick, a pick or leaving the field saves at once.
+function lnQueue(key, k, wait) {
+  const id = k + ':' + key;
+  clearTimeout(LN.timers.get(id));
+  LN.timers.set(id, setTimeout(() => { LN.timers.delete(id); lnSaveStep(key, k); }, wait));
+}
+function lnFlush() {
+  for (const [id, t] of LN.timers) {
+    clearTimeout(t);
+    lnSaveStep(id.slice(id.indexOf(':') + 1), id.slice(0, id.indexOf(':')));
+  }
+  LN.timers.clear();
+}
+function lnEdit(el, changed) {
+  const d = el.closest && el.closest('#lnbox [data-step]');
+  const l = lnFocus();
+  if (!d || !l || !el.matches('[data-f], [data-note], [data-done]')) return;
+  const K = window.LAUNCH;
+  const k = d.dataset.step;
+  const raw = { done: d.querySelector('[data-done]').checked, note: d.querySelector('[data-note]').value, v: {} };
+  for (const x of d.querySelectorAll('[data-f]')) raw.v[x.dataset.f] = x.type === 'checkbox' ? x.checked : x.value;
+  const step = K.cleanStep(k, raw);
+  // What you typed but cannot be saved (not a number, not a link) is marked when you leave the field.
+  for (const x of d.querySelectorAll('input[data-f]:not([type="checkbox"]), textarea[data-f]')) {
+    const ok = !x.value.trim() || step.v[x.dataset.f] !== undefined;
+    if (ok) x.removeAttribute('aria-invalid');
+    else if (changed) x.setAttribute('aria-invalid', 'true');
+    if (changed && ok && x === el && x.type === 'url' && step.v[x.dataset.f]) x.value = step.v[x.dataset.f]; // https:// added
+  }
+  l.steps = Object.assign({}, l.steps, { [k]: step });
+  d.classList.toggle('done', step.done);
+  d.querySelector('.lnn').textContent = step.done ? '✓' : String(K.STEPS.findIndex((s) => s.k === k) + 1);
+  d.querySelector('[data-fill]').textContent = lnFill(K.STEPS.find((s) => s.k === k), step);
+  lnLive(l);
+  lnQueue(l.key, k, changed ? 0 : 700);
+}
+// After every change: the decision card, the margin's numbers, the suggested rules and the margin's hints follow.
+function lnLive(l) {
+  if ($('lndec')) $('lndec').innerHTML = lnDecHtml(l);
+  if ($('lncalc')) $('lncalc').innerHTML = lnCalcHtml(l);
+  if ($('lnsug')) $('lnsug').innerHTML = lnSugHtml(l);
+  for (const x of document.querySelectorAll('#lnbox [data-step="margin"] [data-f="cogs"], #lnbox [data-step="margin"] [data-f="ship"]')) x.placeholder = lnPh(l, 'margin', { k: x.dataset.f });
+}
+async function lnStart(b) {
+  b.disabled = true;
+  let j;
+  try { j = await lnPost({ start: b.dataset.start }); } catch (e) { b.disabled = false; return; }
+  const l = j.launch;
+  LN.list = [l].concat((LN.list || []).filter((x) => x.key !== l.key));
+  Object.assign(LN, { focus: l.key, picking: false, pick: null, open: new Set(['sourcing']) });
+  lnCount();
+  lnRender();
+  window.scrollTo({ top: 0 });
+  toast(l.pinned ? '📌 Launch card started and pinned' : 'Launch card started', '');
+}
+async function lnPin() {
+  const l = lnFocus();
+  if (!l) return;
+  let j;
+  try { j = await lnPost({ key: l.key, pin: !l.pinned }); } catch (e) { return; }
+  for (const x of LN.list) x.pinned = false; // the server cleared the old pin in the same batch
+  l.pinned = j.launch.pinned;
+  lnRender();
+  toast(l.pinned ? '📌 Pinned: the product you launch now' : 'Unpinned', '');
+}
+async function lnDecide(d) {
+  const l = lnFocus();
+  if (!l) return;
+  const want = l.decision === d ? '' : d; // a second tap takes it back
+  const was = l.pinned;
+  let j;
+  try { j = await lnPost({ key: l.key, decision: want }); } catch (e) { return; }
+  Object.assign(l, { decision: j.launch.decision, pinned: j.launch.pinned });
+  lnCount();
+  lnRender();
+  toast(want === 'go' ? 'Go: launch it' : want === 'no' ? (was ? 'No go: off the launch pin' : 'No go') : 'Decision taken back', '');
+}
+function lnUse(k) {
+  const l = lnFocus();
+  const s = l && window.LAUNCH.summaryOf(l);
+  const el = document.querySelector(`#lnbox [data-step="launch"] [data-f="${k}"]`);
+  if (!s || !s[k] || !el) return;
+  el.value = s[k];
+  lnEdit(el, true);
+}
+async function lnRemove(b) {
+  if (!b.dataset.sure) { // a second tap, so a slip never wipes a checklist
+    b.dataset.sure = '1';
+    b.textContent = 'Tap again to remove';
+    setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = 'Remove this launch card'; } }, 3000);
+    return;
+  }
+  const l = lnFocus();
+  if (!l) return;
+  for (const [id, t] of LN.timers) if (id.slice(id.indexOf(':') + 1) === l.key) { clearTimeout(t); LN.timers.delete(id); }
+  try { await lnPost({ key: l.key, remove: true }); } catch (e) { return; }
+  LN.list = LN.list.filter((x) => x !== l);
+  Object.assign(LN, { focus: LN.list.length ? LN.list[0].key : '', pick: null, picking: !LN.list.length });
+  lnCount();
+  lnRender();
+  if (LN.picking) lnPick();
+  toast('Launch card removed', '');
+}
+$('lnbox').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b || b.disabled) return;
+  if (b.dataset.start) lnStart(b);
+  else if (b.dataset.focus) { lnFlush(); Object.assign(LN, { focus: b.dataset.focus, open: new Set() }); lnRender(); window.scrollTo({ top: 0 }); }
+  else if (b.dataset.use) lnUse(b.dataset.use);
+  else if (b.dataset.ld) lnDecide(b.dataset.ld);
+  else if (b.dataset.ln === 'pick') { LN.picking = true; lnRender(); lnPick(); }
+  else if (b.dataset.ln === 'pin') lnPin();
+  else if (b.dataset.ln === 'remove') lnRemove(b);
+});
+$('lnbox').addEventListener('input', (e) => lnEdit(e.target, false));
+$('lnbox').addEventListener('change', (e) => lnEdit(e.target, true));
+$('lnbox').addEventListener('toggle', (e) => { const d = e.target; if (d.dataset && d.dataset.step) { if (d.open) LN.open.add(d.dataset.step); else LN.open.delete(d.dataset.step); } }, true);
+$('lnbox').addEventListener('error', (e) => { if (e.target.tagName === 'IMG') { const i = document.createElement('i'); i.textContent = '?'; e.target.replaceWith(i); } }, true);
+$('lnseg').addEventListener('click', () => goView('launch'));
+// Another view or tab: the launch view steps aside. These run after the views' own handlers, so st.view is the new one.
+for (const b of document.querySelectorAll('[data-view], [data-scope]')) b.addEventListener('click', () => { if (st.view !== 'launch') lnLeave(); });
+addEventListener('pagehide', lnFlush);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') lnFlush(); });
+addEventListener('load', () => { if (!LN.list) lnLoad().catch(() => {}); }); // the count on 🚀: cards that are not a no-go
+
 // Desktop: cards lean toward the pointer (CSS variables through the CSSOM: the CSP blocks style attributes).
 if (st.scope === 'tiktok') { document.body.classList.add('tt'); ttLoad(); } else { load(); loadMarkets(); }
 </script>

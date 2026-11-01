@@ -27,6 +27,12 @@ After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, o
   "Bad store" takes that store out of the Inbox, "Too expensive" (twice) ranks expensive products lower.
 - **🧠**: what the board learned, your notes, and a box to tell the board something. Everything is in the D1
   table `feedback`; ask Claude "learn from my Winner Hunter feedback" to turn it into better keywords and rules.
+- **🚀 Launch** (next to 🧠): launch an approved product today. Start a launch card from any product you approved (✓, or
+  Approved on the TikTok tab). On top, the decision in one card: margin per order, break-even ROAS, how long its ads
+  run, store size and risk flags, with **Go** / **No go**. Under it the checklist: sourcing, margin (worked out as you
+  type; VAT 21% and payment fees 3% unless you fill in your own), compliance, competitors and ads, store, creatives,
+  launch (budget, kill and scale rule). It saves as you type (D1 table `launches`). **📌 Pin** marks the product you
+  launch now, one at a time; a No go loses the pin.
 - **Browse**: everything that passes, most reach per day first, with search, sort and filters. **★**: your kept products.
   **✓**: every product you approved, the last one first, with the day you approved it (also after it ages out of
   the rules). The ✓ count jumps each time you tap **✓ Approved**.
