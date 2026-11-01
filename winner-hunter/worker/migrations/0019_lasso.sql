@@ -1,5 +1,6 @@
 -- Lasso stores (lasso.mjs, off unless started): Shopify stores that use Lasso's hosted checkout, found with urlscan.io and
--- checked live every run. The board does not read this table yet; their ads reach the board through world_ads (LASSO_ADS).
+-- checked live every run. The board reads it for its "Lasso checkout" chip (worker/src/lasso.mjs; the research list: 0080);
+-- their ads reach the board through world_ads (LASSO_ADS).
 CREATE TABLE IF NOT EXISTS lasso_stores (
   store TEXT PRIMARY KEY,        -- store.com (no www)
   host TEXT,                     -- the address that answered

@@ -253,7 +253,7 @@ question: [docs/google-ads/README.md](../docs/google-ads/README.md).
 run.mjs          nightly run (batches, cursor, time budget)
 google.mjs       the Google hunt (lib/google-ads.mjs: the Scrape Creators client, its answers, our rules on them; worker/src/google.mjs: the tab)
 bestsellers.mjs  store signals for the board's products: best-seller rank + Trustpilot (after the hunt; lib/bestsellers.mjs, lib/trust.mjs)
-lasso.mjs        optional discovery source: stores with Lasso's hosted checkout (lib/lasso.mjs; see "Lasso stores" below)
+lasso.mjs        optional discovery source: stores with Lasso's hosted checkout (lib/lasso.mjs; the board's chip: worker/src/lasso.mjs)
 momentum.mjs     once a day: each product's numbers, trend, rivals and crowding (lib/momentum.mjs; the board: worker/src/momentum.mjs)
 migrate.mjs      creates the D1 tables (safe to run every time)
 import.mjs       one-time import of the old winners
@@ -290,6 +290,13 @@ those stores are a place to find products. The research, the fingerprints and th
   `lasso: <store>`. The next World Hunter run turns them into
   products in the 🌍 Inbox under its usual rules (Shopify, an ad 7+ days old, no supplements, …). EU and UK stores have
   no market there: start Winner Hunter by hand with their domains as keywords.
+- **On the board: the "Lasso checkout" chip** (`worker/src/lasso.mjs`), on and off without this workflow: in Browse among
+  the filters, in the Inbox beside the views, on every tab. It keeps only the products of Lasso stores (high or medium)
+  and shows how many the view holds; their cards get a **Lasso** tag, the CSV a `lasso_checkout` column. A store matches
+  by its registrable domain (lowercase, no www: `us.store.com` = `store.com`; `x.myshopify.com` stays itself) and by its
+  other domains (column `aliases`). The 143 stores of the research are in `lasso_stores` from the start (migration
+  `0080_lasso_seed.sql`; it never changes a store this workflow saved). A store this workflow finds, or marks as gone,
+  changes the chip at the board's next read of its tables (after a hunt saves, or within 15 minutes).
 - **Optional secret `URLSCAN_API_KEY`:** a free urlscan.io account's key (1,000 searches a day). Without it urlscan only
   searches the last 30 days, 100 results a search (the run asks per 2-day window, so that is enough for now).
 - **More stores at once:** urlscan only sees the stores someone scanned in the last 30 days (about 140 on 2026-11-01).

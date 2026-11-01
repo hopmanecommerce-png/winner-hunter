@@ -1,0 +1,221 @@
+/*
+ * Lasso checkout on the board (docs/research/lasso-stores.md): the products sold by a store that uses Lasso's hosted
+ * checkout (lassocommerce.com). A block of its own, as the AI read: app.mjs reads the stores with the winners and runs its
+ * views through lassoView (?lasso=1 on /api/ads and /export.csv); /lasso.js puts the "Lasso checkout" chip with its count
+ * on the board, and a "Lasso" tag on those products' cards.
+ * The stores are D1's lasso_stores (0019): the research list of 2026-11-01 (0080) and every store the discovery job
+ * (lasso.mjs, workflow "Lasso stores") finds or checks again later. A store counts while its confidence is high or medium;
+ * one that left Lasso (low, or '' after a check) does not. A store the job saves shows on the board at the next read of
+ * the tables (after a hunt saves, or within 15 minutes).
+ *   registrable(hostOrUrl)   → 'store.com': lowercase, no www, the registrable domain ('' when there is none)
+ *   lassoIndex(rows)         → Map registrable domain → { store, sure, at } of the stores on Lasso now, with their aliases
+ *   readLasso(DB)            → that index from D1 (empty without the table)
+ *   attachLasso(rows, index) → each product's r.lasso: its store's entry, or null
+ *   lassoBoard(list)         → the board (products() in app.mjs) with only Lasso stores' products
+ *   lassoView(p, list, view) → view(p, list); with ?lasso=1 only Lasso stores' products; .lasso: how many this view holds
+ *   lassoCard(r)             → for the card and the CSV: { store, sure, at } or null
+ *   LASSO_JS                 → /lasso.js
+ */
+
+// Suffixes under which a name can be registered, as in the Public Suffix List (publicsuffix.org): the two-label country
+// ones a store is likely to use, and hosts that give every shop its own subdomain (x.myshopify.com is a shop of its own,
+// never "myshopify.com"). A suffix that is not here counts as one label (store.com, store.de, store.co).
+const SUFFIXES = new Set([
+  'co.uk', 'org.uk', 'me.uk', 'ltd.uk', 'plc.uk', 'net.uk', 'ac.uk', 'gov.uk',
+  'com.au', 'net.au', 'org.au', 'id.au', 'asn.au', 'co.nz', 'net.nz', 'org.nz', 'geek.nz', 'gen.nz', 'kiwi.nz',
+  'co.za', 'org.za', 'net.za', 'web.za', 'co.jp', 'ne.jp', 'or.jp', 'gr.jp', 'co.kr', 'or.kr', 'ne.kr',
+  'co.in', 'net.in', 'org.in', 'firm.in', 'gen.in', 'ind.in', 'co.il', 'org.il', 'net.il', 'co.ae', 'net.ae', 'org.ae',
+  'com.br', 'net.br', 'org.br', 'com.mx', 'org.mx', 'com.ar', 'com.co', 'com.pe', 'com.uy', 'com.ec', 'com.ve',
+  'com.sg', 'net.sg', 'org.sg', 'com.my', 'net.my', 'org.my', 'com.hk', 'net.hk', 'org.hk', 'com.tw', 'net.tw', 'org.tw',
+  'com.cn', 'net.cn', 'org.cn', 'com.ph', 'com.vn', 'co.th', 'in.th', 'co.id', 'web.id', 'my.id', 'com.pk', 'com.bd',
+  'com.tr', 'net.tr', 'org.tr', 'com.sa', 'com.eg', 'com.ng', 'co.ke', 'com.qa', 'com.kw',
+  'com.pl', 'net.pl', 'org.pl', 'com.es', 'org.es', 'nom.es', 'com.pt', 'com.gr', 'com.cy', 'com.mt', 'com.fr', 'asso.fr',
+  'co.at', 'or.at', 'co.hu', 'com.ua', 'com.ro', 'com.hr', 'co.rs',
+  'myshopify.com', 'vercel.app', 'netlify.app', 'pages.dev', 'workers.dev', 'github.io', 'gitlab.io', 'herokuapp.com',
+  'web.app', 'firebaseapp.com', 'appspot.com', 'azurewebsites.net', 'cloudfront.net', 'onrender.com', 'fly.dev',
+  'wixsite.com', 'webflow.io', 'framer.website', 'framer.app', 'carrd.co', 'square.site', 'mybigcommerce.com',
+  'myshopline.com', 'weebly.com', 'wordpress.com', 'blogspot.com', 'squarespace.com', 'godaddysites.com', 'mystrikingly.com',
+]);
+
+/**
+ * A host or address as the domain a business registers: lowercase, without www. (or www2.), a subdomain dropped
+ * (us.store.com → store.com, shop.store.co.uk → store.co.uk), a shop on a platform kept whole (x.myshopify.com).
+ * '' for anything that is not a domain name (an IP address, localhost, a suffix on its own).
+ */
+export function registrable(x) {
+  let s = String(x ?? '').trim();
+  if (!s) return '';
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) s = 'https://' + s; // a bare host, maybe with a path
+  let h;
+  try {
+    h = new URL(s).hostname; // lowercase, punycode, without the port
+  } catch (e) {
+    return '';
+  }
+  h = h.replace(/\.+$/, '').replace(/^www\d?\./, '');
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(h) || /^\d+(\.\d+)+$/.test(h) || SUFFIXES.has(h)) return '';
+  const labels = h.split('.');
+  for (let i = 1; i < labels.length - 1; i++) if (SUFFIXES.has(labels.slice(i).join('.'))) return labels.slice(i - 1).join('.');
+  return labels.slice(-2).join('.');
+}
+
+const ON = { high: true, medium: false }; // on Lasso now: sure (its script and checkout found), or likely (one of the two)
+
+/**
+ * The stores on Lasso now, by registrable domain: { store (as lasso_stores has it), sure, at (the day it was checked) }.
+ * A store's aliases (its other domains, from the research) find it too; a store's own domain comes before another
+ * store's alias, and a sure store before a likely one.
+ */
+export function lassoIndex(rows) {
+  const index = new Map();
+  const on = (rows || []).filter((r) => r && Object.hasOwn(ON, r.confidence) && registrable(r.store));
+  const add = (k, e) => {
+    const was = index.get(k);
+    if (k && (!was || (e.sure && !was.sure && was.own === e.own))) index.set(k, e);
+  };
+  const entry = (r, own) => ({ store: String(r.store).toLowerCase(), sure: ON[r.confidence], at: String(r.checked_at || '').slice(0, 10), own });
+  for (const r of on) add(registrable(r.store), entry(r, true));
+  for (const r of on) for (const d of String(r.aliases || '').split(/[\s,;]+/)) add(registrable(d), entry(r, false));
+  return index;
+}
+
+const STORES_SQL = "SELECT store, confidence, aliases, checked_at FROM lasso_stores WHERE confidence IN ('high', 'medium') ORDER BY store";
+// A database without migration 0080 (a test link uses the live database before a merge): no aliases yet.
+const OLDER_SQL = STORES_SQL.replace(', aliases', '');
+
+/** The index of the Lasso stores in D1. No table yet: empty. Any other D1 error is thrown (app.mjs reads again). */
+export async function readLasso(DB) {
+  const all = (sql) => DB.prepare(sql).all().then((r) => (r && r.results) || []);
+  try {
+    return lassoIndex(await all(STORES_SQL));
+  } catch (e) {
+    const msg = String(e && e.message);
+    if (/no such table/i.test(msg)) return new Map();
+    if (/no such column/i.test(msg)) return lassoIndex(await all(OLDER_SQL));
+    throw e;
+  }
+}
+
+/** Each product's r.lasso: the Lasso store its store's domain belongs to, or null. */
+export function attachLasso(rows, index) {
+  for (const r of rows) r.lasso = (index && index.size && index.get(registrable(r.store_url || r.product_url))) || null;
+  return rows;
+}
+
+const isLasso = (r) => !!r.lasso;
+/** The board with only the products of Lasso stores: every list a view reads (EU, outside the EU, Google, ★ and ✓). */
+export function lassoBoard(list) {
+  return Object.assign({}, list, { v: list.v.filter(isLasso), k: list.k.filter(isLasso), w: (list.w || []).filter(isLasso), gl: (list.gl || []).filter(isLasso) });
+}
+
+/**
+ * One view of the board (view: viewOf in app.mjs) with ?lasso=1: only Lasso stores' products. q.lasso: how many products
+ * this view holds that a Lasso store sells, with every other filter as asked (the chip's count). count false: not
+ * worked out (the CSV).
+ */
+export function lassoView(p, list, view, { count = true } = {}) {
+  const on = p.get('lasso') === '1';
+  const only = on || count ? lassoBoard(list) : null;
+  const q = view(p, on ? only : list);
+  if (count) q.lasso = on ? q.total : view(p, only).total;
+  return q;
+}
+
+/** For the card (toAd in app.mjs) and the CSV. */
+export const lassoCard = (r) => (r && r.lasso ? { store: r.lasso.store, sure: r.lasso.sure, at: r.lasso.at } : null);
+
+/**
+ * The board's side, sent as source text (/lasso.js), run once after the board's own script (it uses the board's st, ADS,
+ * DONE and load). Two chips, one state (st.lasso, which params() in board.html sends): Browse has it among its filters;
+ * the Inbox, which has no filter row, where Browse has its search. Its count: the server's (j.lasso of /api/ads, through
+ * LASSO.header in the board's header()), less the Lasso products decided in the Inbox since. A "Lasso" tag goes on each
+ * card of a Lasso store as the cards come.
+ */
+export function lassoKit() {
+  const grid = document.getElementById('grid');
+  const opts = document.getElementById('opts');
+  if (!grid || !opts || window.LASSO || typeof st === 'undefined') return;
+  const me = document.currentScript || document.getElementById('lakit');
+  const css = document.createElement('style');
+  if (me && me.nonce) css.setAttribute('nonce', me.nonce);
+  css.textContent = `
+  .lchip small { margin-left: 4px; font-size: 11px; font-weight: 500; opacity: .75; }
+  body:not(.inbox) .lchip.lin { display: none; }
+  `;
+  document.head.appendChild(css);
+
+  const L = { n: null, ids: new Set(), base: new Set() };
+  window.LASSO = L;
+  const list = () => (typeof ADS !== 'undefined' && Array.isArray(ADS) ? ADS : []);
+  // The server's count, less the Lasso products decided in the Inbox since it came (the Inbox decides without asking again).
+  function count() {
+    if (L.n == null) return null;
+    let n = L.n;
+    if (st.view === 'inbox' && typeof DONE !== 'undefined') for (const id of L.ids) if (DONE.has(id) && !L.base.has(id)) n--;
+    return Math.max(0, n);
+  }
+  const chips = [];
+  function paint() {
+    const n = count();
+    for (const b of chips) {
+      b.setAttribute('aria-pressed', String(!!st.lasso));
+      b.querySelector('small').textContent = n == null ? '' : n.toLocaleString('en-US');
+    }
+  }
+  function chip(where) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip lchip ' + where;
+    b.title = 'Only products from stores that use the Lasso checkout (lassocommerce.com)';
+    b.append('Lasso checkout', document.createElement('small'));
+    b.addEventListener('click', () => {
+      st.lasso = !st.lasso;
+      paint();
+      load();
+    });
+    chips.push(b);
+    return b;
+  }
+  opts.insertBefore(chip('lbr'), opts.querySelector('[data-f="hidden"]')); // Browse: before "Approved & rejected"
+  const search = document.getElementById('allrow');
+  if (search && search.parentNode) search.after(chip('lin'));
+
+  /** From the board's header(j): the count for this view. Products decided here that the server still counted are taken off. */
+  L.header = (j) => {
+    L.n = j && typeof j.lasso === 'number' ? j.lasso : null;
+    L.ids = new Set((j && Array.isArray(j.ads) ? j.ads : []).filter((a) => a && a.lasso).map((a) => a.id));
+    L.base = new Set(st.view === 'inbox' && typeof DONE !== 'undefined' ? [...L.ids].filter((id) => DONE.has(id)) : []);
+    if (L.n != null) L.n = Math.max(0, L.n - L.base.size);
+    paint();
+  };
+
+  function tag(x) {
+    const s = document.createElement('span');
+    s.className = 'tag lasso';
+    s.textContent = 'Lasso';
+    s.title = `${x.store} uses the Lasso checkout (lassocommerce.com): ${x.sure ? 'sure, its Lasso script and checkout were found' : 'likely, its Lasso script or checkout was found'}${x.at ? ', checked ' + x.at : ''}`;
+    return s;
+  }
+  function scan() {
+    const by = new Map(list().map((a) => [a && a.id, a]));
+    for (const card of grid.querySelectorAll(':scope > .card[data-id]')) {
+      const a = by.get(card.dataset.id);
+      if (!a || !a.lasso || card.querySelector('.tag.lasso')) continue;
+      let box = card.querySelector('.badges') || card.querySelector('.bd > .tags');
+      const bd = card.querySelector('.bd');
+      if (!box && bd) {
+        box = document.createElement('div');
+        box.className = 'tags';
+        bd.prepend(box);
+      }
+      if (box) box.append(tag(a.lasso));
+    }
+    paint(); // a decision in the Inbox draws the next card: the count follows
+  }
+  new MutationObserver(scan).observe(grid, { childList: true });
+  scan();
+  if (list().length) load(); // the board's first answer came before this script: once more, for the count
+}
+
+/** GET /lasso.js: lassoKit's source, run once by the board after its own script. */
+export const LASSO_JS = `'use strict';\n(${lassoKit})();\n`;

@@ -8,6 +8,7 @@
 <meta name="color-scheme" content="dark">
 <title>Winner Hunter</title>
 <script nonce="__NONCE__" src="/ai.js" id="aikit" defer></script>
+<script nonce="__NONCE__" src="/lasso.js" id="lakit" defer></script>
 <link rel="stylesheet" nonce="__NONCE__" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <script nonce="__NONCE__" src="/launch.js" id="lnkit" defer></script>
 <script nonce="__NONCE__" src="/sourcing.js" id="sxkit" defer></script>
@@ -1181,6 +1182,7 @@ function params(extra) {
     if (st.hidden) p.set('hidden', '1');
     if (st.cc) p.set('cc', st.cc);
   }
+  if (st.lasso && (st.view === 'inbox' || st.view === 'all')) p.set('lasso', '1'); // the Lasso checkout chip (/lasso.js)
   for (const [k, v] of Object.entries(extra || {})) p.set(k, v);
   if (!(st.riskAll ?? store.get('wh-risk') === 'all')) p.set('risk', 'hide'); // the risk radar's Block products stay out (risk.mjs)
   return p;
@@ -1809,7 +1811,7 @@ function render(append, fresh) {
   $('ccChip').hidden = !st.cc;
   $('ccChip').innerHTML = st.cc ? `<b>${flag(st.cc)}</b>${esc(land(st.cc))} ✕` : '';
   $('ccChip').setAttribute('aria-label', st.cc ? `Market ${land(st.cc)}: tap to show all markets` : '');
-  const filtered = st.view === 'all' && (st.q || st.hidden || st.cc || st.jev || (world ? st.p4 || st.noteu || st.fresh : google ? st.gfull || st.gmeta || st.gnometa || st.gtt : st.r2500 || st.r10k));
+  const filtered = st.view === 'all' && (st.q || st.hidden || st.cc || st.jev || st.lasso || (world ? st.p4 || st.noteu || st.fresh : google ? st.gfull || st.gmeta || st.gnometa || st.gtt : st.r2500 || st.r10k));
   $('count').hidden = !filtered;
   const sorted = world ? WSORTED[st.wsort] || '' : google ? GSORTED[st.gsort] || '' : st.cc && st.sort === 'rpd' ? `by ${st.cc} reach per day` : SORTED[st.sort] || '';
   $('count').textContent = filtered ? `${total.toLocaleString('en-US')} ${total === 1 ? 'match' : 'matches'} · ${sorted}` : '';
@@ -2106,6 +2108,7 @@ function header(j, madeFresh = true) {
   $('neu').textContent = j.counts.eu ?? '';
   $('ngoogle').textContent = j.counts.google || '';
   FRESH = j.counts.fresh || 0;
+  if (window.LASSO) LASSO.header(j); // the Lasso checkout chip's count (/lasso.js)
   if (madeFresh && !PENDING_MADE) setMade(j.counts.made || 0);
   const al = j.alert;
   $('alert').hidden = !al;

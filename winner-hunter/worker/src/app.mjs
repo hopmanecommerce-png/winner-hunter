@@ -7,6 +7,7 @@
  *   GET  /api/markets EU reach a day per country over the board's products (Market Radar); ?scope=world: facts per market outside the EU
  *   ?scope=world on /api/ads and /export.csv: the products outside the EU (world.mjs), judged by proof signals, not reach
  *   ?scope=google on /api/ads, /api/markets and /export.csv: the Google tab (google.mjs), each rule marked exact, approximated or not checked
+ *   ?lasso=1 on /api/ads and /export.csv: only the products of stores that use the Lasso checkout (lasso.mjs)
  * All SQL is parameterized; sort orders come from a fixed list.
  */
 
@@ -21,6 +22,7 @@ import { SOURCING_JS, sourcingGet, sourcingPost } from './sourcing.mjs';
 import { GOOGLE_SQL, TIKTOK_SHOPS_SQL, GOOGLE_CSV_COLS, googleRow, crossLink, googleProof, googleFacts, googleMarketsOf, googleAlert } from './google.mjs';
 import { ECON_JS, econContext, econAd, econBoard, econSorts, econGet, econPost, decisionsGet, decisionsPost, decisionLogged, tiktokLogged } from './econ.mjs';
 import { RISK_JS, riskChecks, riskHide, riskOut, riskList, riskPost } from './risk.mjs';
+import { LASSO_JS, readLasso, attachLasso, lassoBoard, lassoView, lassoCard } from './lasso.mjs';
 
 const COOKIE = '__Host-wh';
 const MAX_AGE = 90 * 864e2; // seconds
@@ -170,6 +172,7 @@ async function readTables(DB) {
     if (t) w.tp = t;
   }
   attachMomentum(results, await readMomentum(DB)); // momentum.mjs: the daily trend summaries (w.mo), a few rows, not one per product
+  attachLasso(results, await readLasso(DB)); // lasso.mjs: the product's store uses the Lasso checkout (w.lasso)
   return results;
 }
 
@@ -1070,6 +1073,7 @@ export function toAd(r) {
     google: r.google ? googleFacts(r) : null,
     on_google: r.on_google || null, // a Meta product whose product page ('product') or shop ('store') is advertised on Google too
     mo: momentumCard(r), // momentum.mjs: rising or falling, sparkline, ads survived, rivals, crowding; null before its first run
+    lasso: lassoCard(r), // lasso.mjs: its store uses the Lasso checkout, { store, sure, at }; null: not a known Lasso store
   };
 }
 
@@ -1101,6 +1105,7 @@ const CSV_COLS = [
   ...Object.keys({ ...CHOICES, ...AD_CHOICES }).map((k) => [`jev_${k}`, (a) => (a.jev ? a.jev.choices[k] ?? null : null)]),
   ...[...TRAITS, ...AD_TRAITS].map((t) => [`jev_${t.k}`, (a) => (a.jev ? a.jev.p[t.k] ?? null : null)]),
   ['jev_used', (a) => (a.jev ? a.jev.used : null)],
+  ['lasso_checkout', (a) => (a.lasso ? a.lasso.store : null)], // the Lasso checkout store it matched (lasso.mjs)
 ];
 // An export that holds Google products gets their columns too (rules exact / approx / unknown, countries, who else shows it).
 export const toCsv = (ads) => {
@@ -1163,9 +1168,10 @@ async function ads(url, env, now, viewer) {
   const [list, states, ec, checks] = await Promise.all([board(env, now), statesJson(env.DB, ['last_run', 'world_run', 'token_expires_at', 'world_check', 'google_run']),
     econContext(env.DB, now, { pageKey: productKey }), riskChecks(env)]);
   riskHide(list, url.searchParams, checks, toAd); // ?risk=hide: the risk radar's Block products leave Inbox and Browse (risk.mjs)
-  const q = viewOf(url.searchParams, econBoard(list, ec, url.searchParams.get('sort')));
+  const q = lassoView(url.searchParams, econBoard(list, ec, url.searchParams.get('sort')), viewOf); // + ?lasso=1 and its count (lasso.mjs)
   const scope = ['world', 'google'].includes(url.searchParams.get('scope')) ? url.searchParams.get('scope') : 'eu';
   const counts = countsOf(list, now, scope);
+  if (url.searchParams.get('lasso') === '1') counts.fresh = countsOf(lassoBoard(list), now, scope).fresh; // the Inbox's "new today" as it is filtered (lasso.mjs)
   const { last_run: run, world_run: worldRun, token_expires_at: token } = states;
   // While a run hunts, the board also shows what the run before it found.
   const prev = run && run.status === 'running'
@@ -1176,6 +1182,7 @@ async function ads(url, env, now, viewer) {
     ads: q.rows.map((r) => econAd(toAd(r), r, ec)),
     total: q.total,
     offset: q.offset,
+    lasso: q.lasso, // how many products of this view a Lasso checkout store sells: the chip's count (lasso.mjs)
     counts,
     last_run: run,
     prev_run: prev || null,
@@ -1380,7 +1387,7 @@ async function learned(env, now) {
 async function csv(url, env, now) {
   const [list, checks] = await Promise.all([board(env, now), riskChecks(env)]);
   riskHide(list, url.searchParams, checks); // the CSV is what you look at: with ?risk=hide, no Block products either
-  const q = viewOf(url.searchParams, list, { csv: true });
+  const q = lassoView(url.searchParams, list, (p, l) => viewOf(p, l, { csv: true }), { count: false }); // + ?lasso=1 (lasso.mjs)
   const results = q.rows;
   const day = new Date(now).toISOString().slice(0, 10);
   return text(toCsv(results.map(toAd)), 200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="winners-${q.view}-${day}.csv"` });
@@ -1467,6 +1474,11 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       if (err) return err;
       const out = await aiPost(env, j, now, deps);
       return json(out.body, out.status);
+    }
+    // ---- Lasso checkout (lasso.mjs): /lasso.js puts the filter chip, its count and the "Lasso" tag on the board. A block of its own.
+    if (path === '/lasso.js') {
+      if (!ok) return json({ error: 'Log in first' }, 401);
+      return method === 'GET' ? text(LASSO_JS, 200, { 'Content-Type': 'text/javascript; charset=utf-8' }) : json({ error: 'Method not allowed' }, 405);
     }
     // ---- Launch view (launch.mjs): an approved product's launch card, checklist and decision. A block of its own, so the
     // routes above stay as they are. /launch.js: the margin and decision code the board runs while you type.

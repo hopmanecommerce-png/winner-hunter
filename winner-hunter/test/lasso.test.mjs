@@ -304,6 +304,7 @@ test('a run: found on urlscan, checked live, saved in D1 with the day it was fir
   const stores = { ...lassoStore('us-lamps.test'), ...lassoStore('eu-dress.test', { country: 'DE', currency: 'EUR' }),
     'https://no-lasso.test/': () => html(PLAIN_STORE), 'https://checkout.no-lasso.test/checkout': () => html(OTHER_APP, 404) };
   const rest = d1Rest();
+  rest.db.exec('DELETE FROM lasso_stores'); // without the research list (migration 0080; with it: lasso-filter.test.mjs)
   const db = d1Client({ accountId: 'a', databaseId: 'd', token: 't' }, { doFetch: rest.doFetch, retryMs: 0 });
   const { doFetch } = world({ stores, scans });
   const t = await discover({ doFetch, db, now: () => NOW, sleep: noSleep, log: () => {} });
