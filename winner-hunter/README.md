@@ -12,6 +12,34 @@ GitHub Actions (4x a day, outside the EU)  →  Cloudflare D1 (the database)  �
 
 After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, once, from its name, type, shop and photo. The card shows its category and tags such as "People take 99%"; the **Jev** filter and the CSV have the same data. Its risks rank a product lower in both Inboxes, and the Inbox card says why: people or pets take it × 0.3, sizing returns, a medical claim, a brand or hard to ship × 0.5 each, for children, cosmetics, electric, fragile or big × 0.8 each, never below × 0.2. An EU product people or pets take stays out of the Inbox (Browse still lists it). Hard to ship, Medical claim and Cosmetics get a red tag. It needs the GitHub secret `TYPESAFE_API_KEY`; without a key or a balance the products stay on the board without answers. About 0.01 cents a product.
 
+## AI read (experimental)
+
+Twice a day `ai-check.mjs` (workflow **AI check**) asks a cheap Claude model (Claude Haiku 5.5) about each board product it has
+not read yet: the products outside the EU that still run, the EU's still on the board, and every product you approved or
+rejected. Per product: what it is (a plain name), niche, the ads' hook, the buyer, wow factor, saturation, claims risk, and a
+0-100 **fit** with reasons for and against and how sure it is. It is saved in D1 table `ai_checks`.
+
+- **Hidden first.** Each card gets **AI read · experimental**, closed. It stays closed until you open it, so you decide on your own
+  first, and nothing is sorted, filtered or hidden by it. The first time you open one is noted, so the eval can keep your blind
+  decisions apart from those made after a look.
+- **How good is it?** `ai-eval.mjs` compares the fit (50 or more counts as approve) with your ✓ / ✗ decisions: agreement, Cohen's
+  kappa (agreement beyond chance) and AUC (does a higher fit go with your approvals), blind decisions apart, by confidence and by
+  your reasons. It runs after every AI check, its result shows at the bottom of each AI read, and on your own computer
+  `node winner-hunter/ai-eval.mjs --details` also lists where you and the AI disagree (never in the public Actions log). Rule of
+  thumb: worth a look once it agrees on 50+ blind decisions with a kappa of 0.4 or more.
+- **Set up:** add the GitHub secret `ANTHROPIC_API_KEY` (console.anthropic.com → API keys). Without it the AI check is off and the
+  board shows no AI read. Run it by hand: Actions → AI check → Run workflow. It goes through the Message Batches API (half price):
+  a batch usually ends within minutes, and one still running is collected by the next run.
+- **Cost:** about 0.02 cents a product. A run spends at most `max_usd` (default $0.50, counted at the worst case of every request)
+  and a month at most the repository variable `AI_MONTH_USD` (default $5). Another model: repository variable `AI_MODEL`
+  (for example `claude-sonnet-5-5`: more careful, 20 times the price; the caps hold either way).
+- **Safe with ad copy:** titles and ad texts are written by advertisers. The model is told they are only data; they reach it as one
+  escaped JSON block, one product per request; every answer must match a strict schema and is checked again; text that tries to
+  instruct the AI is flagged (⚠ on the card, low confidence). Your decisions, notes and reasons are never sent, and the Actions log
+  holds counts and money only.
+- **Tests:** `npm test` skips the tests that need Anthropic's SDK when it is not installed. To run them all, first
+  `npm install --no-save --no-package-lock playwright@1.56.1 @anthropic-ai/sdk@1.3.0` (the CI does). They use a fake API: nothing is sent.
+
 ## What you see on the board
 
 - Only ads that pass **all four hard rules** (no points, no score): **Shopify store**, advertiser has **75+ active ads**,
