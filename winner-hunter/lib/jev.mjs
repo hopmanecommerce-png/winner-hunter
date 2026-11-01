@@ -181,9 +181,10 @@ function readAnswers(j, withAd) {
 export async function checkProduct(p, { key, doFetch = globalThis.fetch, pause = wait } = {}) {
   const page = p.key ? await productPage(p.key, { doFetch, pause }) : null;
   const ads = p.ads || {};
-  const main = p.image ? await photoAsset(p.image, { doFetch }) : null;
+  const mainUrl = p.image || (page && page.images[0]) || '';
+  const main = mainUrl ? await photoAsset(mainUrl, { doFetch, must: p.must !== false }) : null;
   const second = page && page.images[1] ? await photoAsset(page.images[1], { doFetch, must: false }) : null;
-  const adPic = ads.image ? await photoAsset(ads.image, { doFetch, must: false }) : null; // a Facebook link can have expired
+  const adPic = ads.image && ads.image !== mainUrl ? await photoAsset(ads.image, { doFetch, must: false }) : null; // a Facebook link can have expired
   const adWords = (ads.titles || []).length + (ads.texts || []).length;
   const withAd = !!adPic || adWords > 0;
   const state = {

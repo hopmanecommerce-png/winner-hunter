@@ -81,6 +81,8 @@ for (const [name, viewport] of [['phone', { width: 390, height: 844 }], ['deskto
       assert.strictEqual(await page.getAttribute('[data-view="all"]', 'aria-pressed'), 'true');
       assert.strictEqual(await page.locator('[data-view="starred"], [data-act="star"], [data-tri="keep"]').count(), 0, 'the star is gone (Connor, 2026-10-31)');
       await page.waitForSelector('#radar:not([hidden]) #rlist .mk');
+      assert.ok(await page.locator('#rlist .mk').count() <= 6, 'the top markets first: products come next');
+      await page.click('#rall');
       assert.strictEqual(await page.locator('#rlist .mk').count(), 17, 'every market, also the empty ones');
       assert.match(await page.textContent('#radar'), /Dubai \/ UAE/);
       assert.doesNotMatch(await page.textContent('#radar'), /reach \/ day/);

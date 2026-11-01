@@ -176,6 +176,23 @@ async function db() {
 const addProduct = (mem, key, active = 1) => mem.prepare("INSERT INTO world_products (product_key, ad_id, active, product_title, image_url, store_url, first_seen, markets, ads, days) VALUES (?, ?, ?, ?, ?, 'https://s.test', '2026-10-31', '{\"AU\":{\"ads\":2}}', 2, 40)").run(key, 'w' + key, active, 'P ' + key, IMG);
 const stateOf = (mem) => JSON.parse(mem.prepare("SELECT value FROM state WHERE key = 'world_check'").get().value);
 
+test('checkAll: EU products get answers too, once per product, after the ones outside the EU; a gone picture is no reason to skip', async () => {
+  const { mem, client } = await db();
+  addProduct(mem, 's.test/products/world');
+  const put = mem.prepare("INSERT INTO winners (ad_id, product_title, advertiser, advertiser_page_id, active_ads, ad_age_days, reach_eu, image_url, store_url, product_url, first_seen, last_seen, data) VALUES (?, ?, 'Shop', '7', 200, 20, 400000, ?, 'https://eu.test', ?, '2026-10-31', '2026-10-31', '{}')");
+  put.run('1', 'Pod', 'https://scontent.test/gone.jpg', 'https://eu.test/products/pod');
+  put.run('2', 'Pod', '', 'https://eu.test/products/pod');
+  put.run('3', 'Lamp', '', 'https://eu.test/');
+  const now = () => Date.UTC(2026, 10, 1);
+  const a = api(OK, { photo: (u) => (/scontent/.test(u) ? new Response('gone', { status: 403 }) : new Response(jpg())) });
+  const t = await checkAll({ db: client, key: 'k', doFetch: a.doFetch, pause, atOnce: 1, log: () => {}, now });
+  assert.deepStrictEqual({ c: t.checked, s: t.skipped, l: t.left }, { c: 3, s: 0, l: 0 });
+  const keys = mem.prepare('SELECT product_key, input FROM world_checks ORDER BY product_key').all().map((r) => r.product_key);
+  assert.deepStrictEqual(keys, ['eu|7|lamp', 'eu|7|pod', 's.test/products/world']);
+  assert.strictEqual(JSON.parse(a.asks()[0].init.body).state.product.name, 'P s.test/products/world', 'outside the EU first');
+  assert.strictEqual((await checkAll({ db: client, key: 'k', doFetch: api().doFetch, pause, log: () => {}, now })).checked, 0, 'once');
+});
+
 test('adsOf: unique words, the ad with the most copies first, and the markets', () => {
   const a = adsOf([{ title: 'A', body: 'x', image_url: '' }, { title: 'A', body: 'y', image_url: 'https://i' }, { title: 'B', body: '', image_url: 'https://j' }], { markets: '{"AU":{},"NZ":{}}', ads: 3, days: 9, new14: 1, creatives: 2 });
   assert.deepStrictEqual(a, { titles: ['A', 'B'], texts: ['x', 'y'], image: 'https://i', countries: ['AU', 'NZ'], count: 3, days: 9, new14: 1, creatives: 2 });
@@ -258,7 +275,7 @@ const full = (o = {}) => ({ product_key: 'k', people: 0.01, animals: 0.01, gymwe
   answers: JSON.stringify({ p: { people: 0.01, animals: 0.01, gymwear: 0.01, physical: 0.98, face: 0.01, electric: 0.9, problem: 0.8 }, choices: { audience: { c: 'Women', conf: 0.9 } }, scores: {} }), ...o });
 
 test('board: the filter, flags at 0.5, an older answer, and the alert', () => {
-  const c = row(full()).world.check;
+  const c = row(full()).jev;
   assert.deepStrictEqual(jevFlags(c), []);
   assert.ok(jevMatches('main:Home', c) && !jevMatches('main:Pets', c));
   assert.ok(jevMatches(`sub:Home${SEP}Lighting`, c) && !jevMatches(`sub:Home${SEP}Bathroom`, c));
@@ -268,10 +285,10 @@ test('board: the filter, flags at 0.5, an older answer, and the alert', () => {
   assert.ok(!jevMatches('noblock', c), 'it has a battery');
   assert.ok(jevMatches('clean', c) && !jevMatches('clean', null));
   assert.ok(jevMatches('none', null) && !jevMatches('none', c));
-  const flagged = row(full({ people: 0.99, physical: 0.4, answers: JSON.stringify({ p: { people: 0.99, physical: 0.4, face: 0.7 }, choices: {} }) })).world.check;
+  const flagged = row(full({ people: 0.99, physical: 0.4, answers: JSON.stringify({ p: { people: 0.99, physical: 0.4, face: 0.7 }, choices: {} }) })).jev;
   assert.deepStrictEqual(jevFlags(flagged), ['people', 'digital', 'face']);
   assert.ok(jevMatches('unsure', flagged) && !jevMatches('unsure', c));
-  const old = row({ product_key: 'k', people: 0.99, animals: 0.01, gymwear: 0.01, physical: 0.98, category: 'pet', input: 'photo' }).world.check;
+  const old = row({ product_key: 'k', people: 0.99, animals: 0.01, gymwear: 0.01, physical: 0.98, category: 'pet', input: 'photo' }).jev;
   assert.strictEqual(old.main, 'pet', 'answered by the first question set: still shows');
   assert.deepStrictEqual(jevFlags(old), ['people']);
   const now = Date.UTC(2026, 10, 1);
@@ -293,7 +310,7 @@ test('board: the breakdown counts the answers and sorts by count; the CSV has th
   assert.strictEqual(j.pStrong, 2);
   assert.strictEqual(j.noBlock, 0);
   assert.deepStrictEqual(j.choices.find((x) => x.k === 'audience').items, [{ name: 'Women', n: 3 }]);
-  const csv = toCsv([{ world: { markets: [], check: { ...row(full()).world.check } } }, { world: { markets: [], check: null } }, {}]).split('\r\n');
+  const csv = toCsv([{ jev: row(full()).jev }, { jev: null }, {}]).split('\r\n');
   const head = csv[0].split(',');
   const at = (k, line) => csv[line].split(',')[head.indexOf(k)];
   assert.strictEqual(at('jev_main', 1), 'Home');
