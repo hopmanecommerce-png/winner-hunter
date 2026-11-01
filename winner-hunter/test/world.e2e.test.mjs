@@ -116,6 +116,23 @@ for (const [name, viewport] of [['phone', { width: 390, height: 844 }], ['deskto
       // A plain sort.
       await page.selectOption('#sort', 'days');
       await page.waitForFunction(() => /Pillow Pod/.test(document.querySelector('.card').textContent));
+      // No in-between: a tap on the card or on ▶ opens the Ad Library, the card does not expand. Shop, its ads and 1688 sit on the shop line.
+      const pod = page.locator('.card', { hasText: 'Pillow Pod' }).first();
+      const lib = (await pod.locator('a.view').getAttribute('href'));
+      assert.match(lib, /facebook\.com\/ads\/library/);
+      await page.context().route('https://www.facebook.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: 'ok' }));
+      const [tab] = await Promise.all([page.waitForEvent('popup'), pod.locator('h2.t').click()]);
+      await tab.waitForURL(lib);
+      await tab.close();
+      assert.strictEqual(await pod.evaluate((c) => c.classList.contains('open')), false);
+      assert.strictEqual(await page.locator('.card .links, .card .more').count(), 0, 'the facts and links are on the Inbox card only');
+      const before = page.context().pages().length;
+      await pod.locator('.acts').click({ position: { x: 1, y: 1 } }); // a missed tap beside Approved and Reject
+      await page.waitForTimeout(150);
+      assert.strictEqual(page.context().pages().length, before, 'beside the buttons: no Ad Library');
+      assert.ok(await pod.locator('.who a.shop').isVisible() && await pod.locator('.who a.src', { hasText: '1688 ↗' }).isVisible());
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'no sideways scroll with the shop line');
+      assert.ok(await page.locator('.acts button').evaluateAll((bs) => bs.every((b) => b.scrollWidth <= b.clientWidth + 1 && b.getBoundingClientRect().right <= b.closest('.card').getBoundingClientRect().right)), 'Approved and Reject fit on the card');
       // Reject: gone here, saved in the same tables as the EU decisions.
       await page.locator('.card', { hasText: 'Grain free dog food' }).locator('[data-act="rejected"]').click();
       await page.waitForFunction(() => document.querySelectorAll('.card').length === 2);

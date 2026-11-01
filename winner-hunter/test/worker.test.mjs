@@ -478,12 +478,13 @@ test('a database without tables gives a clear 503', async () => {
   assert.match((await res.json()).error, /Database not ready/);
 });
 
-test('no ad text on the cards (the ad itself is one tap away); every card has a ▶ View ad button', async () => {
+test('no ad text on the cards (the ad itself is one tap away); ▶ is a link to the Ad Library', async () => {
   const env = await seededEnv();
   const me = await loggedIn(env);
   assert.strictEqual((await me.get('/ad/1234567890')).status, 404);
   assert.doesNotMatch(HTML, /class="copy"|a\.copy/, 'no ad text on the cards');
-  assert.strictEqual(HTML.match(/class="view"[^>]*aria-label="View ad"/g).length, 3, 'EU card: button (viewer on) and link (viewer off); outside-EU card: link');
+  assert.strictEqual(HTML.match(/class="view"[^>]*aria-label="Open in Ad Library"/g).length, 2, 'one ▶ on each card, a link: EU card and outside-EU card');
+  assert.doesNotMatch(HTML, /data-act="view"|id="sheet"/, 'no in-board ad viewer');
 });
 
 // ---- The ad viewer: GET /api/ad/:id

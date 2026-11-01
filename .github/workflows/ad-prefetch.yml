@@ -1,6 +1,7 @@
-# Opens every ad on the board ahead of time (Meta's render_ad page in Chrome on the runner) and stores it in D1, so
-# "▶ Bekijk ad" on the board opens at once. These are EU ads only, so since the EU hunt stopped (1 Nov 2026) it only runs
-# when started by hand, which leaves Meta's limit to the hunt outside the EU. Only ads without a stored view from the last 16 hours. Secrets: META_TOKEN, CF_API_TOKEN, CF_ACCOUNT_ID.
+# Opens every ad on the board ahead of time (Meta's render_ad page in Chrome on the runner) and stores it in D1 for the
+# /api/ad viewer; only ads without a stored view from the last 16 hours. Secrets: META_TOKEN, CF_API_TOKEN, CF_ACCOUNT_ID.
+# Off: ▶ and a tap on a card now open the Facebook Ad Library, the board shows no ads itself. Only by hand, and it spends
+# the Meta limit the hunt outside the EU needs.
 name: Ad prefetch
 
 on:
