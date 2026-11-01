@@ -12,6 +12,8 @@ import { d1Client, d1Settings } from './lib/d1.mjs';
 import { pool } from './lib/meta.mjs';
 import { checkProduct, JevError, PRICE_PER_TOKEN } from './lib/jev.mjs';
 import { VERSION } from './worker/src/jev-questions.mjs';
+import { EU_TODO_SQL, EU_LEFT_SQL } from './worker/src/app.mjs';
+import { productKey } from './lib/bestsellers.mjs';
 
 const MAX_PER_RUN = 1000; // about 40 cents at 10,000 tokens a product
 const AT_ONCE = 3; // 8 at once ran into waits of 4 seconds and more (2026-11-01)
@@ -45,6 +47,16 @@ export function adsOf(rows, product) {
     countries, count: product.ads ?? null, days: product.days ?? null, new14: product.new14 ?? null, creatives: product.creatives ?? null };
 }
 
+/** The ad's words saved with an EU product. */
+export function copyOf(data) {
+  try {
+    const c = JSON.parse(data || '{}').ad_copy;
+    return c ? [String(c)] : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 export async function checkAll({ db, key, doFetch = globalThis.fetch, now = Date.now, log = console.log, deadline = Infinity, pause, atOnce = AT_ONCE }) {
   const when = () => new Date(now()).toISOString();
   const t = { checked: 0, skipped: 0, left: 0, tokens: 0, stopped: '' };
@@ -55,6 +67,8 @@ export async function checkAll({ db, key, doFetch = globalThis.fetch, now = Date
     return t;
   }
   const todo = await db.query(TODO_SQL);
+  // Outside the EU first, the EU's with what is left of this run. EU pictures are old Facebook links: one that is gone is no reason to skip.
+  const eu = todo.length < MAX_PER_RUN ? await db.query(EU_TODO_SQL, [when(), MAX_PER_RUN - todo.length]) : [];
   const adsBy = new Map();
   if (todo.length) {
     for (const a of await db.query(ADS_OF_SQL, [JSON.stringify(todo.map((p) => p.product_key))])) {
@@ -75,13 +89,18 @@ export async function checkAll({ db, key, doFetch = globalThis.fetch, now = Date
       throw e;
     }
   };
+  const jobs = [
+    ...todo.map((p) => ({ id: p.product_key, label: p.product_key, what: { key: p.product_key, title: p.title, type: p.type, store: p.store_url, image: p.image_url, price: p.price, was: p.compare_at_price, currency: p.currency,
+      products: p.store_products, advertiser: p.advertiser, likes: p.likes, keyword: p.keyword, ads: adsOf(adsBy.get(p.product_key) || [], p) } })),
+    ...eu.map((p) => ({ id: 'eu|' + p.gk, label: p.store_url || p.gk, what: { key: productKey(p.product_url), title: p.title, store: p.store_url, image: p.image_url, must: false, price: p.price, was: p.compare_at_price, currency: p.currency,
+      advertiser: p.advertiser, keyword: p.keyword, ads: { titles: [p.title], texts: copyOf(p.data), count: p.ads ?? null, days: p.days ?? null, countries: [] } } })),
+  ];
   try {
-    await pool(todo, atOnce, async (p) => {
+    await pool(jobs, atOnce, async (job) => {
       if (t.stopped || now() > deadline) return;
       try {
-        const a = await checkProduct({ key: p.product_key, title: p.title, type: p.type, store: p.store_url, image: p.image_url, price: p.price, was: p.compare_at_price, currency: p.currency,
-          products: p.store_products, advertiser: p.advertiser, likes: p.likes, keyword: p.keyword, ads: adsOf(adsBy.get(p.product_key) || [], p) }, { key, doFetch, ...(pause ? { pause } : {}) });
-        rows.push({ key: p.product_key, ...a });
+        const a = await checkProduct(job.what, { key, doFetch, ...(pause ? { pause } : {}) });
+        rows.push({ key: job.id, ...a });
         t.checked++;
         t.tokens += a.tokens;
         fails = 0;
@@ -90,7 +109,7 @@ export async function checkAll({ db, key, doFetch = globalThis.fetch, now = Date
         if (!(e instanceof JevError)) throw e; // D1: that is a real failure
         t.skipped++;
         fails++;
-        log(`Jev: ${p.product_key} skipped (${e.message})`);
+        log(`Jev: ${job.label} skipped (${e.message})`);
         if (e.stop) t.stopped = e.status === 401 || e.status === 403 ? 'the API key was refused' : e.status === 402 ? 'no balance left' : e.message;
         else if (fails >= FAILS_THEN_STOP) t.stopped = `${FAILS_THEN_STOP} failures in a row (${e.message})`;
       }
@@ -99,7 +118,8 @@ export async function checkAll({ db, key, doFetch = globalThis.fetch, now = Date
     // Also after a failure: what is answered stays, and the board can say how far it got.
     await save().catch((e) => { lost = e; });
     const [left] = await db.query(LEFT_SQL).catch(() => [{ n: 0 }]);
-    t.left = Number(left && left.n) || 0;
+    const [euLeft] = await db.query(EU_LEFT_SQL, [when()]).catch(() => [{ n: 0 }]);
+    t.left = (Number(left && left.n) || 0) + (Number(euLeft && euLeft.n) || 0);
     await db.setState('world_check', { ...t, at: when(), cost: Math.round(t.tokens * PRICE_PER_TOKEN * 1e4) / 1e4 }).catch(() => {});
   }
   if (lost) throw lost;

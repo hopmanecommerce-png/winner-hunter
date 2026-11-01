@@ -387,12 +387,12 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     assert.strictEqual((await (await fetch(base + '/api/ads?view=inbox', { headers: { cookie: (await page.context().cookies()).map((c) => `${c.name}=${c.value}`).join('; ') } })).json()).total, 1, 'saved: nothing left on the server but the product removed from ✓ and unstarred (back in the Inbox)');
     // a failed run: red banner on top, on a phone
     env.db.prepare("UPDATE state SET value = ? WHERE key = 'last_run'").run(JSON.stringify({ status: 'done', health: 'failed', finished_at: new Date(NOW - 3600e3).toISOString(), ads_checked: 0, new_winners: 0,
-      alert: 'Run mislukt: 0 ads gecheckt (Meta token?) / Run failed: 0 ads checked (Meta token?) <b>x</b>' }));
+      alert: 'Run failed: 0 ads checked (Meta token?) <b>x</b>' }));
     await page.setViewportSize({ width: 390, height: 844 });
     await page.emulateMedia({ colorScheme: 'light' });
     await page.reload();
     await page.waitForSelector('#alert:not([hidden])');
-    assert.strictEqual(await page.textContent('#alert'), 'Run mislukt: 0 ads gecheckt (Meta token?) / Run failed: 0 ads checked (Meta token?) <b>x</b>', 'shown as text');
+    assert.strictEqual(await page.textContent('#alert'), 'Run failed: 0 ads checked (Meta token?) <b>x</b>', 'shown as text');
     assert.strictEqual(await page.getAttribute('#alert', 'class'), 'alert');
     const box = await page.locator('#alert').boundingBox();
     assert.ok(box.y < 40, 'at the top');

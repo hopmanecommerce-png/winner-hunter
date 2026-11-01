@@ -10,7 +10,7 @@
  */
 
 import { adView } from './adview.mjs';
-import { TRAITS, AD_TRAITS, CHOICES, AD_CHOICES, SEP, YES_AT } from './jev-questions.mjs';
+import { TRAITS, AD_TRAITS, CHOICES, AD_CHOICES, SEP, YES_AT, VERSION } from './jev-questions.mjs';
 import { MARKET_RULES } from './market-rules.mjs';
 
 const COOKIE = '__Host-wh';
@@ -75,6 +75,12 @@ const TRUST_SQL = 'SELECT store, status, score, reviews, profile FROM store_trus
 // Outside the EU (world.mjs): products from the public Ad Library, with proof signals instead of reach. Read with the
 // winners; they take part in ★, ✓, notes and decisions like any product, but stay off the EU tabs.
 const WORLD_SQL = `SELECT w.* FROM world_products w`;
+// The EU products Jev has no answers for yet, best reach a day first: one row per product, those on the board and those approved (✓). ?1 now, ?2 how many.
+export const EU_TODO_SQL = `SELECT gk, product_title AS title, image_url, store_url, product_url, price, compare_at_price, currency, advertiser, keyword, ad_age_days AS days, scaled_count AS ads, data
+FROM (SELECT w.*, ${KEY} AS gk, ${RPD} AS rpd, ROW_NUMBER() OVER (PARTITION BY ${KEY} ORDER BY (COALESCE(w.image_url, '') != '') DESC, ${RPD} DESC) AS rn
+  FROM winners w WHERE ${PASS} OR w.ad_id IN (SELECT ad_id FROM hidden WHERE status = 'seen'))
+WHERE rn = 1 AND ('eu|' || gk) NOT IN (SELECT product_key FROM world_checks WHERE COALESCE(version, 1) >= ${VERSION}) ORDER BY rpd DESC LIMIT ?2`;
+export const EU_LEFT_SQL = EU_TODO_SQL.replace(/^SELECT .*? AS ads, data\n/, 'SELECT COUNT(*) AS n\n').replace(' ORDER BY rpd DESC LIMIT ?2', '');
 const CHECK_SQL = 'SELECT product_key, people, animals, gymwear, physical, category, category_conf, input, checked_at, main, sub, main_conf, sub_conf, product_score, ad_score, answers, used FROM world_checks';
 const VERSION_SQL = `SELECT (SELECT MAX(rowid) FROM winners) AS r, (SELECT updated_at FROM state WHERE key = 'last_run') AS u, (SELECT updated_at FROM state WHERE key = 'world_run') AS wu, (SELECT updated_at FROM state WHERE key = 'world_check') AS jc`;
 const SNAP_MS = 15 * 60000; // read again after this long anyway
@@ -91,6 +97,10 @@ export async function snapshot(DB, now = Date.now()) {
     const optional = (sql) => DB.prepare(sql).all().then((r) => r.results || [], () => []); // no table yet: the board still works
     const [{ results: eu }, bs, tp, world, jev] = await Promise.all([DB.prepare(SNAP_SQL).all(), optional(BS_SQL), optional(TRUST_SQL), optional(WORLD_SQL), optional(CHECK_SQL)]);
     const checks = new Map(jev.map((c) => [c.product_key, c]));
+    for (const w of eu) {
+      const c = checks.get('eu|' + w.gk);
+      w.jev = c ? checkOf(c) : null;
+    }
     const results = eu.concat(world.map((w) => worldRow(w, checks.get(w.product_key))));
     const best = new Map(bs.map((b) => [b.product_key, b]));
     const trust = new Map(tp.map((t) => [t.store, t]));
@@ -181,10 +191,10 @@ const jsonOf = (s, or) => { try { return JSON.parse(s || '') ?? or; } catch (e) 
 
 /** A world_products row in the shape of a winners row (reach_eu empty, ad_age_days the age of its oldest running ad). */
 export function worldRow(w, check) {
-  return { ...w, gk: 'world|' + w.product_key, ad_age_days: w.days, reach_eu: null, scaled_count: w.ads, active_ads: w.shop_ads, data: '{}',
+  const jev = check ? checkOf(check) : null;
+  return { ...w, jev, gk: 'world|' + w.product_key, ad_age_days: w.days, reach_eu: null, scaled_count: w.ads, active_ads: w.shop_ads, data: '{}',
     world: { markets: jsonOf(w.markets, {}), creatives: num(w.creatives), new14: num(w.new14), in_eu: w.in_eu == null ? null : Number(w.in_eu), eu_rpd: w.eu_rpd == null ? null : Number(w.eu_rpd), shop_eu_rpd: w.shop_eu_rpd == null ? null : Number(w.shop_eu_rpd),
-      likes: w.likes == null ? null : Number(w.likes), page_id: w.page_id || '', active: Number(w.active) !== 0, store_products: w.store_products == null ? null : Number(w.store_products),
-      check: check ? checkOf(check) : null } };
+      likes: w.likes == null ? null : Number(w.likes), page_id: w.page_id || '', active: Number(w.active) !== 0, store_products: w.store_products == null ? null : Number(w.store_products) } };
 }
 
 /** A world_checks row for the board. An answer from the first, smaller question set has only the four rules and a category. */
@@ -235,7 +245,7 @@ export function jevSummary(rows) {
   let noBlock = 0;
   const yes = new Map();
   for (const r of rows) {
-    const c = r.world.check;
+    const c = r.jev;
     if (!c) continue;
     checked++;
     mains.set(c.main, (mains.get(c.main) || 0) + 1);
@@ -406,6 +416,8 @@ const SORTS = {
   ads: (a, b) => num(b.active_ads) - num(a.active_ads) || b.rpd - a.rpd,
   reach: (a, b) => num(b.reach_eu) - num(a.reach_eu) || b.rpd - a.rpd,
   best: (a, b) => (bsRank(a) ?? 999) - (bsRank(b) ?? 999) || better(a, b),
+  jevp: (a, b) => num(b.jev && b.jev.product_score) - num(a.jev && a.jev.product_score) || better(a, b),
+  jeva: (a, b) => num(b.jev && b.jev.ad_score) - num(a.jev && a.jev.ad_score) || better(a, b),
 };
 
 // Outside the EU: the most proof first; every other order is one plain fact.
@@ -419,8 +431,8 @@ const WORLD_SORTS = {
   fresh: (a, b) => num(b.world.new14) - num(a.world.new14) || stronger(a, b),
   best: (a, b) => (bsRank(a) ?? 999) - (bsRank(b) ?? 999) || stronger(a, b),
   reviews: (a, b) => num(b.tp && b.tp.reviews) - num(a.tp && a.tp.reviews) || stronger(a, b),
-  jevp: (a, b) => num(b.world.check && b.world.check.product_score) - num(a.world.check && a.world.check.product_score) || stronger(a, b),
-  jeva: (a, b) => num(b.world.check && b.world.check.ad_score) - num(a.world.check && a.world.check.ad_score) || stronger(a, b),
+  jevp: (a, b) => num(b.jev && b.jev.product_score) - num(a.jev && a.jev.product_score) || stronger(a, b),
+  jeva: (a, b) => num(b.jev && b.jev.ad_score) - num(a.jev && a.jev.ad_score) || stronger(a, b),
   eu: (a, b) => num(b.world.eu_rpd ?? b.world.shop_eu_rpd) - num(a.world.eu_rpd ?? a.world.shop_eu_rpd) || stronger(a, b),
   new: (a, b) => cmp(b.first_seen ?? '', a.first_seen ?? '') || stronger(a, b),
 };
@@ -435,7 +447,7 @@ function worldView(p, list, csv) {
   if (p.get('noteu') === '1') out = out.filter((r) => r.world.in_eu === 0);
   if (p.get('p4') === '1') out = out.filter((r) => r.proof.n >= 4);
   if (p.get('fresh') === '1') out = out.filter((r) => r.world.new14 > 0);
-  if (p.get('jev')) out = out.filter((r) => jevMatches(String(p.get('jev')).slice(0, 40), r.world.check));
+  if (p.get('jev')) out = out.filter((r) => jevMatches(String(p.get('jev')).slice(0, 80), r.jev));
   const q = String(p.get('q') || '').trim().slice(0, 80).toLowerCase();
   if (q) out = out.filter((r) => [r.product_title, r.advertiser, r.store_url, r.keyword].some((x) => String(x ?? '').toLowerCase().includes(q)));
   out.sort(Object.hasOwn(WORLD_SORTS, p.get('sort') || '') ? WORLD_SORTS[p.get('sort')] : stronger);
@@ -481,6 +493,7 @@ export function viewOf(p, list, { csv = false } = {}) {
       });
       if (!SORTS[p.get('sort')] || p.get('sort') === 'rpd') sort = (a, b) => b.crpd - a.crpd || cmp(a.ad_id, b.ad_id);
     }
+    if (p.get('jev')) out = out.filter((r) => jevMatches(String(p.get('jev')).slice(0, 80), r.jev));
     limit = csv ? 5000 : Math.min(Math.max(parseInt(p.get('limit'), 10) || 40, 1), 100);
     offset = offsetOf(p, csv);
   }
@@ -752,6 +765,7 @@ export function toAd(r) {
     fit: r.fit == null ? null : r.fit,
     best: bestOf(r.bs),
     trust: trustOf(r.tp),
+    jev: r.jev ? { ...r.jev, flags: jevFlags(r.jev) } : null,
     world: r.world ? {
       proof: r.proof || null,
       markets: Object.entries(r.world.markets).map(([cc, x]) => [cc, num(x.ads), num(x.days), num(x.new14)]).sort((a, b) => b[1] - a[1] || b[2] - a[2]),
@@ -762,7 +776,6 @@ export function toAd(r) {
       shop_eu_rpd: r.world.shop_eu_rpd,
       likes: r.world.likes,
       page_id: r.world.page_id,
-      check: r.world.check ? { ...r.world.check, flags: jevFlags(r.world.check) } : null,
     } : null,
   };
 }
@@ -788,13 +801,13 @@ const CSV_COLS = [
   ['in_eu', (a) => (a.world && a.world.in_eu != null ? a.world.in_eu : null)],
   ['eu_reach_per_day_product', (a) => (a.world ? a.world.eu_rpd : null)],
   ['eu_reach_per_day_shop_best_ad', (a) => (a.world ? a.world.shop_eu_rpd : null)],
-  ['jev_main', (a) => (a.world && a.world.check ? a.world.check.main : null)],
-  ['jev_sub', (a) => (a.world && a.world.check ? a.world.check.sub : null)],
-  ['jev_product_score', (a) => (a.world && a.world.check ? a.world.check.product_score : null)],
-  ['jev_ad_score', (a) => (a.world && a.world.check ? a.world.check.ad_score : null)],
-  ...Object.keys({ ...CHOICES, ...AD_CHOICES }).map((k) => [`jev_${k}`, (a) => (a.world && a.world.check ? a.world.check.choices[k] ?? null : null)]),
-  ...[...TRAITS, ...AD_TRAITS].map((t) => [`jev_${t.k}`, (a) => (a.world && a.world.check ? a.world.check.p[t.k] ?? null : null)]),
-  ['jev_used', (a) => (a.world && a.world.check ? a.world.check.used : null)],
+  ['jev_main', (a) => (a.jev ? a.jev.main : null)],
+  ['jev_sub', (a) => (a.jev ? a.jev.sub : null)],
+  ['jev_product_score', (a) => (a.jev ? a.jev.product_score : null)],
+  ['jev_ad_score', (a) => (a.jev ? a.jev.ad_score : null)],
+  ...Object.keys({ ...CHOICES, ...AD_CHOICES }).map((k) => [`jev_${k}`, (a) => (a.jev ? a.jev.choices[k] ?? null : null)]),
+  ...[...TRAITS, ...AD_TRAITS].map((t) => [`jev_${t.k}`, (a) => (a.jev ? a.jev.p[t.k] ?? null : null)]),
+  ['jev_used', (a) => (a.jev ? a.jev.used : null)],
 ];
 export const toCsv = (ads) => [CSV_COLS.map((c) => c[0]).join(','), ...ads.map((a) => CSV_COLS.map(([, f]) => csvCell(f(a))).join(','))].join('\r\n') + '\r\n';
 
@@ -1065,7 +1078,8 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
           const open = b.w.filter((r) => r.hid === 0);
           return json({ ...worldMarketsOf(open), jev: jevSummary(open) });
         }
-        return json(marketsOf(b.v.filter((r) => r.hid === 0)));
+        const open = b.v.filter((r) => r.hid === 0);
+        return json({ ...marketsOf(open), jev: jevSummary(open) });
       }
       if (path === '/api/ads' && method === 'GET') return await ads(url, env, now, !!(launch && env.BROWSER && String(env.META_TOKEN || '').trim()));
       if (path === '/api/hide' && method === 'POST') return await hide(req, url, env, now);
