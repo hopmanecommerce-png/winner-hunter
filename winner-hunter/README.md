@@ -57,6 +57,11 @@ After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, o
   the store's product count, shop. **▶** and a tap on the card open the ad in the Facebook Ad Library (new tab); the shop name links to the product (or the store), **1688 ↗** searches 1688. The in-board ad viewer (`/api/ad/:id`, `ad-prefetch.yml`) is off: the board no longer uses it, the Worker only answers it with `AD_VIEWER = "on"` (wrangler.toml), and the deploy no longer gives the Worker a Meta token. A token an older deploy left there is never used; remove it once: `cd winner-hunter/worker && npx wrangler secret delete META_TOKEN`.
 - **✓ Approved** moves a product to **✓**; **✗ Reject** (not for me) hides it; **Undo** brings it back.
 - **CSV** downloads what you are looking at.
+- **Problems** (the fourth tab): problems people complain about or ask a fix for, before any product
+  (docs/problem-db/README.md). Each problem has its quotes with links, its mentions, engagement, trend, intensity and
+  willingness to pay. Filter by category, language, country, platform, fewest mentions and trend; decide **Save**,
+  **★ Star** or **Ignore**; export CSV or JSON. It is filled by **Problem Hunter** (Actions), which is off until you
+  start it and spends at most the credits you give each run. `matched_products` is empty for now.
 - A "store photo" label means: photo from the shop's page, not the product photo of the ad.
 - "Measured 17 Sep": the card's figures (reach, ads, copies, days live) are from then, more than 2 days ago (the EU hunt
   only runs by hand). "Product not identified": no product page, price or rank was found, the title is the ad's own
@@ -72,7 +77,9 @@ Add these 4 secrets in GitHub: **Settings → Secrets and variables → Actions 
 | `CF_API_TOKEN` | Cloudflare API token. Make it at dash.cloudflare.com → My Profile → API Tokens → Create Token → Custom token, with **Account → D1 → Edit** and **Account → Workers Scripts → Edit**. |
 | `CF_ACCOUNT_ID` | Your Cloudflare account ID (Cloudflare dashboard → Workers & Pages, right side). |
 | `BOARD_PIN` | The PIN for the board. Use 6+ digits. 10 tries per address (IPv6: per /64) and 30 per network (IPv6 /48, IPv4 /24) per 15 minutes. |
-| `CF_D1_TOKEN` | Optional, better: a second Cloudflare token with only **Account → D1 → Edit**. The hunts (World Hunter, Winner Hunter, Jev check, Ad prefetch) then use it instead of `CF_API_TOKEN`, so the jobs that open Facebook and shops hold no token that can change the board. |
+| `CF_D1_TOKEN` | Optional, better: a second Cloudflare token with only **Account → D1 → Edit**. The hunts (World Hunter, Winner Hunter, Jev check, Ad prefetch, Problem Hunter) then use it instead of `CF_API_TOKEN`, so the jobs that open Facebook and shops hold no token that can change the board. |
+| `SCRAPECREATORS_API_KEY` | Optional: the Scrape Creators key for **Problem Hunter** (the Problems tab). Its runs spend at most the credits you give them; see docs/problem-db/README.md. |
+| `ANTHROPIC_API_KEY` | Optional: Problem Hunter's Claude step, which names and merges problems (at most $0.50 a run unless you set more). |
 
 The login cookie is keyed by the PIN and a random key the board makes at the first login and keeps in D1 (`state` row
 `cookie_key`): no one can make a cookie to try PINs, and a copied cookie does not give the PIN away. To log every phone
@@ -135,8 +142,10 @@ bestsellers.mjs  store signals for the board's products: best-seller rank + Trus
 migrate.mjs      creates the D1 tables (safe to run every time)
 import.mjs       one-time import of the old winners
 keywords.txt     the search words (keywords-optin.txt: only with KEYWORDS_OPTIN=1)
+problems-collect.mjs, problems-process.mjs   the Problem Database (problem-hunter.yml; problem-queries.json is its query bank)
 lib/             score.mjs (the four rules) · meta.mjs (Ad Library search) · d1.mjs (database) · storephoto.mjs · record.mjs
-worker/          the board: src/app.mjs (API + PIN) · src/board.html (page) · wrangler.toml · migrations/
+                 problem-*.mjs: the Problem Database (sources, text, grouping, Claude step, D1)
+worker/          the board: src/app.mjs (API + PIN) · src/board.html (page) · src/problems.mjs (Problems tab) · wrangler.toml · migrations/
 test/            npm test (node --test); test/board.e2e.test.mjs opens the board in Chromium at iPhone size;
                  test/ops.test.mjs runs the workflows' deploy steps and checks the rules that keep the live board safe
 ```

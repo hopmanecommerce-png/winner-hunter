@@ -1,0 +1,77 @@
+{
+  "_note": "SAMPLE ANSWERS, written by hand for the tests: shaped like the examples in the Scrape Creators docs (docs.scrapecreators.com, openapi.json, read 2026-11-01) and Bluesky's searchPosts, with made-up texts, ids and links that do not exist. Not real API output.",
+  "/v1/reddit/search": {
+    "success": true, "credits_remaining": 9990, "credits_charged": 1,
+    "posts": [
+      { "id": "samps1", "author": "sample_user_1", "subreddit": "CleaningTips", "title": "Is there a way to get limescale off the shower glass?", "selftext": "I scrub every week and the limescale is back in two days. Nothing works.", "name": "t3_samps1", "ups": 120, "score": 120, "created": 1790000000, "num_comments": 45, "url": "https://www.reddit.com/r/CleaningTips/comments/samps1/is_there_a_way/", "created_utc": 1790000000 },
+      { "id": "samps2", "author": "sample_user_2", "subreddit": "pics", "title": "My shower after a renovation", "name": "t3_samps2", "ups": 900, "score": 900, "num_comments": 12, "url": "https://i.redd.it/sample-image.jpg", "created_utc": 1790100000 },
+      { "id": "", "title": "no id: dropped", "url": "https://www.reddit.com/r/x/comments/zz/" }
+    ],
+    "after": "t3_samps2"
+  },
+  "/v1/reddit/subreddit/search": {
+    "success": true, "credits_remaining": 9989, "credits_charged": 1,
+    "posts": [
+      { "id": "t3_sampt1", "post_id": "t3_sampt1", "title": "Anyone else struggle with dog hair on black clothes?", "url": "https://www.reddit.com/r/Dogs/comments/sampt1/anyone_else_struggle/", "permalink": "/r/Dogs/comments/sampt1/anyone_else_struggle/", "subreddit": { "id": "t5_sample", "name": "Dogs" }, "votes": 88, "num_comments": 30, "created_at": "2026-09-01T10:00:00.000000+0000", "created_at_iso": "2026-09-01T10:00:00.000Z" }
+    ],
+    "comments": [
+      { "id": "t1_sampt2", "post_id": "t3_sampt9", "parent_comment_id": null, "author": "sample_user_3", "body": "I hate that the dog hair sticks to every black shirt I own", "votes": 41, "url": "https://www.reddit.com/r/Dogs/comments/sampt9/other_post/sampt2/", "permalink": "/r/Dogs/comments/sampt9/other_post/sampt2/", "created_at_iso": "2026-08-20T09:00:00.000Z", "post": { "id": "t3_sampt9", "title": "Dog hair on clothes", "url": "https://www.reddit.com/r/Dogs/comments/sampt9/other_post/" }, "subreddit": { "id": "t5_sample", "name": "Dogs" } }
+    ],
+    "cursor": "eyJzYW1wbGUiOjF9"
+  },
+  "/v1/reddit/post/comments": {
+    "success": true, "credits_remaining": 9988, "credits_charged": 1,
+    "comments": [
+      { "id": "sampc1", "author": "sample_user_4", "body": "Same here, the limescale comes back no matter what I do.", "name": "t1_sampc1", "created_utc": 1790003600, "created_at_iso": "2026-09-21T15:33:20.000Z", "parent_id": "t3_samps1", "url": "https://www.reddit.com/r/CleaningTips/comments/samps1/is_there_a_way/sampc1/", "ups": 30, "score": 30,
+        "replies": { "items": [ { "id": "sampc2", "name": "t1_sampc2", "author": "sample_user_5", "body": "I've tried vinegar and three sprays, nothing helps", "score": 9, "parent_id": "t1_sampc1", "created_utc": 1790007200, "url": "https://www.reddit.com/r/CleaningTips/comments/samps1/is_there_a_way/sampc2/", "replies": { "items": [], "more": { "has_more": false, "next_cursor": null } } } ], "more": { "has_more": true, "cursor": "sampc9" } } },
+      { "id": "sampc3", "author": "sample_user_6", "body": "nice bathroom", "name": "t1_sampc3", "created_utc": 1790003700, "parent_id": "t3_samps1", "url": "https://www.reddit.com/r/CleaningTips/comments/samps1/is_there_a_way/sampc3/", "score": 2, "replies": { "items": [] } },
+      { "id": "sampc4", "author": "[deleted]", "body": "[deleted]", "name": "t1_sampc4", "created_utc": 1790003800, "parent_id": "t3_samps1", "url": "https://www.reddit.com/r/CleaningTips/comments/samps1/is_there_a_way/sampc4/", "score": 1 }
+    ],
+    "post": { "id": "samps1", "title": "Is there a way to get limescale off the shower glass?", "name": "t3_samps1", "num_comments": 45, "created_utc": 1790000000 },
+    "more": { "has_more": true, "cursor": "sampc5,sampc6" }
+  },
+  "/v1/tiktok/search/keyword": {
+    "success": true, "credits_remaining": 9987, "credits_charged": 1,
+    "search_item_list": [
+      { "aweme_info": { "aweme_id": "7000000000000000111", "desc": "dog hair everywhere 😭", "create_time": 1789000000, "url": "https://www.tiktok.com/@sample.creator/video/7000000000000000111", "desc_language": "en", "author": { "unique_id": "sample.creator", "uid": "1" }, "statistics": { "digg_count": 5000, "comment_count": 900, "play_count": 2000000 } } },
+      { "aweme_id": "7000000000000000112", "desc": "How I clean my couch", "create_time": "1789100000", "create_time_utc": "2026-09-07T08:53:20.000Z", "url": "https://www.tiktok.com/@sample.other/video/7000000000000000112", "desc_language": "en", "author": { "unique_id": "sample.other" }, "statistics": { "digg_count": 300, "comment_count": 20, "play_count": 40000 } }
+    ],
+    "cursor": 12
+  },
+  "/v1/tiktok/video/comments": {
+    "success": true, "credits_remaining": 9986,
+    "comments": [
+      { "aweme_id": "7000000000000000111", "cid": "7000000000000000999", "text": "the dog hair on my couch drives me crazy", "create_time": 1789003600, "digg_count": 1200, "reply_comment_total": 14, "comment_language": "en", "user": { "unique_id": "sample.viewer", "nickname": "Sample" }, "share_info": { "url": "https://m.tiktok.com/v/7000000000000000111.html?comment_author_id=123" } },
+      { "aweme_id": "7000000000000000111", "text": "same problem with my husky!!", "create_time": 1789003700, "digg_count": 300, "reply_comment_total": 2, "comment_language": "en", "user": { "unique_id": "sample.viewer2" } },
+      { "aweme_id": "7000000000000000111", "cid": "7000000000000000998", "text": "cute dog", "create_time": 1789003800, "digg_count": 50 }
+    ],
+    "cursor": 20, "has_more": 1, "total": 3
+  },
+  "/v1/youtube/search": {
+    "success": true, "credits_remaining": 9985, "credits_charged": 1,
+    "videos": [ { "id": "SAMPLEvid01", "url": "https://www.youtube.com/watch?v=SAMPLEvid01", "title": "Stop back pain from sitting all day", "channel": { "id": "UCsample", "title": "Sample Channel", "handle": "samplechannel" }, "viewCountInt": 1200000, "publishedTimeText": "2 months ago", "publishedTime": "2026-08-20T10:00:00.000Z", "lengthSeconds": 600 } ],
+    "shorts": [ { "id": "SAMPLEsht01", "url": "https://www.youtube.com/watch?v=SAMPLEsht01", "title": "desk posture #shorts", "viewCountInt": 50000, "publishedTime": "2026-09-01T10:00:00.000Z" } ],
+    "continuationToken": "c2FtcGxl"
+  },
+  "/v1/youtube/video/comments": {
+    "success": true, "credits_remaining": 9984, "credits_charged": 1,
+    "comments": [
+      { "id": "UgSAMPLEc1", "content": "Is there a way to sit at a desk without lower back pain? Nothing helps me.", "publishedTimeText": "3 weeks ago", "publishedTime": "2026-10-01T10:00:00.000Z", "engagement": { "likes": 210, "replies": 12 }, "author": { "name": "Sample Viewer", "channelId": "UCviewer" } },
+      { "id": "UgSAMPLEc2", "content": "great video", "publishedTime": "2026-10-02T10:00:00.000Z", "engagement": { "likes": 3, "replies": 0 } }
+    ],
+    "continationToken": null
+  },
+  "/v1/threads/search": {
+    "success": true, "credits_remaining": 9983, "credits_charged": 1,
+    "posts": [ { "id": "3600000000000000000_100", "pk": "3600000000000000000", "caption": { "text": "Why is it so hard to find shoes that don't give me blisters" }, "code": "SAMPLEcode1", "like_count": 77, "taken_at": 1789500000, "user": { "username": "sample.threads", "pk": "100" }, "text_post_app_info": { "direct_reply_count": 9 } } ]
+  },
+  "/v1/twitter/search/posts": {
+    "success": true, "credits_remaining": 9982, "credits_charged": 1, "query": "\"so annoying\" earbuds",
+    "posts": [ { "rest_id": "2000000000000000001", "url": "https://x.com/sample_x/status/2000000000000000001", "views": { "count": "780" }, "legacy": { "created_at": "Thu Oct 01 18:50:27 +0000 2026", "full_text": "my earbuds falling out every run is so annoying", "favorite_count": 11, "reply_count": 4, "retweet_count": 0 } } ],
+    "cursor": "2"
+  },
+  "/xrpc/app.bsky.feed.searchPosts": {
+    "posts": [ { "uri": "at://did:plc:sample000000000000000000/app.bsky.feed.post/3sample0000a", "cid": "bafysample", "author": { "did": "did:plc:sample000000000000000000", "handle": "sample.bsky.social" }, "record": { "text": "Weet iemand hoe ik de schimmel in de badkamer kan oplossen? Ik word er gek van.", "createdAt": "2026-10-10T10:00:00.000Z", "langs": ["nl"] }, "likeCount": 15, "replyCount": 4, "repostCount": 1, "indexedAt": "2026-10-10T10:00:01.000Z" } ],
+    "hitsTotal": 1
+  }
+}

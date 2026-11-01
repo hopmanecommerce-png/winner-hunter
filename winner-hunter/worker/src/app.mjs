@@ -6,10 +6,12 @@
  *   GET  /api/ad/:id  the ad itself (text, video/images, CTA) (adview.mjs; the board no longer uses it: off unless AD_VIEWER = "on")
  *   GET  /api/markets EU reach a day per country over the board's products (Market Radar); ?scope=world: facts per market outside the EU
  *   ?scope=world on /api/ads and /export.csv: the products outside the EU (world.mjs), judged by proof signals, not reach
+ *   /api/problems, /api/problems/<id>, /problems.csv, /problems.json: the Problems tab (problems.mjs), behind the same PIN
  * All SQL is parameterized; sort orders come from a fixed list.
  */
 
 import { tiktokDecide, tiktokList } from './tiktok.mjs';
+import { problemDecide, problemDetail, problemsExport, problemsList } from './problems.mjs';
 import { adView } from './adview.mjs';
 import { TRAITS, AD_TRAITS, CHOICES, AD_CHOICES, SEP, YES_AT, VERSION } from './jev-questions.mjs';
 import { MARKET_RULES } from './market-rules.mjs';
@@ -1361,6 +1363,33 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       const { j, err } = await readJson(req, url, 8000);
       if (err) return err;
       const out = await launchPost(env, j, now, deps);
+      return json(out.body, out.status);
+    }
+    // ---- Problems (problems.mjs): problems people complain about, from the Problem Database. A block of its own, so the
+    // routes above stay as they are. Read-only for problems: the board only saves your decision on one.
+    if (path === '/api/problems' || path.startsWith('/api/problems/') || path === '/problems.csv' || path === '/problems.json') {
+      if (!ok) return path === '/problems.csv' ? text('Log in first.', 401) : json({ error: 'Log in first' }, 401);
+      if (path === '/problems.csv' || path === '/problems.json') {
+        if (method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+        const out = await problemsExport(env, url.searchParams, now, path.endsWith('.csv') ? 'csv' : 'json');
+        return text(out.body, 200, { 'Content-Type': out.type, 'Content-Disposition': `attachment; filename="${out.name}"` });
+      }
+      if (path !== '/api/problems') {
+        if (method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+        let id = '';
+        try {
+          id = decodeURIComponent(path.slice('/api/problems/'.length));
+        } catch (e) {
+          return json({ error: 'Bad id' }, 400);
+        }
+        const out = await problemDetail(env, id, now);
+        return json(out.body, out.status);
+      }
+      if (method === 'GET') return json(await problemsList(env, url.searchParams, now));
+      if (method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+      const { j, err } = await readJson(req, url);
+      if (err) return err;
+      const out = await problemDecide(env, j, now);
       return json(out.body, out.status);
     }
     // Off unless the Worker has AD_VIEWER = "on": the board no longer uses it, and a Meta token left in the Worker by an

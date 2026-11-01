@@ -1,0 +1,361 @@
+{
+  "_about": [
+    "The Problem Database's query bank (docs/problem-db/README.md). problems-collect.mjs searches with it, problems-process.mjs scores with it.",
+    "Problems only: how people complain or ask for a fix, never a product or a product idea.",
+    "patterns: how people complain or ask, per language. kind: complaint, need, question or struggle. search: false keeps a pattern out of the searches (it still counts when found in a post). '...' stands for a few words in between ('weet iemand hoe ik ... kan oplossen').",
+    "areas: the parts of life. keywords go with the patterns in text searches (Reddit, Threads); topics are searched as they are on the video platforms (TikTok, YouTube), whose comments hold the complaints; subreddits are searched with the patterns alone.",
+    "general: subreddits of no single area, searched with the patterns alone. signals: words that score a problem, never searched. countries: words that say where a post is from (a guess).",
+    "Add a line anywhere: test/problems.bank.test.mjs checks the file (every area in every language, no duplicates, valid subreddit names). Lower case or not does not matter."
+  ],
+  "version": 1,
+  "languages": ["en", "nl", "de"],
+  "patterns": {
+    "en": [
+      { "p": "I hate that", "kind": "complaint" },
+      { "p": "I hate when", "kind": "complaint" },
+      { "p": "so annoying", "kind": "complaint" },
+      { "p": "drives me crazy", "kind": "complaint" },
+      { "p": "sick of", "kind": "complaint" },
+      { "p": "fed up with", "kind": "complaint" },
+      { "p": "can't stand", "kind": "complaint" },
+      { "p": "the worst part", "kind": "complaint", "search": false },
+      { "p": "why is it so hard to", "kind": "complaint" },
+      { "p": "wish there was", "kind": "need" },
+      { "p": "is there a way to", "kind": "need" },
+      { "p": "there has to be a better way", "kind": "need" },
+      { "p": "looking for a way to", "kind": "need" },
+      { "p": "how do I stop", "kind": "need" },
+      { "p": "how do I get rid of", "kind": "need" },
+      { "p": "how do you deal with", "kind": "need" },
+      { "p": "any tips for", "kind": "need" },
+      { "p": "need a solution", "kind": "need" },
+      { "p": "does anyone know a fix for", "kind": "question" },
+      { "p": "does anyone else have this problem", "kind": "question" },
+      { "p": "anyone else struggle with", "kind": "question" },
+      { "p": "how do I fix", "kind": "question" },
+      { "p": "struggling with", "kind": "struggle" },
+      { "p": "no matter what I do", "kind": "struggle" },
+      { "p": "every single time", "kind": "struggle", "search": false },
+      { "p": "nothing works", "kind": "struggle" },
+      { "p": "I've tried everything", "kind": "struggle" }
+    ],
+    "nl": [
+      { "p": "ik heb er zo'n hekel aan", "kind": "complaint" },
+      { "p": "ik erger me aan", "kind": "complaint" },
+      { "p": "zo irritant", "kind": "complaint" },
+      { "p": "ik word er gek van", "kind": "complaint" },
+      { "p": "ben het zat", "kind": "complaint" },
+      { "p": "baal ervan", "kind": "complaint" },
+      { "p": "wat een gedoe", "kind": "complaint" },
+      { "p": "waarom is het zo moeilijk om", "kind": "complaint" },
+      { "p": "weet iemand hoe ik ... kan oplossen", "kind": "need" },
+      { "p": "is er een manier om", "kind": "need" },
+      { "p": "zoek een oplossing voor", "kind": "need" },
+      { "p": "hoe kom ik af van", "kind": "need" },
+      { "p": "hoe voorkom ik", "kind": "need" },
+      { "p": "iemand een tip voor", "kind": "need" },
+      { "p": "was er maar iets", "kind": "need" },
+      { "p": "weet iemand een oplossing", "kind": "question" },
+      { "p": "heeft iemand ervaring met", "kind": "question" },
+      { "p": "iemand anders ook last van", "kind": "question" },
+      { "p": "hoe los ik ... op", "kind": "question" },
+      { "p": "heb last van", "kind": "struggle" },
+      { "p": "worstel met", "kind": "struggle" },
+      { "p": "lukt maar niet", "kind": "struggle" },
+      { "p": "niks helpt", "kind": "struggle" },
+      { "p": "alles al geprobeerd", "kind": "struggle" }
+    ],
+    "de": [
+      { "p": "nervt", "kind": "complaint" },
+      { "p": "ich hasse es", "kind": "complaint" },
+      { "p": "geht mir auf die Nerven", "kind": "complaint" },
+      { "p": "regt mich auf", "kind": "complaint" },
+      { "p": "bin genervt", "kind": "complaint" },
+      { "p": "total nervig", "kind": "complaint" },
+      { "p": "ärgert mich", "kind": "complaint" },
+      { "p": "warum ist es so schwer", "kind": "complaint" },
+      { "p": "gibt es eine Lösung für", "kind": "need" },
+      { "p": "gibt es eine Möglichkeit", "kind": "need" },
+      { "p": "wie bekomme ich ... weg", "kind": "need" },
+      { "p": "wie verhindere ich", "kind": "need" },
+      { "p": "suche eine Lösung", "kind": "need" },
+      { "p": "hat jemand einen Tipp", "kind": "need" },
+      { "p": "was hilft gegen", "kind": "need" },
+      { "p": "ich wünschte es gäbe", "kind": "need" },
+      { "p": "weiß jemand wie", "kind": "question" },
+      { "p": "kennt jemand eine Lösung", "kind": "question" },
+      { "p": "hat jemand Erfahrung mit", "kind": "question" },
+      { "p": "hat noch jemand das Problem", "kind": "question" },
+      { "p": "habe Probleme mit", "kind": "struggle" },
+      { "p": "kämpfe mit", "kind": "struggle" },
+      { "p": "klappt einfach nicht", "kind": "struggle" },
+      { "p": "nichts hilft", "kind": "struggle" },
+      { "p": "schon alles probiert", "kind": "struggle" }
+    ]
+  },
+  "areas": {
+    "home": {
+      "label": "Home",
+      "keywords": {
+        "en": ["house", "apartment", "living room", "bathroom", "door", "window", "wall", "heating", "humidity", "mold"],
+        "nl": ["huis", "woning", "woonkamer", "badkamer", "deur", "raam", "muur", "verwarming", "vocht", "schimmel"],
+        "de": ["Haus", "Wohnung", "Wohnzimmer", "Badezimmer", "Tür", "Fenster", "Wand", "Heizung", "Feuchtigkeit", "Schimmel"]
+      },
+      "topics": {
+        "en": ["mold in bathroom", "drafty windows", "house always cold", "condensation on windows", "noisy neighbors"],
+        "nl": ["schimmel in de badkamer", "tocht bij de ramen", "huis altijd koud", "condens op de ramen", "gehorige woning"],
+        "de": ["Schimmel im Bad", "Fenster zieht", "Wohnung immer kalt", "Kondenswasser am Fenster", "hellhörige Wohnung"]
+      },
+      "subreddits": { "en": ["HomeImprovement", "DIY", "BuyItForLife", "HomeMaintenance"], "nl": ["Klussen"], "de": ["Heimwerker"] }
+    },
+    "kitchen": {
+      "label": "Kitchen",
+      "keywords": {
+        "en": ["kitchen", "cooking", "pan", "pot", "oven", "fridge", "dishes", "food storage", "knife", "cutting board"],
+        "nl": ["keuken", "koken", "pan", "oven", "koelkast", "afwas", "vershoudbakjes", "mes", "snijplank", "aanrecht"],
+        "de": ["Küche", "Kochen", "Pfanne", "Topf", "Backofen", "Kühlschrank", "Abwasch", "Vorratsdosen", "Messer", "Schneidebrett"]
+      },
+      "topics": {
+        "en": ["food sticking to pan", "small kitchen no counter space", "fridge smells", "greasy stove top", "dishes piling up"],
+        "nl": ["eten plakt aan de pan", "kleine keuken weinig ruimte", "koelkast stinkt", "vet op het fornuis", "afwas stapelt op"],
+        "de": ["Essen klebt in der Pfanne", "kleine Küche wenig Platz", "Kühlschrank stinkt", "fettiger Herd", "Abwasch stapelt sich"]
+      },
+      "subreddits": { "en": ["Cooking", "cookingforbeginners", "MealPrepSunday"], "nl": [], "de": ["kochen"] }
+    },
+    "cleaning": {
+      "label": "Cleaning",
+      "keywords": {
+        "en": ["cleaning", "stain", "laundry", "dust", "limescale", "grout", "carpet", "shower", "toilet", "smell"],
+        "nl": ["schoonmaken", "vlek", "was", "stof", "kalkaanslag", "voegen", "tapijt", "douche", "wc", "stank"],
+        "de": ["Putzen", "Fleck", "Wäsche", "Staub", "Kalk", "Fugen", "Teppich", "Dusche", "Toilette", "Geruch"]
+      },
+      "topics": {
+        "en": ["hard water stains shower", "black mold in grout", "dust everywhere", "laundry smells musty", "carpet stains won't come out"],
+        "nl": ["kalk op de douchewand", "zwarte voegen in de badkamer", "overal stof", "was ruikt muf", "vlekken in het tapijt"],
+        "de": ["Kalkflecken Dusche", "schwarze Fugen im Bad", "überall Staub", "Wäsche riecht muffig", "Flecken im Teppich"]
+      },
+      "subreddits": { "en": ["CleaningTips", "howtoclean", "Laundry"], "nl": [], "de": [] }
+    },
+    "pets": {
+      "label": "Pets",
+      "keywords": {
+        "en": ["dog", "cat", "puppy", "kitten", "litter box", "dog hair", "leash", "vet", "fleas", "barking"],
+        "nl": ["hond", "kat", "puppy", "kitten", "kattenbak", "hondenharen", "riem", "dierenarts", "vlooien", "blaffen"],
+        "de": ["Hund", "Katze", "Welpe", "Kätzchen", "Katzenklo", "Hundehaare", "Leine", "Tierarzt", "Flöhe", "Bellen"]
+      },
+      "topics": {
+        "en": ["dog hair everywhere", "cat scratching furniture", "dog pulling on leash", "litter box smell", "dog barks when left alone"],
+        "nl": ["overal hondenharen", "kat krabt aan de bank", "hond trekt aan de riem", "kattenbak stinkt", "hond blaft als ik weg ben"],
+        "de": ["überall Hundehaare", "Katze kratzt am Sofa", "Hund zieht an der Leine", "Katzenklo stinkt", "Hund bellt wenn er allein ist"]
+      },
+      "subreddits": { "en": ["Dogs", "Cats", "petcare", "puppy101", "DogAdvice"], "nl": [], "de": ["Hunde", "Katzen"] }
+    },
+    "baby_kids": {
+      "label": "Baby & kids",
+      "keywords": {
+        "en": ["baby", "toddler", "kids", "stroller", "diaper", "car seat", "bottle", "teething", "nap", "toys"],
+        "nl": ["baby", "peuter", "kinderen", "kinderwagen", "luier", "autostoeltje", "flesje", "tandjes", "slaapje", "speelgoed"],
+        "de": ["Baby", "Kleinkind", "Kinder", "Kinderwagen", "Windel", "Kindersitz", "Fläschchen", "Zahnen", "Mittagsschlaf", "Spielzeug"]
+      },
+      "topics": {
+        "en": ["baby won't sleep", "toddler refuses to eat", "toys everywhere", "diaper blowouts", "kids fighting in the car"],
+        "nl": ["baby slaapt niet door", "peuter wil niet eten", "overal speelgoed", "luier lekt door", "kinderen ruzie in de auto"],
+        "de": ["Baby schläft nicht durch", "Kleinkind will nicht essen", "überall Spielzeug", "Windel läuft aus", "Kinder streiten im Auto"]
+      },
+      "subreddits": { "en": ["ParentingHacks", "Parenting", "NewParents", "beyondthebump"], "nl": [], "de": ["Eltern"] }
+    },
+    "sleep": {
+      "label": "Sleep",
+      "keywords": {
+        "en": ["sleep", "insomnia", "mattress", "pillow", "snoring", "night sweats", "waking up", "blanket", "noise at night", "light"],
+        "nl": ["slapen", "slapeloosheid", "matras", "kussen", "snurken", "nachtzweten", "wakker worden", "dekbed", "geluid", "licht"],
+        "de": ["Schlafen", "Schlaflosigkeit", "Matratze", "Kissen", "Schnarchen", "Nachtschweiß", "Aufwachen", "Bettdecke", "Lärm", "Licht"]
+      },
+      "topics": {
+        "en": ["can't fall asleep", "partner snoring", "waking up at 3am", "too hot at night", "neck pain from pillow"],
+        "nl": ["kan niet in slaap komen", "partner snurkt", "elke nacht wakker", "te warm in bed", "nekpijn van mijn kussen"],
+        "de": ["kann nicht einschlafen", "Partner schnarcht", "nachts aufwachen", "nachts zu warm", "Nackenschmerzen vom Kissen"]
+      },
+      "subreddits": { "en": ["sleep", "insomnia", "Mattress"], "nl": [], "de": [] }
+    },
+    "back_neck_pain": {
+      "label": "Back & neck pain",
+      "keywords": {
+        "en": ["back pain", "neck pain", "lower back", "posture", "sciatica", "shoulder pain", "stiff neck", "desk", "lifting", "chair"],
+        "nl": ["rugpijn", "nekpijn", "onderrug", "houding", "hernia", "schouderpijn", "stijve nek", "bureau", "tillen", "stoel"],
+        "de": ["Rückenschmerzen", "Nackenschmerzen", "unterer Rücken", "Haltung", "Ischias", "Schulterschmerzen", "steifer Nacken", "Schreibtisch", "Heben", "Stuhl"]
+      },
+      "topics": {
+        "en": ["back pain from sitting all day", "neck pain from looking at phone", "lower back pain in the morning", "bad posture at desk", "sciatica at night"],
+        "nl": ["rugpijn van de hele dag zitten", "nekpijn van mijn telefoon", "rugpijn in de ochtend", "slechte houding achter het bureau", "pijn in de onderrug"],
+        "de": ["Rückenschmerzen vom Sitzen", "Nackenschmerzen vom Handy", "morgens Rückenschmerzen", "schlechte Haltung am Schreibtisch", "Ischias nachts"]
+      },
+      "subreddits": { "en": ["BackPain", "Posture", "Sciatica"], "nl": [], "de": [] }
+    },
+    "car": {
+      "label": "Car",
+      "keywords": {
+        "en": ["car", "car seat", "trunk", "windshield", "parking", "car smell", "car interior", "dashboard", "tires", "road trip"],
+        "nl": ["auto", "autostoel", "kofferbak", "voorruit", "parkeren", "luchtje in de auto", "interieur", "dashboard", "banden", "lange autorit"],
+        "de": ["Auto", "Autositz", "Kofferraum", "Windschutzscheibe", "Parken", "Geruch im Auto", "Innenraum", "Armaturenbrett", "Reifen", "lange Autofahrt"]
+      },
+      "topics": {
+        "en": ["car smells bad", "messy car interior", "foggy windshield", "phone keeps falling in car", "stuff sliding around in trunk"],
+        "nl": ["auto stinkt", "rommel in de auto", "beslagen voorruit", "telefoon valt steeds in de auto", "spullen schuiven in de kofferbak"],
+        "de": ["Auto stinkt", "Chaos im Auto", "Scheibe beschlägt", "Handy fällt im Auto runter", "Sachen rutschen im Kofferraum"]
+      },
+      "subreddits": { "en": ["MechanicAdvice", "AutoDetailing", "cars"], "nl": [], "de": [] }
+    },
+    "travel": {
+      "label": "Travel",
+      "keywords": {
+        "en": ["travel", "flight", "suitcase", "packing", "hotel", "jet lag", "airport", "backpack", "carry on", "camping"],
+        "nl": ["reizen", "vlucht", "koffer", "inpakken", "hotel", "jetlag", "vliegveld", "rugzak", "handbagage", "kamperen"],
+        "de": ["Reisen", "Flug", "Koffer", "Packen", "Hotel", "Jetlag", "Flughafen", "Rucksack", "Handgepäck", "Zelten"]
+      },
+      "topics": {
+        "en": ["can't sleep on planes", "suitcase too heavy", "packing too much", "neck pain on long flights", "wrinkled clothes after packing"],
+        "nl": ["kan niet slapen in het vliegtuig", "koffer te zwaar", "altijd te veel ingepakt", "nekpijn op een lange vlucht", "kreukels na het inpakken"],
+        "de": ["kann im Flugzeug nicht schlafen", "Koffer zu schwer", "immer zu viel eingepackt", "Nackenschmerzen beim Fliegen", "Kleidung zerknittert im Koffer"]
+      },
+      "subreddits": { "en": ["travel", "onebag", "solotravel", "CampingGear"], "nl": [], "de": [] }
+    },
+    "fitness": {
+      "label": "Fitness",
+      "keywords": {
+        "en": ["gym", "workout", "running", "home workout", "sore muscles", "knee pain", "weights", "yoga", "motivation", "stretching"],
+        "nl": ["sportschool", "workout", "hardlopen", "thuis sporten", "spierpijn", "kniepijn", "gewichten", "yoga", "motivatie", "rekken"],
+        "de": ["Fitnessstudio", "Training", "Laufen", "Heimtraining", "Muskelkater", "Knieschmerzen", "Gewichte", "Yoga", "Motivation", "Dehnen"]
+      },
+      "topics": {
+        "en": ["knee pain when running", "no space for home workout", "sore after every workout", "can't stay motivated to work out", "blisters from running"],
+        "nl": ["kniepijn bij hardlopen", "geen ruimte om thuis te sporten", "spierpijn na elke training", "geen motivatie om te sporten", "blaren van hardlopen"],
+        "de": ["Knieschmerzen beim Laufen", "kein Platz für Heimtraining", "Muskelkater nach jedem Training", "keine Motivation für Sport", "Blasen vom Laufen"]
+      },
+      "subreddits": { "en": ["Fitness", "homegym", "running", "xxfitness"], "nl": [], "de": [] }
+    },
+    "gardening": {
+      "label": "Gardening",
+      "keywords": {
+        "en": ["garden", "plants", "lawn", "weeds", "pests", "watering", "balcony", "houseplants", "slugs", "soil"],
+        "nl": ["tuin", "planten", "gazon", "onkruid", "ongedierte", "water geven", "balkon", "kamerplanten", "slakken", "grond"],
+        "de": ["Garten", "Pflanzen", "Rasen", "Unkraut", "Schädlinge", "Gießen", "Balkon", "Zimmerpflanzen", "Schnecken", "Erde"]
+      },
+      "topics": {
+        "en": ["weeds between pavers", "slugs eating my plants", "plants dying while on vacation", "lawn full of moss", "fungus gnats in houseplants"],
+        "nl": ["onkruid tussen de tegels", "slakken eten mijn planten", "planten water geven op vakantie", "mos in het gazon", "vliegjes in kamerplanten"],
+        "de": ["Unkraut in den Fugen", "Schnecken fressen meine Pflanzen", "Pflanzen gießen im Urlaub", "Moos im Rasen", "Trauermücken in Zimmerpflanzen"]
+      },
+      "subreddits": { "en": ["gardening", "lawncare", "houseplants", "IndoorGarden"], "nl": ["tuinieren"], "de": ["garten"] }
+    },
+    "organization": {
+      "label": "Organization",
+      "keywords": {
+        "en": ["storage", "clutter", "closet", "drawer", "small apartment", "cables", "shoes", "pantry", "garage", "shelves"],
+        "nl": ["opbergen", "rommel", "kast", "lade", "klein appartement", "kabels", "schoenen", "voorraadkast", "garage", "planken"],
+        "de": ["Aufbewahrung", "Unordnung", "Kleiderschrank", "Schublade", "kleine Wohnung", "Kabel", "Schuhe", "Vorratsschrank", "Garage", "Regale"]
+      },
+      "topics": {
+        "en": ["no storage space small apartment", "closet always messy", "cables everywhere", "shoes piling up by the door", "junk drawer chaos"],
+        "nl": ["geen opbergruimte in een klein huis", "kast altijd een rommel", "overal kabels", "schoenen slingeren in de gang", "rommella puilt uit"],
+        "de": ["kein Stauraum in kleiner Wohnung", "Kleiderschrank immer unordentlich", "überall Kabel", "Schuhe stapeln sich im Flur", "Chaos in der Schublade"]
+      },
+      "subreddits": { "en": ["organization", "declutter", "lifehacks", "minimalism"], "nl": [], "de": [] }
+    },
+    "fashion": {
+      "label": "Fashion",
+      "keywords": {
+        "en": ["clothes", "shoes", "bra", "jeans", "shirt", "fit", "sizing", "wrinkles", "sweat stains", "pilling"],
+        "nl": ["kleding", "schoenen", "bh", "spijkerbroek", "overhemd", "pasvorm", "maat", "kreukels", "zweetvlekken", "pluizen"],
+        "de": ["Kleidung", "Schuhe", "BH", "Jeans", "Hemd", "Passform", "Größe", "Falten", "Schweißflecken", "Fusseln"]
+      },
+      "topics": {
+        "en": ["jeans too tight at the waist", "new shoes giving blisters", "bra straps falling down", "sweat stains on shirts", "clothes pilling after washing"],
+        "nl": ["spijkerbroek knelt in de taille", "blaren van nieuwe schoenen", "bh-bandjes zakken af", "zweetvlekken in shirts", "kleding pluist na het wassen"],
+        "de": ["Jeans kneift am Bund", "Blasen von neuen Schuhen", "BH-Träger rutschen", "Schweißflecken auf Shirts", "Kleidung fusselt nach dem Waschen"]
+      },
+      "subreddits": { "en": ["malefashionadvice", "femalefashionadvice", "ABraThatFits"], "nl": [], "de": [] }
+    },
+    "tech_accessories": {
+      "label": "Tech accessories",
+      "keywords": {
+        "en": ["phone", "charger", "charging cable", "earbuds", "laptop", "battery", "phone case", "headphones", "keyboard", "wifi"],
+        "nl": ["telefoon", "oplader", "oplaadkabel", "oordopjes", "laptop", "batterij", "telefoonhoesje", "koptelefoon", "toetsenbord", "wifi"],
+        "de": ["Handy", "Ladegerät", "Ladekabel", "Kopfhörer", "Laptop", "Akku", "Handyhülle", "In-Ear", "Tastatur", "WLAN"]
+      },
+      "topics": {
+        "en": ["charging cable keeps breaking", "earbuds keep falling out", "phone battery dies fast", "laptop overheating", "tangled cables"],
+        "nl": ["oplaadkabel gaat steeds kapot", "oordopjes vallen steeds uit", "batterij snel leeg", "laptop wordt heet", "kabels in de knoop"],
+        "de": ["Ladekabel geht ständig kaputt", "Kopfhörer fallen raus", "Akku schnell leer", "Laptop wird heiß", "Kabelsalat"]
+      },
+      "subreddits": { "en": ["iphone", "Android", "headphones", "laptops"], "nl": [], "de": [] }
+    },
+    "hobby": {
+      "label": "Hobby",
+      "keywords": {
+        "en": ["hobby", "crafts", "sewing", "knitting", "painting", "fishing", "camping", "woodworking", "photography", "board games"],
+        "nl": ["hobby", "knutselen", "naaien", "breien", "schilderen", "vissen", "kamperen", "houtbewerking", "fotografie", "bordspellen"],
+        "de": ["Hobby", "Basteln", "Nähen", "Stricken", "Malen", "Angeln", "Camping", "Holzarbeiten", "Fotografie", "Brettspiele"]
+      },
+      "topics": {
+        "en": ["yarn always gets tangled", "craft supplies everywhere", "condensation inside tent", "paint brushes drying out", "fishing line tangles"],
+        "nl": ["wol raakt steeds in de knoop", "knutselspullen slingeren overal", "condens in de tent", "kwasten drogen uit", "vislijn raakt in de war"],
+        "de": ["Wolle verheddert sich", "Bastelsachen liegen überall", "Kondenswasser im Zelt", "Pinsel trocknen aus", "Angelschnur verheddert sich"]
+      },
+      "subreddits": { "en": ["crafts", "sewing", "knitting", "Fishing", "woodworking"], "nl": [], "de": [] }
+    },
+    "office": {
+      "label": "Office",
+      "keywords": {
+        "en": ["home office", "desk", "office chair", "monitor", "work from home", "meetings", "eye strain", "wrist pain", "focus", "noise"],
+        "nl": ["thuiswerken", "bureau", "bureaustoel", "beeldscherm", "werkplek", "vergaderen", "vermoeide ogen", "polspijn", "concentratie", "lawaai"],
+        "de": ["Homeoffice", "Schreibtisch", "Bürostuhl", "Monitor", "Arbeitsplatz", "Meetings", "müde Augen", "Handgelenkschmerzen", "Konzentration", "Lärm"]
+      },
+      "topics": {
+        "en": ["wrist pain from mouse", "eye strain from screen", "home office too small", "can't focus working from home", "desk always cluttered"],
+        "nl": ["polspijn van de muis", "vermoeide ogen van het scherm", "te kleine thuiswerkplek", "kan me thuis niet concentreren", "bureau altijd vol rommel"],
+        "de": ["Handgelenkschmerzen von der Maus", "müde Augen vom Bildschirm", "Homeoffice zu klein", "kann mich im Homeoffice nicht konzentrieren", "Schreibtisch immer unordentlich"]
+      },
+      "subreddits": { "en": ["WorkFromHome", "Ergonomics", "homeoffice"], "nl": [], "de": [] }
+    }
+  },
+  "general": {
+    "subreddits": { "en": ["mildlyinfuriating", "lifehacks", "NoStupidQuestions"], "nl": ["thenetherlands", "nederlands"], "de": ["de", "Finanzen"] }
+  },
+  "signals": {
+    "intensity": {
+      "en": ["hate", "annoying", "annoyed", "frustrating", "frustrated", "drives me crazy", "sick of", "fed up", "nightmare", "the worst", "ridiculous", "unbearable", "can't stand", "so tired of", "infuriating", "furious", "ugh", "desperate", "losing my mind", "at my wits end"],
+      "nl": ["haat", "hekel", "irritant", "ergerlijk", "erger me", "frustrerend", "gek van", "zat", "vreselijk", "verschrikkelijk", "drama", "ellende", "balen", "baal", "niet te doen", "wanhopig", "doodziek van"],
+      "de": ["hasse", "nervig", "nervt", "genervt", "frustrierend", "wahnsinnig", "satt", "furchtbar", "schrecklich", "Katastrophe", "Albtraum", "unerträglich", "ärgerlich", "ärgert", "regt mich auf", "kotzt mich an", "verzweifelt"]
+    },
+    "pay": {
+      "en": ["I would pay", "I'd pay", "take my money", "willing to pay", "happy to pay", "would buy", "worth paying for", "money is no object"],
+      "nl": ["ik zou ervoor betalen", "zou ervoor betalen", "geld voor over", "mag best wat kosten", "zou het meteen kopen"],
+      "de": ["würde dafür zahlen", "würde dafür bezahlen", "würde Geld ausgeben", "darf auch was kosten", "würde es sofort kaufen"]
+    },
+    "seeking": {
+      "en": ["looking for a solution", "any recommendations", "any suggestions", "what do you use", "what works for you", "can anyone recommend", "need something that", "is there something that"],
+      "nl": ["zoek een oplossing", "iemand een aanrader", "wat gebruiken jullie", "wat werkt voor jullie", "kan iemand iets aanraden", "zoek iets dat"],
+      "de": ["suche eine Lösung", "Empfehlungen", "was benutzt ihr", "was nutzt ihr", "kann jemand etwas empfehlen", "suche etwas"]
+    },
+    "tried": {
+      "en": ["I tried", "I've tried", "tried everything", "nothing works", "nothing helps", "didn't work", "doesn't work", "still doesn't", "waste of money"],
+      "nl": ["geprobeerd", "niks helpt", "helpt niet", "werkt niet", "heeft niet geholpen", "zonde van het geld"],
+      "de": ["probiert", "ausprobiert", "hilft nicht", "nichts hilft", "funktioniert nicht", "bringt nichts", "rausgeschmissenes Geld"]
+    },
+    "agree": {
+      "en": ["same here", "me too", "same problem", "I have the same", "same issue", "this is me", "glad I'm not the only one"],
+      "nl": ["ik ook", "zelfde probleem", "herkenbaar", "precies hetzelfde", "heb ik ook"],
+      "de": ["ich auch", "gleiches Problem", "geht mir genauso", "kenne ich", "habe ich auch"]
+    }
+  },
+  "countries": {
+    "NL": { "cues": ["nederland", "holland", "amsterdam", "rotterdam", "den haag", "utrecht", "eindhoven", "groningen", "albert heijn", "kruidvat", "hema", "bol.com", "marktplaats", "gemeente", "huisbaas"], "communities": ["thenetherlands", "nederlands", "Klussen", "tuinieren"] },
+    "BE": { "cues": ["belgie", "vlaanderen", "antwerpen", "gent", "brussel", "colruyt", "delhaize"], "communities": ["belgium", "Belgium2"] },
+    "DE": { "cues": ["deutschland", "berlin", "hamburg", "münchen", "köln", "frankfurt", "rossmann", "edeka", "rewe", "kaufland", "vermieter", "krankenkasse", "kleinanzeigen"], "communities": ["de", "Finanzen", "Heimwerker", "kochen", "garten", "Hunde", "Katzen", "Eltern"] },
+    "AT": { "cues": ["österreich", "wien", "graz", "salzburg", "billa"], "communities": ["Austria", "Wien"] },
+    "CH": { "cues": ["schweiz", "zürich", "basel", "migros"], "communities": ["Switzerland", "BUENZLI"] },
+    "US": { "cues": ["walmart", "home depot", "lowes", "costco", "usps", "zip code", "dollar store", "in the us"], "communities": [] },
+    "GB": { "cues": ["tesco", "sainsburys", "argos", "nhs", "council tax", "quid", "in the uk"], "communities": ["unitedkingdom", "CasualUK", "AskUK"] }
+  }
+}

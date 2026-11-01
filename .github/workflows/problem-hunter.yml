@@ -1,0 +1,94 @@
+# Problem Hunter (docs/problem-db/README.md): collects public posts and comments where people complain or ask for a fix
+# (winner-hunter/problems-collect.mjs, through the Scrape Creators API) and groups them into problems for the board's
+# Problems tab (winner-hunter/problems-process.mjs). Problems only, never products.
+# OFF by default: it runs when you start it (Actions → Problem Hunter → Run workflow). The daily schedule below starts
+# nothing until the repository variable PROBLEMS_SCHEDULE is "on" (Settings → Secrets and variables → Actions → Variables).
+# Spending is capped on every run: max_credits when started by hand, else the variable PROBLEMS_MAX_CREDITS (default 100);
+# 1 credit = 1 request, and the request that would pass the cap is never sent. The optional variable
+# PROBLEMS_MONTHLY_CREDITS caps a calendar month too. A dry run spends nothing and writes nothing.
+# Secrets: SCRAPECREATORS_API_KEY, CF_API_TOKEN, CF_ACCOUNT_ID (CF_D1_TOKEN, a D1-only Cloudflare token, is used instead of
+# CF_API_TOKEN when it is there). Optional: ANTHROPIC_API_KEY for the Claude step (the claude box, or the variable
+# PROBLEMS_CLAUDE = "on"), at most claude_max_usd (default 0.50) a run.
+# The logs hold counts only, never a quote or a name: this repository's Actions logs are public.
+name: Problem Hunter
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_credits:
+        description: 'Most Scrape Creators credits this run may spend (1 credit = 1 request; at most 5000)'
+        required: true
+        default: '100'
+      dry_run:
+        description: 'Dry run: show what it would search and cost; calls nothing, writes nothing'
+        type: boolean
+        default: false
+      platforms:
+        description: 'Platforms: reddit, youtube, tiktok (also threads, twitter, bluesky)'
+        required: false
+        default: 'reddit,youtube,tiktok'
+      claude:
+        description: 'Name and merge the problems with Claude (needs the ANTHROPIC_API_KEY secret)'
+        type: boolean
+        default: false
+      claude_max_usd:
+        description: 'Most dollars the Claude step may spend this run'
+        required: false
+        default: '0.50'
+  schedule:
+    # Starts nothing unless the repository variable PROBLEMS_SCHEDULE is "on".
+    - cron: '41 4 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: problem-hunter
+  cancel-in-progress: false
+
+jobs:
+  hunt:
+    # By hand, or on the schedule only when PROBLEMS_SCHEDULE is on: nothing spends credits by itself.
+    if: github.event_name == 'workflow_dispatch' || vars.PROBLEMS_SCHEDULE == 'on'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CF_API_TOKEN: ${{ secrets.CF_D1_TOKEN || secrets.CF_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID || '8934aca9-51d3-4f87-9c62-e897843149a1' }}
+      SCRAPECREATORS_API_KEY: ${{ secrets.SCRAPECREATORS_API_KEY }}
+      PROBLEM_MAX_CREDITS: ${{ inputs.max_credits || vars.PROBLEMS_MAX_CREDITS || '100' }}
+      PROBLEM_MONTHLY_CREDITS: ${{ vars.PROBLEMS_MONTHLY_CREDITS }}
+      PROBLEM_DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+      PROBLEM_PLATFORMS: ${{ inputs.platforms || vars.PROBLEMS_PLATFORMS || 'reddit,youtube,tiktok' }}
+      PROBLEM_SKIP_AREAS: ${{ vars.PROBLEMS_SKIP_AREAS }}
+      PROBLEM_MINUTES: '25'
+      CLAUDE_ON: ${{ (inputs.claude || vars.PROBLEMS_CLAUDE == 'on') && secrets.ANTHROPIC_API_KEY != '' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+
+      # Saves D1 Time Travel's bookmark in this log first, then makes the tables (only new ones: 0040_problems.sql).
+      - name: Database tables
+        if: ${{ !inputs.dry_run }}
+        run: node winner-hunter/migrate.mjs
+
+      - name: Collect posts and comments
+        run: node winner-hunter/problems-collect.mjs
+
+      # Claude's SDK, only when the Claude step is on and there is a key. Pinned, never saved in the repository.
+      - name: Install the Anthropic SDK
+        if: ${{ !cancelled() && !inputs.dry_run && env.CLAUDE_ON == 'true' }}
+        working-directory: winner-hunter
+        run: npm install --no-save --no-package-lock @anthropic-ai/sdk@1.3.0
+
+      # Free: grouping costs no credits. Also after a red collection: it groups what is in D1.
+      - name: Group into problems
+        if: ${{ !cancelled() && !inputs.dry_run }}
+        env:
+          ANTHROPIC_API_KEY: ${{ env.CLAUDE_ON == 'true' && secrets.ANTHROPIC_API_KEY || '' }}
+          PROBLEM_LLM_MAX_USD: ${{ inputs.claude_max_usd || vars.PROBLEMS_CLAUDE_MAX_USD || '0.50' }}
+          PROBLEM_LLM_MODEL: ${{ vars.PROBLEMS_CLAUDE_MODEL }}
+        run: node winner-hunter/problems-process.mjs

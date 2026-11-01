@@ -582,6 +582,52 @@
   .ttads a:hover { text-decoration: underline; }
   #ttgrid .t a { color: inherit; text-decoration: none; }
   #ttcat { max-width: 136px; }
+  /* Problems (problems.mjs): problems people complain about, before any product. The hunt's controls and cards step aside. */
+  body:not(.pb) #pbbox { display: none; }
+  .pb .wrap > .tools, .pb .wrap > .rail, .pb #runbox, .pb #grid, .pb #ibox, .pb #dock, .pb #pnote, .pb #learn, .pb #zero, .pb #empty, .pb #loadmore, .pb #csv, .pb #lnbox { display: none !important; }
+  .pbbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-top: 8px; }
+  .pbbar .ttnote { margin: 0; flex: 1 1 260px; }
+  .pbexp { display: flex; gap: 8px; }
+  .pblist { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; margin-top: 12px; align-items: start; }
+  .pbcard { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 10px; min-width: 0; }
+  .pbcard.open { grid-column: 1 / -1; }
+  .pbcard.starred { border-color: rgba(217, 164, 65, .55); }
+  .pbcard.saved { border-color: rgba(76, 195, 138, .45); }
+  .pbcard.ignored { opacity: .72; }
+  .pbcard.gone { opacity: 0; transition: opacity .2s; }
+  .pbtop { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .tag.rising, .tag.new { color: var(--win); border-color: rgba(76, 195, 138, .5); }
+  .tag.falling { color: var(--muted); }
+  .pbcard h2 { margin: 0; font-size: 17px; font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; }
+  .pbst { margin: 0; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+  .meta.pbnums { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .pbmeta { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .spark { display: inline-block; vertical-align: -1px; }
+  .spark rect { fill: rgba(237, 237, 237, .22); }
+  .spark rect.on { fill: var(--acc); }
+  .pbacts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 8px; }
+  .pbacts button { height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card2); color: var(--ink); font: 500 13px var(--sans); cursor: pointer; white-space: nowrap; }
+  .pbacts button:hover { border-color: var(--line2); }
+  .pbacts .pbstar[aria-pressed="true"] { border-color: var(--acc); color: var(--acc); background: rgba(217, 164, 65, .12); }
+  .pbacts .pbsave[aria-pressed="true"] { border-color: var(--win); color: var(--win); background: rgba(76, 195, 138, .12); }
+  .pbacts .pbign[aria-pressed="true"] { border-color: var(--bad); color: var(--bad); background: rgba(229, 72, 77, .1); }
+  .pbquotes { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; min-width: 0; }
+  .pbq { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .pbq li { border-left: 3px solid var(--line2); padding: 2px 0 2px 12px; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-line; }
+  .pbq li small { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+  .pbq li a { color: var(--ink); font-weight: 500; text-decoration: none; }
+  .pbq li a:hover { text-decoration: underline; }
+  .pbquotes .ghost { justify-self: start; }
+  .pbmp { margin: 0; font-size: 12px; color: var(--muted); }
+  @media (max-width: 520px) {
+    .pblist { grid-template-columns: minmax(0, 1fr); }
+    .meta.pbnums { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 8px; }
+    .meta.pbnums .m:nth-child(3) { border-left: 0; }
+    .pbacts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .pbacts .pbx { grid-column: 1 / -1; }
+  }
+  @media (pointer: coarse) { .pbacts button { min-height: 44px; } }
+  @media (max-width: 440px) { .scope button { padding: 0 6px; min-width: 0; } .scope button small { margin-left: 2px; } } /* four tabs fit a phone */
   /* 🚀 Launch (launch.mjs): an approved product's launch card, decision and checklist. The hunt's lists step aside. */
   body:not(.lnv) #lnbox, .tt #lnbox { display: none !important; }
   .lnv .wrap > .tools, .lnv #csv, .lnv #grid, .lnv #loadmore { display: none !important; }
@@ -695,7 +741,7 @@
     </div>
   </header>
   <div class="status" id="runbox"><i class="dot"></i><span class="run" id="run">Loading…</span></div>
-  <div class="scope" role="group" aria-label="Which products"><button data-scope="world" aria-pressed="true">Outside EU <small id="nworld"></small></button><button data-scope="eu" aria-pressed="false">EU <small id="neu"></small></button><button data-scope="tiktok" aria-pressed="false">TikTok <small id="ntt"></small></button></div>
+  <div class="scope" role="group" aria-label="Which products"><button data-scope="world" aria-pressed="true">Outside EU <small id="nworld"></small></button><button data-scope="eu" aria-pressed="false">EU <small id="neu"></small></button><button data-scope="tiktok" aria-pressed="false">TikTok <small id="ntt"></small></button><button data-scope="problems" aria-pressed="false" title="Problems people complain about, before any product">Problems <small id="npb"></small></button></div>
 
   <div class="tools">
   <section class="radar min" id="radar" aria-label="Market Radar" hidden>
@@ -801,6 +847,49 @@
     <div class="empty" id="ttempty" hidden></div>
     <div class="loadmore" id="ttload"><button id="ttmore" hidden>Show more</button></div>
   </section>
+  <section id="pbbox" aria-label="Problems">
+    <div class="alert yellow" id="pbsample" role="note" hidden>Sample data: made up for the tests, not real posts. A real Problem Hunter run replaces it.</div>
+    <div class="rail">
+      <div class="bar2">
+        <div class="seg" role="group" aria-label="Which problems">
+          <button data-pv="open" aria-pressed="true">Open <small id="pbn-open"></small></button>
+          <button data-pv="starred" aria-pressed="false" aria-label="Starred" title="Starred">★ <small id="pbn-starred"></small></button>
+          <button data-pv="saved" aria-pressed="false">Saved <small id="pbn-saved"></small></button>
+          <button data-pv="ignored" aria-pressed="false">Ignored <small id="pbn-ignored"></small></button>
+        </div>
+        <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg>
+          <input id="pbq" type="search" placeholder="Search problems and quotes…" aria-label="Search problems" maxlength="80" enterkeyhint="search"></label>
+      </div>
+      <div class="find">
+        <div class="chips" role="group" aria-label="Problem filters">
+          <span class="selw"><select id="pbsort" class="chip" aria-label="Sort">
+            <option value="intensity">Intensity</option>
+            <option value="volume">Most mentions</option>
+            <option value="growth">Growing fastest</option>
+            <option value="engagement">Most engagement</option>
+            <option value="wtp">Willing to pay</option>
+            <option value="newest">Newest problem</option>
+          </select></span>
+          <span class="selw"><select id="pbarea" class="chip" aria-label="Category"><option value="">All categories</option></select></span>
+          <span class="selw"><select id="pblang" class="chip" aria-label="Language"><option value="">All languages</option></select></span>
+          <span class="selw"><select id="pbcountry" class="chip" aria-label="Country"><option value="">All countries</option></select></span>
+          <span class="selw"><select id="pbplatform" class="chip" aria-label="Platform"><option value="">All platforms</option></select></span>
+          <span class="selw"><select id="pbmin" class="chip" aria-label="Fewest mentions">
+            <option value="1">Any mentions</option><option value="3">3+ mentions</option><option value="5">5+ mentions</option><option value="10">10+ mentions</option><option value="25">25+ mentions</option>
+          </select></span>
+          <span class="selw"><select id="pbtrend" class="chip" aria-label="Trend">
+            <option value="">Any trend</option><option value="rising">Rising</option><option value="new">New</option><option value="steady">Steady</option><option value="falling">Falling</option>
+          </select></span>
+          <button class="chip" id="pbpay" aria-pressed="false" title="At least one person said they would pay">Would pay</button>
+        </div>
+      </div>
+      <div class="count" id="pbcount" aria-live="polite"></div>
+    </div>
+    <div class="pbbar"><p class="ttnote" id="pbnote"></p><div class="pbexp"><a class="ic" id="pbcsv" href="/problems.csv" download title="These problems as CSV">CSV</a><a class="ic" id="pbjson" href="/problems.json" download title="These problems as JSON, with every quote">JSON</a></div></div>
+    <div class="pblist" id="pblist" aria-busy="true"></div>
+    <div class="empty" id="pbempty" hidden></div>
+    <div class="loadmore" id="pbload"><button id="pbmore" hidden>Show more</button></div>
+  </section>
   <section class="lnbox" id="lnbox" aria-label="Launch" hidden></section>
 </div>
 <div class="toast" id="toast" role="status" hidden><span id="toastMsg"></span><button id="undo">Undo</button></div>
@@ -848,7 +937,7 @@ const WSORTED = { eu: 'by EU reach a day', proof: 'most proof first', days: 'by 
 const WSORT_LABEL = { proof: 'Most proof', days: 'Oldest ad', ads: 'Most ads for product', markets: 'Most markets', shop: 'Most shop ads', fresh: 'New ads 14d', best: 'Store best seller', reviews: 'Trustpilot reviews', eu: 'EU reach / day', new: 'Newest' , jevp: 'Jev product score', jeva: 'Jev ad score' };
 const ESORT_LABEL = { rpd: 'Reach / day', new: 'Newest', scaled: 'Most ad copies', ads: 'Most shop ads', reach: 'Total reach', best: 'Store best seller' , jevp: 'Jev product score', jeva: 'Jev ad score' };
 const saved = store.get('wh-scope');
-const scope0 = saved === 'eu' || saved === 'tiktok' ? saved : 'world'; // the markets outside the EU come first
+const scope0 = saved === 'eu' || saved === 'tiktok' || saved === 'problems' ? saved : 'world'; // the markets outside the EU come first
 const st = { scope: scope0, view: scope0 === 'eu' ? 'inbox' : 'all', q: '', sort: 'rpd', wsort: 'proof', jev: '', r2500: false, r10k: false, p4: false, noteu: false, fresh: false, hidden: false, cc: '', offset: 0 };
 let ADS = [];
 let total = 0;
@@ -1317,7 +1406,7 @@ function worldRadar(m) {
   $('rall').textContent = showAll ? 'Top only' : `All ${m.markets.length} markets and selling rules`;
 }
 async function loadMarkets() {
-  if (st.scope === 'tiktok') return;
+  if (st.scope === 'tiktok' || st.scope === 'problems') return;
   const asked = st.scope;
   try {
     const res = await fetch('/api/markets' + (asked === 'world' ? '?scope=world' : ''), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
@@ -1734,7 +1823,7 @@ function setMade(n, bump) {
 
 let seq = 0;
 async function load(append) {
-  if (st.scope === 'tiktok') return;
+  if (st.scope === 'tiktok' || st.scope === 'problems') return;
   if (st.view === 'learned') { seq++; loadLearned(); return; }
   if (st.view === 'launch') { seq++; lnView(); return; }
   const my = ++seq;
@@ -1841,7 +1930,7 @@ $('grid').addEventListener('click', async (e) => {
 
 document.addEventListener('keydown', (e) => {
   // "/" jumps to the search (not while typing somewhere)
-  if (e.key === '/' && st.view === 'all' && !e.target.closest('input, select, textarea')) { e.preventDefault(); $('q').focus(); }
+  if (e.key === '/' && st.view === 'all' && !e.target.closest('input, select, textarea')) { e.preventDefault(); $(st.scope === 'problems' ? 'pbq' : st.scope === 'tiktok' ? 'ttq' : 'q').focus(); }
   // Inbox: R / ← reject, D / → approved, Enter or V: the ad in the Facebook Ad Library
   if (st.view !== 'inbox' || e.metaKey || e.ctrlKey || e.altKey || e.target.closest('input, select, textarea')) return;
   if (LAST && /^[1-9]$/.test(e.key)) {
@@ -2001,6 +2090,182 @@ for (const b of document.querySelectorAll('[data-tf]')) b.addEventListener('clic
 $('ttmore').addEventListener('click', ttMore);
 if ('IntersectionObserver' in window) new IntersectionObserver((es) => { if (es.some((x) => x.isIntersecting)) ttMore(); }, { rootMargin: '900px 0px' }).observe($('ttload'));
 
+// ---- Problems tab: problems people complain about (problems.mjs), before any product. The server filters and sorts,
+// a page at a time; Save, ★ and Ignore are your decisions on a problem.
+const pb = { view: 'open', q: '', sort: 'intensity', area: '', lang: '', country: '', platform: '', min: '1', trend: '', pay: false, list: [], total: 0, seq: 0, loading: false, areas: {}, open: new Set(), more: new Map() };
+const PB_PAGE = 40;
+const PB_TREND = { rising: '↑ Rising', new: '✦ New', steady: '→ Steady', falling: '↓ Falling' };
+const PB_PLATFORM = { reddit: 'Reddit', youtube: 'YouTube', tiktok: 'TikTok', threads: 'Threads', twitter: 'X', bluesky: 'Bluesky' };
+const PB_LANG = { en: 'English', nl: 'Dutch', de: 'German' };
+const PB_DECIDED = { saved: 'Saved', starred: 'Starred ★', ignored: 'Ignored' };
+const pbParams = () => {
+  const p = new URLSearchParams();
+  if (pb.view !== 'open') p.set('view', pb.view);
+  if (pb.q) p.set('q', pb.q);
+  if (pb.sort !== 'intensity') p.set('sort', pb.sort);
+  for (const k of ['area', 'lang', 'country', 'platform', 'trend']) if (pb[k]) p.set(k, pb[k]);
+  if (pb.min !== '1') p.set('min', pb.min);
+  if (pb.pay) p.set('pay', '1');
+  return p;
+};
+const pbArea = (k) => pb.areas[k] || (k ? k.replace(/_/g, ' ') : 'General');
+const pbCounts = (m, names = {}) => Object.entries(m || {}).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => `${esc(names[k] || k || '?')} ${esc(n)}`).join(' · ');
+function pbSpark(monthly) {
+  const max = Math.max(1, ...monthly.map((m) => m[1]));
+  const bars = monthly.map(([m, n], i) => { const h = n ? Math.max(2, Math.round((n / max) * 12)) : 1; return `<rect x="${i * 4}" y="${12 - h}" width="3" height="${h}"${n ? ' class="on"' : ''}><title>${esc(m)}: ${esc(n)}</title></rect>`; }).join('');
+  return `<svg class="spark" width="${monthly.length * 4}" height="12" viewBox="0 0 ${monthly.length * 4} 12" role="img" aria-label="Mentions a month, the last 12 months">${bars}</svg>`;
+}
+const pbQuote = (q) => `<li>${esc(q.text)}<small><a href="${safe(q.url)}" target="_blank" rel="noopener noreferrer">${esc(PB_PLATFORM[q.platform] || q.platform)} ↗</a>${q.lang ? ' · ' + esc(PB_LANG[q.lang] || q.lang) : ''}${q.at ? ' · ' + esc(day(q.at)) : ''}${q.score ? ' · ' + esc(fmt(q.score)) + ' likes and replies' : ''}</small></li>`;
+function pbCard(p) {
+  const open = pb.open.has(p.id);
+  const quotes = pb.more.get(p.id) || p.quotes;
+  const press = (d) => `aria-pressed="${p.decision === d}"`;
+  const tags = `<span class="tag">${esc(pbArea(p.area))}</span><span class="tag ${esc(p.trend)}" title="Mentions in the last 90 days against the 90 days before: × ${esc(p.growth)}">${esc(PB_TREND[p.trend] || p.trend)}</span>`
+    + (p.wtp_signals.pay ? '<span class="tag fit" title="Someone said they would pay">Would pay</span>' : '')
+    + (p.flags.includes('noise') ? '<span class="tag red" title="Claude read the quotes and says they are not one real problem">Not one problem?</span>' : '')
+    + (p.decision ? `<span class="tag made">${esc(PB_DECIDED[p.decision])}</span>` : '') + (p.sample ? '<span class="tag">Sample</span>' : '');
+  const when = p.first_seen ? `${esc(day(p.first_seen))}${p.last_seen && day(p.last_seen) !== day(p.first_seen) ? ' – ' + esc(day(p.last_seen)) : ''}` : '';
+  const country = pbCounts(p.countries);
+  return `<article class="pbcard${p.decision ? ' ' + esc(p.decision) : ''}${open ? ' open' : ''}" data-id="${esc(p.id)}">
+    <div class="pbtop">${tags}</div>
+    <h2>${esc(p.title)}</h2>
+    ${p.statement ? `<p class="pbst">${esc(p.statement)}</p>` : ''}
+    <div class="meta m4 pbnums">
+      <div class="m" title="Different posts and comments, copies counted once"><b>${esc(fmt(p.mentions))}</b><span>mentions</span></div>
+      <div class="m" title="Different people, where the platform says who"><b>${p.authors ? esc(fmt(p.authors)) : '–'}</b><span>people</span></div>
+      <div class="m" title="Upvotes, likes and replies added up"><b>${esc(fmt(p.engagement))}</b><span>engagement</span></div>
+      <div class="m" title="0-100: how upset the words are, and engagement. Willing to pay: ${esc(p.wtp)}/100"><b>${esc(p.intensity)}</b><span>intensity</span></div>
+    </div>
+    <div class="pbmeta"><span>${pbCounts(p.langs, PB_LANG)}</span>${country ? `<span title="A guess from the words and the community">${country}</span>` : ''}<span>${pbCounts(p.platforms, PB_PLATFORM)}</span>
+      <span>${pbSpark(p.monthly)}</span>${when ? `<span>${when}</span>` : ''}${p.wtp ? `<span title="I would pay: ${esc(p.wtp_signals.pay)} · looking for a fix: ${esc(p.wtp_signals.seeking)} · tried things: ${esc(p.wtp_signals.tried)}">Pay ${esc(p.wtp)}/100</span>` : ''}</div>
+    <div class="pbacts" role="group" aria-label="Decide">
+      <button class="pbsave" data-pd="saved" ${press('saved')}>Save</button><button class="pbstar" data-pd="starred" ${press('starred')}>★ Star</button><button class="pbign" data-pd="ignored" ${press('ignored')}>Ignore</button>
+      <button class="pbx" data-px aria-expanded="${open}">${open ? 'Hide quotes' : `Quotes (${esc(quotes.length)})`}</button>
+    </div>
+    ${open ? `<div class="pbquotes"><ul class="pbq">${quotes.map(pbQuote).join('')}</ul>${pb.more.has(p.id) ? '' : '<button class="ghost" data-pm>More quotes</button>'}
+      <p class="pbmp">${p.matched_products.length ? esc(p.matched_products.length) + ' products matched' : 'Products: none matched yet (a later step).'}${p.named_by.startsWith('claude:') ? ' · Named by Claude' : ''}</p></div>` : ''}
+  </article>`;
+}
+function pbRender() {
+  for (const b of document.querySelectorAll('[data-pv]')) b.setAttribute('aria-pressed', String(b.dataset.pv === pb.view));
+  $('pbpay').setAttribute('aria-pressed', String(pb.pay));
+  $('pblist').innerHTML = pb.list.map(pbCard).join('');
+  $('pblist').setAttribute('aria-busy', 'false');
+  const sortName = $('pbsort').selectedOptions[0] ? $('pbsort').selectedOptions[0].textContent.toLowerCase() : '';
+  $('pbcount').textContent = `${pb.total.toLocaleString('en-US')} problem${pb.total === 1 ? '' : 's'} · by ${sortName}`;
+  $('pbempty').hidden = pb.list.length > 0;
+  $('pbmore').hidden = pb.list.length >= pb.total;
+  const p = pbParams().toString();
+  $('pbcsv').href = '/problems.csv' + (p ? '?' + p : '');
+  $('pbjson').href = '/problems.json' + (p ? '?' + p : '');
+}
+function pbFill(id, counts, names, all) {
+  const sel = $(id);
+  const keep = sel.value;
+  const opts = Object.entries(counts || {}).filter(([k]) => k !== '').sort((a, b) => b[1] - a[1]);
+  sel.innerHTML = `<option value="">${esc(all)}</option>` + opts.map(([k, n]) => `<option value="${esc(k)}">${esc(names(k))} (${esc(n)})</option>`).join('');
+  sel.value = opts.some(([k]) => k === keep) ? keep : '';
+}
+function pbNote(j) {
+  const c = j.runs && j.runs.collect;
+  const pr = j.runs && j.runs.process;
+  const parts = [];
+  if (c && c.at) parts.push(`Collected ${ago(c.at)}: ${c.searches} searches, ${c.credits} of ${c.cap} credits${c.health && c.health !== 'ok' ? ` (${c.health}: ${c.alert})` : ''}`);
+  if (pr && pr.at) parts.push(`grouped ${ago(pr.at)}: ${pr.problems} problems from ${pr.relevant} posts and comments that state one${pr.llm && pr.llm.used ? `, named by Claude ($${pr.llm.usd})` : ''}`);
+  $('pbnote').textContent = parts.length ? parts.join(' · ') + '.' : 'No Problem Hunter run yet: Actions → Problem Hunter → Run workflow (docs/problem-db/README.md).';
+}
+async function pbLoad(append) {
+  if (pb.loading && append) return;
+  const my = ++pb.seq;
+  pb.loading = true;
+  if (!append) { $('pblist').innerHTML = SKELETON; $('pblist').setAttribute('aria-busy', 'true'); }
+  try {
+    const p = pbParams();
+    p.set('offset', String(append ? pb.list.length : 0));
+    p.set('limit', String(PB_PAGE));
+    const res = await fetch('/api/problems?' + p.toString(), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    if (res.status === 401) { location.reload(); return; }
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+    if (my !== pb.seq) return; // a newer filter was asked for meanwhile
+    pb.areas = j.areas || {};
+    pb.list = append ? pb.list.concat(j.problems) : j.problems;
+    pb.total = j.total;
+    for (const v of ['open', 'starred', 'saved', 'ignored']) $('pbn-' + v).textContent = j.views[v] ? fmt(j.views[v]) : '';
+    $('npb').textContent = j.views.open ? fmt(j.views.open) : '';
+    pbFill('pbarea', j.facets.areas, pbArea, 'All categories');
+    pbFill('pblang', j.facets.langs, (k) => PB_LANG[k] || k, 'All languages');
+    pbFill('pbcountry', j.facets.countries, land, 'All countries');
+    pbFill('pbplatform', j.facets.platforms, (k) => PB_PLATFORM[k] || k, 'All platforms');
+    $('pbsample').hidden = !j.sample;
+    pbNote(j);
+    $('pbempty').innerHTML = `${EMPTY_ICON}<div>${j.views.all ? 'No problems match these filters.' : 'No problems collected yet.'}</div>`;
+    pbRender();
+  } catch (e) {
+    if (my !== pb.seq) return;
+    $('pblist').innerHTML = '';
+    $('pbempty').hidden = false;
+    $('pbempty').textContent = 'Could not load the problems: ' + e.message;
+  } finally {
+    if (my === pb.seq) pb.loading = false;
+  }
+}
+const pbReload = () => { pb.open.clear(); pbLoad(false); };
+$('pblist').addEventListener('click', async (e) => {
+  const card = e.target.closest('.pbcard');
+  const p = card && pb.list.find((x) => x.id === card.dataset.id);
+  if (!p) return;
+  if (e.target.closest('[data-px]')) {
+    if (pb.open.has(p.id)) pb.open.delete(p.id); else pb.open.add(p.id);
+    card.outerHTML = pbCard(p);
+    return;
+  }
+  if (e.target.closest('[data-pm]')) {
+    const b = e.target.closest('[data-pm]');
+    b.disabled = true;
+    try {
+      const res = await fetch('/api/problems/' + encodeURIComponent(p.id), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+      pb.more.set(p.id, j.quotes.length ? j.quotes : p.quotes);
+      const now = $('pblist').querySelector(`.pbcard[data-id="${CSS.escape(p.id)}"]`);
+      if (now) now.outerHTML = pbCard(p);
+    } catch (err) {
+      b.disabled = false;
+      toast('Could not load the quotes. Try again.', '');
+    }
+    return;
+  }
+  const b = e.target.closest('[data-pd]');
+  if (!b) return;
+  const back = p.decision;
+  const want = p.decision === b.dataset.pd ? '' : b.dataset.pd; // a second tap takes it back
+  p.decision = want || null;
+  const leaves = pb.view !== 'all' && (pb.view === 'open' ? !!want : want !== pb.view);
+  if (leaves) {
+    card.classList.add('gone');
+    setTimeout(() => { pb.list = pb.list.filter((x) => x !== p); pb.total = Math.max(0, pb.total - 1); pbRender(); }, 180);
+  } else card.outerHTML = pbCard(p);
+  toast(want ? PB_DECIDED[want] : 'Taken back', '');
+  try {
+    const res = await fetch('/api/problems', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, decision: want }) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+  } catch (err) {
+    p.decision = back;
+    toast('Could not save that. Try again.', '');
+    pbLoad(false);
+  }
+});
+let pbTimer = 0;
+$('pbq').addEventListener('input', (e) => { clearTimeout(pbTimer); pbTimer = setTimeout(() => { pb.q = e.target.value.trim(); pbReload(); }, 300); });
+for (const [id, k] of [['pbsort', 'sort'], ['pbarea', 'area'], ['pblang', 'lang'], ['pbcountry', 'country'], ['pbplatform', 'platform'], ['pbmin', 'min'], ['pbtrend', 'trend']]) {
+  $(id).addEventListener('change', (e) => { pb[k] = e.target.value; pbReload(); });
+}
+$('pbpay').addEventListener('click', () => { pb.pay = !pb.pay; pbReload(); });
+for (const b of document.querySelectorAll('[data-pv]')) b.addEventListener('click', () => { if (pb.view !== b.dataset.pv) { pb.view = b.dataset.pv; pbReload(); } });
+$('pbmore').addEventListener('click', () => pbLoad(true));
+if ('IntersectionObserver' in window) new IntersectionObserver((es) => { if (st.scope === 'problems' && !$('pbmore').hidden && es.some((x) => x.isIntersecting)) pbLoad(true); }, { rootMargin: '900px 0px' }).observe($('pbload'));
+
 function goView(v) {
   if (st.view === v) return;
   st.view = v;
@@ -2039,6 +2304,7 @@ function goScope(s) {
   st.view = s === 'eu' ? 'inbox' : 'all';
   seq++; // an answer still on its way belongs to the tab you left
   document.body.classList.toggle('tt', s === 'tiktok');
+  document.body.classList.toggle('pb', s === 'problems');
   document.body.classList.remove('inbox');
   ADS = [];
   MARKETS = null;
@@ -2049,6 +2315,7 @@ function goScope(s) {
   for (const b of document.querySelectorAll('[data-scope]')) b.setAttribute('aria-pressed', String(b.dataset.scope === s));
   sortOptions();
   if (s === 'tiktok') ttLoad();
+  else if (s === 'problems') pbLoad(false);
   else { radar(); load(); loadMarkets(); }
   window.scrollTo({ top: 0 });
 }
@@ -2410,7 +2677,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 addEventListener('load', () => { if (!LN.list) lnLoad().catch(() => {}); }); // the count on 🚀: cards that are not a no-go
 
 // Desktop: cards lean toward the pointer (CSS variables through the CSSOM: the CSP blocks style attributes).
-if (st.scope === 'tiktok') { document.body.classList.add('tt'); ttLoad(); } else { load(); loadMarkets(); }
+if (st.scope === 'tiktok') { document.body.classList.add('tt'); ttLoad(); } else if (st.scope === 'problems') { document.body.classList.add('pb'); pbLoad(false); } else { load(); loadMarkets(); }
 </script>
 </body>
 </html>
