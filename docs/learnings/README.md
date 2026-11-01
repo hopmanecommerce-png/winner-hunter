@@ -24,7 +24,7 @@ On 1 November 2026, five read-only audits (hunt code, board, ops, data, tests) w
 | 12:50 | [#25] CI/CD and ops: safe previews, tested deploys, guarded hunts outside the EU | 168/168, 0 skipped |
 | 12:53 | [#27] Hunt pipeline: 11 audit fixes | 170/170, 0 skipped |
 | 12:57 | [#26] Board: 🚀 Launch view, launch card, checklist and go/no-go | 165/165, 0 skipped |
-| open | [#28] Board: fix the audit findings | 171 pass, 0 fail, 0 skipped |
+| open | [#28] Board: fix the audit findings | 171 pass in the description; 223 pass, 0 fail, 0 skipped on its latest commit (88dfc23) |
 
 ### [#25] CI/CD and ops safety (merged)
 - Previews only upload a test version: no migrations, hunt or store signals against the live D1. Only `winner-hunter/worker/**` and the workflow itself trigger them.
@@ -56,6 +56,7 @@ On 1 November 2026, five read-only audits (hunt code, board, ops, data, tests) w
 - Jev risks lower the Inbox rank. EU products people or pets take leave the Inbox.
 - Learning is by Jev category. "Too expensive" has one limit per currency (`0015_feedback_currency.sql`).
 - The best-seller boost is relative to store size, and products are grouped by product page. New tags: "Product not identified" and "Big catalogue". Smaller bugs fixed.
+- A later commit (88dfc23) makes [#26]'s launch cards follow the product-page grouping. New EU cards are keyed `eu|<store.com/products/handle>`. Cards saved under the old advertiser + title key are still found, and no rows are rewritten (no migration).
 - After it merges, every phone logs in once more.
 
 Earlier on 2026-11-01, #17–#24 were also merged (among them the D1 read fixes #20–#21 and the TikTok tab #23–#24). They came before the audit fixes and aren't covered here.
