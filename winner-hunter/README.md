@@ -40,6 +40,15 @@ After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, o
   launch (budget, kill and scale rule). It saves as you type (D1 table `launches`). **📌 Pin** marks the product you
   launch now, one at a time; a No go loses the pin. One card per product, as the board groups it (an EU product by its
   product page). A card started before that keeps its old advertiser + title key in D1 and is still that product's card.
+- **🏭 Suppliers** (🚀's second tab): which supplier to choose, with the evidence. One scorecard per product (from a
+  launch card's Sourcing step, or any product by name): up to 5 suppliers side by side, scored 0 to 100 on 7 criteria
+  with quality and delivery first (25 each; the weights are yours), and hard gates that put a supplier out (no samples,
+  no certificates the product needs, delivery over your limit (12 days unless you change it), an identity you can't
+  check, no refund or replacement for defects, a failed must-pass sample test). It has the checklist, the sample tests,
+  the first message to suppliers in English and Chinese, and **Choose**: the decision record (why, the price, the days,
+  the lead time, a backup) with a re-check every 90 days and before every reorder. D1 table `sourcing`
+  (`worker/src/supplier.mjs`). The method, for every product: `docs/sourcing/supplier-selection.md`. The filtered
+  showerhead is seeded as the first scorecard (its tests and questions, no suppliers): `docs/sourcing/showerhead-muravai.md`.
 - **Browse**: everything that passes, most reach per day first, with search, sort and filters. **★**: your kept products.
   **✓**: every product you approved, the last one first, with the day you approved it (also after it ages out of
   the rules). The ✓ count jumps each time you tap **✓ Approved**.
@@ -136,7 +145,7 @@ migrate.mjs      creates the D1 tables (safe to run every time)
 import.mjs       one-time import of the old winners
 keywords.txt     the search words (keywords-optin.txt: only with KEYWORDS_OPTIN=1)
 lib/             score.mjs (the four rules) · meta.mjs (Ad Library search) · d1.mjs (database) · storephoto.mjs · record.mjs
-worker/          the board: src/app.mjs (API + PIN) · src/board.html (page) · wrangler.toml · migrations/
+worker/          the board: src/app.mjs (API + PIN) · src/board.html (page) · src/launch.mjs (🚀) · src/supplier.mjs (🏭) · wrangler.toml · migrations/
 test/            npm test (node --test); test/board.e2e.test.mjs opens the board in Chromium at iPhone size;
                  test/ops.test.mjs runs the workflows' deploy steps and checks the rules that keep the live board safe
 ```

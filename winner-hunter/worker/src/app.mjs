@@ -14,6 +14,7 @@ import { adView } from './adview.mjs';
 import { TRAITS, AD_TRAITS, CHOICES, AD_CHOICES, SEP, YES_AT, VERSION } from './jev-questions.mjs';
 import { MARKET_RULES } from './market-rules.mjs';
 import { LAUNCH_JS, launchList, launchPost } from './launch.mjs';
+import { SUPPLIER_JS, supplierGet, supplierPost } from './supplier.mjs';
 
 const COOKIE = '__Host-wh';
 const MAX_AGE = 90 * 864e2; // seconds
@@ -1361,6 +1362,21 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       const { j, err } = await readJson(req, url, 8000);
       if (err) return err;
       const out = await launchPost(env, j, now, deps);
+      return json(out.body, out.status);
+    }
+    // ---- Suppliers (supplier.mjs): which supplier to choose for a product, up to 5 side by side, with the gates and the
+    // decision record. Opened from the Launch view. /supplier.js: the scoring code the board runs while you type.
+    if (path === '/api/supplier' || path === '/supplier.js') {
+      if (!ok) return json({ error: 'Log in first' }, 401);
+      if (path === '/supplier.js') return method === 'GET' ? text(SUPPLIER_JS, 200, { 'Content-Type': 'text/javascript; charset=utf-8' }) : json({ error: 'Method not allowed' }, 405);
+      if (method === 'GET') {
+        const out = await supplierGet(env, url.searchParams, now);
+        return json(out.body, out.status);
+      }
+      if (method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+      const { j, err } = await readJson(req, url, 16000);
+      if (err) return err;
+      const out = await supplierPost(env, j, now);
       return json(out.body, out.status);
     }
     // Off unless the Worker has AD_VIEWER = "on": the board no longer uses it, and a Meta token left in the Worker by an
