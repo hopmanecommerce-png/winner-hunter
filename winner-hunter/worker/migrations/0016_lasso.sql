@@ -1,8 +1,9 @@
 -- Lasso stores (lasso.mjs, optional, off by default): Shopify stores whose checkout runs on Lasso, checked on the store
 -- itself, with their best sellers. verdict: 'script' (Lasso's script on the store), 'checkout' (only checkout.<store>
 -- serves Lasso's checkout) or 'gone' (seen before, not any more). best: JSON [{ title, url, price, compare_at, currency,
--- image }], best first (Shopify's own sales order). first_seen: when this store was first found; last_seen: last
--- verified. The board does not read this table yet (docs/research/lasso-stores.md, "Into the board").
+-- image }], best first (Shopify's own sales order). currency, business_country (where the shop is registered) and
+-- ships_to (JSON ['DE', …], its market) are the shop's own (Shopify's /meta.json). first_seen: when this store was first
+-- found; last_seen: last verified. The board does not read this table yet (docs/research/lasso-stores.md, "Into the board").
 CREATE TABLE IF NOT EXISTS lasso_stores (
   domain TEXT PRIMARY KEY,
   store_id TEXT,
@@ -13,6 +14,8 @@ CREATE TABLE IF NOT EXISTS lasso_stores (
   lang TEXT,
   currency TEXT,
   country TEXT,
+  business_country TEXT,
+  ships_to TEXT,
   products INTEGER,
   kind TEXT,
   best TEXT,

@@ -24,6 +24,7 @@
  *   await checkStore('x.com')        → { domain, live, status, url, shopify, lasso, title, lang, currency, country, error? }
  *   await checkCheckout('checkout.x.com') → { host, lasso, status }
  *   await bestSellers('x.com')       → { products: [{ title, handle, url, price, compareAt, currency, image, type }] } | { error }
+ *   await shopMeta('x.com')          → { name, city, country, currency, products, shipsTo } (Shopify's /meta.json), or null
  *   await catalogSize('x.com')       → number of products (250 = 250 or more), or null
  *   adLibraryUrl('x.com')            → the Meta Ad Library search for the domain (all countries, active ads)
  * Fetchers never throw; doFetch is injectable (tests).
@@ -295,6 +296,30 @@ export async function bestSellers(domain, { n = 5, doFetch = globalThis.fetch, t
       };
     }),
   };
+}
+
+/**
+ * The shop's own facts from Shopify's public /meta.json: { name, city, country (where the business is registered),
+ * currency, products (exact count), shipsTo: ['DE', …] }, or null when the store does not answer it. Never throws.
+ */
+export async function shopMeta(domain, { doFetch = globalThis.fetch, timeout = 20000 } = {}) {
+  const r = await get(doFetch, `https://${cleanHost(domain)}/meta.json`, { timeout, accept: 'application/json' });
+  try {
+    const j = r.ok && JSON.parse(r.text);
+    if (!j || !j.myshopify_domain) return null;
+    const n = Number(j.published_products_count);
+    return {
+      name: decode(j.name).slice(0, 120),
+      city: decode(j.city).slice(0, 60),
+      country: /^[A-Z]{2}$/.test(j.country || '') ? j.country : '',
+      currency: /^[A-Z]{3}$/.test(j.currency || '') ? j.currency : '',
+      products: Number.isFinite(n) && n >= 0 ? n : null,
+      shipsTo: (Array.isArray(j.ships_to_countries) ? j.ships_to_countries : []).filter((c) => /^[A-Z]{2}$/.test(c)),
+      myshopify: String(j.myshopify_domain || '').toLowerCase(),
+    };
+  } catch (e) {
+    return null;
+  }
 }
 
 /**

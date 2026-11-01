@@ -5,7 +5,7 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import {
   LASSO_CNAME, OLD_CNAME, URLSCAN_QUERIES, lassoTag, lassoMarks, isLassoCheckout, cleanHost, checkoutHostOf, storeOf, pageStore,
-  otxHosts, urlscanHosts, ddgHosts, urlscanSearch, otxPassiveDns, checkStore, checkCheckout, bestSellers, catalogSize, isAddOn,
+  otxHosts, urlscanHosts, ddgHosts, urlscanSearch, otxPassiveDns, checkStore, checkCheckout, shopMeta, bestSellers, catalogSize, isAddOn,
   topProducts, storeKind, adLibraryUrl,
 } from '../lib/lasso.mjs';
 import { run, candidatesOf, toCsv, SAVE_SQL } from '../lasso.mjs';
@@ -127,6 +127,11 @@ function fakeWeb({ aHasLasso = true } = {}) {
     if (!hosts.has(host)) throw new TypeError('fetch failed');
     if (u.pathname.endsWith('/graphql.json')) return /BEST_SELLING/.test(init.body || '') ? best.clone() : json({ data: { products: { nodes: [{ id: '1' }, { id: '2' }] } } });
     if (u.pathname === '/products.json') return host === 'shop-b.test' ? html('nope', 404) : json({ products: [{ id: 1 }, { id: 2 }, { id: 3 }] });
+    if (u.pathname === '/meta.json') {
+      return ['shop-a.test', 'mirror.test'].includes(host)
+        ? json({ name: 'Shop A', city: 'Utrecht', country: 'NL', currency: 'EUR', myshopify_domain: 'a1b2c3-xy.myshopify.com', published_products_count: 1290, ships_to_countries: ['AT', 'CH', 'DE'] })
+        : html('', 404);
+    }
     if (u.pathname !== '/') return html('', 404);
     if (host === 'shop-a.test') return html(storePage(aHasLasso ? TAG_V4 : ''));
     if (host === 'mirror.test') return html(storePage(TAG_V4));
@@ -158,6 +163,8 @@ test('the store checks: live, Shopify, its Lasso tag, language and currency; the
   assert.strictEqual(await catalogSize('shop-a.test', { doFetch }), 3);
   assert.strictEqual(await catalogSize('shop-b.test', { doFetch }), 2, 'products.json off: the Storefront API counts');
   assert.strictEqual(await catalogSize('nowhere.test', { doFetch }), null);
+  assert.deepStrictEqual(await shopMeta('shop-a.test', { doFetch }), { name: 'Shop A', city: 'Utrecht', country: 'NL', currency: 'EUR', products: 1290, shipsTo: ['AT', 'CH', 'DE'], myshopify: 'a1b2c3-xy.myshopify.com' });
+  assert.strictEqual(await shopMeta('shop-b.test', { doFetch }), null);
 });
 
 test('add-ons, store kinds and the Ad Library link', () => {
@@ -188,16 +195,16 @@ test('a run: verified stores saved once (one per Shopify store), first_seen kept
   assert.deepStrictEqual([t.health, t.verified, t.script, t.checkout, t.mirrors, t.new, t.gone], ['ok', 2, 1, 1, 1, 2, 0]);
   assert.ok(queries.every((q) => q.endsWith(' AND date:>now-7d')), 'urlscan: the last LASSO_DAYS days');
   const rows = mem.prepare('SELECT * FROM lasso_stores ORDER BY domain').all();
-  assert.deepStrictEqual(rows.map((r) => [r.domain, r.verdict, r.checkout_host, r.script, r.store_id, r.lang, r.currency, r.products, r.kind]), [
-    ['mirror.test', 'script', 'checkout.shop-a.test', 'lasso-script-v4.min.js', ID, 'en', 'EUR', 3, 'one-product'],
-    ['shop-b.test', 'checkout', 'checkout.shop-b.test', '', '', 'de', 'EUR', 2, 'one-product'],
-  ], 'shop-a.test and mirror.test are one Shopify store: saved once; shop-c (no Lasso), gone.test and closed.test are not');
+  assert.deepStrictEqual(rows.map((r) => [r.domain, r.verdict, r.checkout_host, r.script, r.store_id, r.title, r.lang, r.currency, r.business_country, r.ships_to, r.products, r.kind]), [
+    ['mirror.test', 'script', 'checkout.shop-a.test', 'lasso-script-v4.min.js', ID, 'Shop A', 'en', 'EUR', 'NL', '["AT","CH","DE"]', 1290, 'general'],
+    ['shop-b.test', 'checkout', 'checkout.shop-b.test', '', '', 'Shop & Co', 'de', 'EUR', '', '[]', 2, 'one-product'],
+  ], 'shop-a.test and mirror.test are one Shopify store: saved once; shop-c (no Lasso), gone.test and closed.test are not; /meta.json gives the count, else products.json / the Storefront API');
   assert.deepStrictEqual(JSON.parse(rows[0].best).map((p) => p.title), ['Glow Gummies']);
   assert.deepStrictEqual(JSON.parse(rows[1].sources), ['otx']);
   assert.strictEqual(rows[0].first_seen, '2026-11-01T06:00:00.000Z');
   assert.ok(JSON.parse(mem.prepare("SELECT value FROM state WHERE key = 'lasso_run'").get().value).verified === 2);
   // Public logs: no store name, no checkout host, no product.
-  for (const text of [...lines, sum]) assert.doesNotMatch(text, /shop-[abc]\.test|mirror\.test|closed\.test|Glow Gummies/, text);
+  for (const text of [...lines, sum]) assert.doesNotMatch(text, /shop-[abc]\.test|mirror\.test|closed\.test|Glow Gummies|Shop A|Utrecht/, text);
   assert.match(sum, /2 verified \(1 script, 1 checkout only\) · 2 new/);
 
   // A week later: mirror.test has dropped Lasso (gone), shop-b is still there and keeps its first_seen.
@@ -232,10 +239,10 @@ test('a run: one source failing is yellow, every source failing is red; a D1 fai
 });
 
 test('CSV: one line per store, its top 3 products and the Ad Library link; commas and quotes escaped', () => {
-  const csv = toCsv([{ domain: 'shop.test', verdict: 'script', checkout_host: 'checkout.shop.test', title: 'Shop, "Co"', lang: 'en', currency: 'EUR', products: 3, kind: 'one-product', best: JSON.stringify([{ title: 'Glow', price: 39.95, url: 'https://shop.test/products/glow' }]) }]);
+  const csv = toCsv([{ domain: 'shop.test', verdict: 'script', checkout_host: 'checkout.shop.test', title: 'Shop, "Co"', lang: 'en', currency: 'EUR', business_country: 'NL', ships_to: '["DE","AT"]', products: 3, kind: 'one-product', best: JSON.stringify([{ title: 'Glow', price: 39.95, url: 'https://shop.test/products/glow' }]) }]);
   const [head, line] = csv.trim().split('\n');
-  assert.strictEqual(head, 'domain,verdict,checkout_host,title,lang,currency,products,kind,best_1,price_1,url_1,best_2,price_2,best_3,price_3,ad_library');
-  assert.ok(line.startsWith('shop.test,script,checkout.shop.test,"Shop, ""Co""",en,EUR,3,one-product,Glow,39.95,https://shop.test/products/glow,,,,,https://www.facebook.com/ads/library/'));
+  assert.strictEqual(head, 'domain,verdict,checkout_host,title,lang,currency,business_country,ships_to,products,kind,best_1,price_1,url_1,best_2,price_2,best_3,price_3,ad_library');
+  assert.ok(line.startsWith('shop.test,script,checkout.shop.test,"Shop, ""Co""",en,EUR,NL,DE AT,3,one-product,Glow,39.95,https://shop.test/products/glow,,,,,https://www.facebook.com/ads/library/'), line);
 });
 
 test('lasso-stores.yml: off (only by hand), the D1-only token, and no store list in public logs or files', () => {

@@ -25,21 +25,16 @@ import { d1Client, d1Settings, chunks } from './lib/d1.mjs';
 import { pool } from './lib/meta.mjs';
 import {
   LASSO_CNAME, OLD_CNAME, URLSCAN_QUERIES, SCRIPT_HOST, otxPassiveDns, otxHosts, urlscanSearch, urlscanHosts, ddgRadar, ddgHosts, pageStore, storeOf,
-  cleanHost, checkoutHostOf, checkStore, checkCheckout, bestSellers, catalogSize, storeKind, topProducts, adLibraryUrl,
+  cleanHost, checkoutHostOf, checkStore, checkCheckout, shopMeta, bestSellers, catalogSize, storeKind, topProducts, adLibraryUrl,
 } from './lib/lasso.mjs';
 
 const DAY = 864e5;
 const GONE_AFTER_DAYS = 120; // a store marked gone this long ago is not checked again
 
-export const SAVE_SQL = `INSERT INTO lasso_stores (domain, store_id, checkout_host, verdict, script, title, lang, currency, country, products, kind, best, sources, first_seen, last_seen, checked_at)
-SELECT json_extract(value, '$.domain'), json_extract(value, '$.store_id'), json_extract(value, '$.checkout_host'), json_extract(value, '$.verdict'),
-  json_extract(value, '$.script'), json_extract(value, '$.title'), json_extract(value, '$.lang'), json_extract(value, '$.currency'),
-  json_extract(value, '$.country'), json_extract(value, '$.products'), json_extract(value, '$.kind'), json_extract(value, '$.best'),
-  json_extract(value, '$.sources'), ?2, ?2, ?2 FROM json_each(?1) WHERE true
-ON CONFLICT(domain) DO UPDATE SET store_id = excluded.store_id, checkout_host = excluded.checkout_host, verdict = excluded.verdict,
-  script = excluded.script, title = excluded.title, lang = excluded.lang, currency = excluded.currency, country = excluded.country,
-  products = excluded.products, kind = excluded.kind, best = excluded.best, sources = excluded.sources,
-  last_seen = excluded.last_seen, checked_at = excluded.checked_at`;
+const COLS = ['domain', 'store_id', 'checkout_host', 'verdict', 'script', 'title', 'lang', 'currency', 'country', 'business_country', 'ships_to', 'products', 'kind', 'best', 'sources'];
+export const SAVE_SQL = `INSERT INTO lasso_stores (${COLS.join(', ')}, first_seen, last_seen, checked_at)
+SELECT ${COLS.map((c) => `json_extract(value, '$.${c}')`).join(', ')}, ?2, ?2, ?2 FROM json_each(?1) WHERE true
+ON CONFLICT(domain) DO UPDATE SET ${COLS.slice(1).map((c) => `${c} = excluded.${c}`).join(', ')}, last_seen = excluded.last_seen, checked_at = excluded.checked_at`;
 export const GONE_SQL = `UPDATE lasso_stores SET verdict = 'gone', checked_at = ?2 WHERE domain IN (SELECT value FROM json_each(?1))`;
 export const KNOWN_SQL = `SELECT domain, checkout_host, verdict FROM lasso_stores WHERE verdict != 'gone' OR checked_at >= ?1`;
 
@@ -66,8 +61,11 @@ export function candidatesOf({ otx = [], urlscan = [], ddg = [], known = [] } = 
   return out;
 }
 
-/** A verified store → its lasso_stores row (best: JSON text). */
-export function rowOf(c, s, verdict, checkoutHost, best, products) {
+/**
+ * A verified store → its lasso_stores row (best, ships_to, sources: JSON text). currency and business_country are the
+ * shop's own (/meta.json); ships_to: the countries it sells to, so its market.
+ */
+export function rowOf(c, s, verdict, checkoutHost, best, products, meta = null) {
   const script = s.lasso ? s.lasso.script || 'lasso-script' : s.marks.includes('inline') ? 'inline' : '';
   return {
     domain: c.store,
@@ -75,10 +73,12 @@ export function rowOf(c, s, verdict, checkoutHost, best, products) {
     checkout_host: checkoutHost,
     verdict,
     script,
-    title: String(s.siteName || s.title || '').slice(0, 120),
+    title: String((meta && meta.name) || s.siteName || s.title || '').slice(0, 120),
     lang: s.lang || '',
-    currency: s.currency || '',
+    currency: (meta && meta.currency) || s.currency || '',
     country: s.country || '',
+    business_country: (meta && meta.country) || '',
+    ships_to: JSON.stringify((meta && meta.shipsTo) || []),
     products: products ?? null,
     kind: storeKind(products),
     best: JSON.stringify(best.map((p) => ({ title: p.title, url: p.url, price: p.price, compare_at: p.compareAt, currency: p.currency, image: p.image }))),
@@ -86,7 +86,7 @@ export function rowOf(c, s, verdict, checkoutHost, best, products) {
   };
 }
 
-const CSV_COLS = ['domain', 'verdict', 'checkout_host', 'title', 'lang', 'currency', 'products', 'kind', 'best_1', 'price_1', 'url_1', 'best_2', 'price_2', 'best_3', 'price_3', 'ad_library'];
+const CSV_COLS = ['domain', 'verdict', 'checkout_host', 'title', 'lang', 'currency', 'business_country', 'ships_to', 'products', 'kind', 'best_1', 'price_1', 'url_1', 'best_2', 'price_2', 'best_3', 'price_3', 'ad_library'];
 const cell = (v) => (/[",\n]/.test(String(v ?? '')) ? `"${String(v).replace(/"/g, '""')}"` : String(v ?? ''));
 
 /** The rows as CSV (one line per store, its top 3 products). */
@@ -95,7 +95,8 @@ export function toCsv(rows) {
   for (const r of rows) {
     const b = JSON.parse(r.best || '[]');
     const p = (i, k) => (b[i] ? b[i][k] : '');
-    lines.push([r.domain, r.verdict, r.checkout_host, r.title, r.lang, r.currency, r.products, r.kind, p(0, 'title'), p(0, 'price'), p(0, 'url'),
+    const ships = JSON.parse(r.ships_to || '[]');
+    lines.push([r.domain, r.verdict, r.checkout_host, r.title, r.lang, r.currency, r.business_country, ships.length > 12 ? `${ships.length} countries` : ships.join(' '), r.products, r.kind, p(0, 'title'), p(0, 'price'), p(0, 'url'),
       p(1, 'title'), p(1, 'price'), p(2, 'title'), p(2, 'price'), adLibraryUrl(r.domain)].map(cell).join(','));
   }
   return lines.join('\n') + '\n';
@@ -189,16 +190,18 @@ export async function run(cfg = {}, deps = {}) {
       if (knownSet.has(c.store) && (s.live || s.status >= 400)) gone.push(c.store);
       return;
     }
-    if (s.myshopify && seenShop.has(s.myshopify)) {
+    const meta = await shopMeta(c.store, { doFetch });
+    const shop = s.myshopify || (meta && meta.myshopify) || '';
+    if (shop && seenShop.has(shop)) {
       t.mirrors++;
       return;
     }
-    if (s.myshopify) seenShop.set(s.myshopify, c.store);
+    if (shop) seenShop.set(shop, c.store);
     const b = await bestSellers(c.store, { n: 10, doFetch });
-    const products = await catalogSize(c.store, { doFetch });
+    const products = meta && meta.products != null ? meta.products : await catalogSize(c.store, { doFetch });
     // The checkout host as far as it is known: the script's, the one that served Lasso, or the CNAME from the source.
     const checkoutHost = tagHost || (co.lasso ? host : c.checkoutHost);
-    t.rows.push(rowOf(c, s, verdict, checkoutHost, topProducts(b.products, 5), products));
+    t.rows.push(rowOf(c, s, verdict, checkoutHost, topProducts(b.products, 5), products, meta));
     t[verdict]++;
   });
   t.rows.sort((a, b) => (a.domain < b.domain ? -1 : 1));
