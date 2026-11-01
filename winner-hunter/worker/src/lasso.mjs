@@ -170,6 +170,8 @@ export function lassoKit() {
     b.append('Lasso checkout', document.createElement('small'));
     b.addEventListener('click', () => {
       st.lasso = !st.lasso;
+      const csv = document.getElementById('csv'); // the CSV link follows the chip at once, not only when the answer is drawn (render())
+      if (csv) csv.href = '/export.csv?' + params().toString();
       paint();
       load();
     });

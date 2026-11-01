@@ -130,8 +130,12 @@ test('Lasso checkout on a phone: the chip in the Inbox and in Browse, its count,
     assert.strictEqual(await page.locator('#opts .lchip.lbr + [data-f="hidden"]').count(), 1, 'before "Approved & rejected"');
     await page.click('[data-f="hidden"]');
     await page.waitForFunction(() => document.querySelector('.lchip.lbr small').textContent === '4');
+    // The four products decided above are the four Lasso ones: the grid looks the same with the chip on, so the wait is for
+    // the chip's own answer (the cards drawn again). The CSV link follows the chip at once.
+    const shown = await page.$('#grid .card');
     await chip(page, 'lbr').click();
-    await page.waitForFunction(() => document.querySelectorAll('#grid .card').length === 4);
+    assert.match(await page.getAttribute('#csv', 'href'), /[?&]lasso=1(&|$)/, 'the CSV follows the chip at once');
+    await page.waitForFunction((c) => !c.isConnected && document.querySelectorAll('#grid .card').length === 4, shown);
     assert.strictEqual(await page.locator('#grid .card .badges .tag.lasso').count(), 4, 'every card has its tag, on the photo');
     assert.match(await page.textContent('#count'), /^4 matches · /);
     assert.match(await page.getAttribute('#csv', 'href'), /[?&]lasso=1(&|$)/);
