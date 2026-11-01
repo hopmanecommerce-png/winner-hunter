@@ -166,6 +166,17 @@ My CJ → Authorization → API), or `cd winner-hunter/worker && npx wrangler se
 The CJ token is kept in D1 (`state` row `cj_token`) sealed with a key made from `CJ_API_KEY`: the hunts can read D1, and
 a token there is no use to them.
 
+## 🧭 Pipeline (from approved to launched)
+
+**🧭** (next to 🚀) lists every approved product on eight stages: Approved → Request ready → Link found → Supplier confirmed
+→ Sample ordered → Sample approved → Test ads → Launched (scale or kill), each with what to do next, who does it, the days
+in its stage and your note. Filter by stage, target market or "stuck"; move with the buttons (or drag on a desktop),
+forward and back. Per product: a **sourcing request** with every field ready to copy (agent form, Kungfubuy or free text;
+English or Chinese; the photo as a JPG under 3 MB; the documents the risk radar asks for), the **1688 links** you paste (cleaned, offer id, price and MOQ; they are
+🔎 Sourcing's candidates, and **Choose** puts the cost on the launch card), and **target markets outside the EU** with
+currency, shipping, plug, tax, customs and restrictions per country. Nothing to set. How it works and how to add a country
+or an agent template: [docs/pipeline/README.md](../docs/pipeline/README.md).
+
 ## Set up (once)
 
 Add these 4 secrets in GitHub: **Settings → Secrets and variables → Actions → New repository secret**.
@@ -383,7 +394,9 @@ Every product gets a badge (`worker/src/risk.mjs`; the rules and their sources: 
 **Block** (a law, Shopify Payments or customs stops it: supplements, cosmetics, medical claims and devices, pet medicine,
 weapons, CBD and vapes, famous brands...), **Docs** (it sells with papers first: CE, a battery and UN38.3, toys, food contact,
 claims, blades) or **OK**, with return risks beside it (↩ Sizes, Fragile, Bulky, Over €150). It reads the name in English,
-Dutch and German, the product link and Jev's answers; never the ad's words for a block.
+Dutch and German, the product link and Jev's answers; never the ad's words for a block. A product that is not physical
+(gift card, download, course, service) is never blocked or hidden for that: a *Digital* note, and **OK** unless another
+reason applies.
 
 - Block products are hidden in the Inbox and Browse (EU, Outside EU, Google) and on the TikTok tab. The line above the cards says how many; **Show** brings
   them back with their badge (kept on that phone). ✓ Approved keeps them all and says how your approvals score.

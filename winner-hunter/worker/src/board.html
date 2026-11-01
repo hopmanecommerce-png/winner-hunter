@@ -824,6 +824,157 @@
   @media (pointer: coarse) { .eclink, .ecundo { min-height: 40px; } }
 </style>
 <style nonce="__NONCE__">
+  /* 🧭 Pipeline (pipeline.mjs): every approved product from Approved to Launched. The hunt's lists step aside (body.plv). */
+  body:not(.plv) #plbox, .tt #plbox { display: none !important; }
+  .plv .wrap > .tools, .plv #csv, .plv #grid, .plv #loadmore { display: none !important; }
+  .plbox { margin: 16px auto 0; display: grid; gap: 16px; min-width: 0; max-width: 1320px; }
+  .plhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+  .plhead h2 { margin: 0; font-size: 26px; font-weight: 600; }
+  .plhead p { flex: 1 1 100%; margin: 0; color: var(--muted); font-size: 14px; }
+  .plsaved { margin-left: auto; min-height: 1em; font: 500 12px var(--sans); color: var(--faint); }
+  .plbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
+  .plchips { flex: 1 1 100%; display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; min-width: 0; max-width: 100%; scrollbar-width: none; }
+  .plclip { position: fixed; left: -9999px; top: 0; opacity: 0; }
+  .plchips::-webkit-scrollbar { display: none; }
+  .plchips .chip[aria-pressed="true"] { color: var(--ink); border-color: var(--acc); background: rgba(217, 164, 65, .12); }
+  .plchips .chip small { font: 600 11px var(--mono); color: var(--faint); margin-left: 4px; }
+  .plchips .chip.drop, .plcol.drop { border-color: var(--acc); box-shadow: 0 0 0 2px rgba(217, 164, 65, .35); }
+  .plboard { display: grid; gap: 12px; min-width: 0; }
+  .plcol { display: grid; gap: 8px; align-content: start; min-width: 0; padding: 8px; border: 1px solid transparent; border-radius: 12px; }
+  .plcol h3 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .plcol h3 small { margin-left: auto; font: 600 11px var(--mono); color: var(--faint); }
+  .plcol.plnone h3 { color: var(--faint); font-weight: 500; }
+  .pln { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line2); display: grid; place-items: center; font: 600 11px var(--mono); flex: none; }
+  .plcards { display: grid; gap: 8px; min-width: 0; }
+  .plcard { display: grid; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+  .plcard.on { border-color: var(--acc); }
+  .plcard.stuck { border-color: rgba(217, 164, 65, .55); }
+  .plcard.dragging { opacity: .5; }
+  .plopen { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 10px; align-items: center; width: 100%; padding: 0; border: 0; background: none; color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+  .plth { width: 40px; height: 40px; border-radius: 8px; overflow: hidden; background: var(--card2); display: grid; place-items: center; flex: none; }
+  .plth.big { width: 72px; height: 72px; }
+  .plth img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .plth i { font-style: normal; color: var(--muted); font-weight: 600; }
+  .plt { min-width: 0; display: grid; gap: 2px; }
+  .plt b { font-size: 14px; font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .plt small, .plnext { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .plnext b { color: var(--ink); font-weight: 500; }
+  .pldays { font: 600 11px var(--mono); color: var(--faint); }
+  .plcard.stuck .pldays { color: var(--amb); }
+  .plmove { display: flex; gap: 6px; }
+  .plmove button, .plbtn { min-height: 36px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--line2); background: var(--card2); color: var(--ink); font: 500 13px var(--sans); cursor: pointer; white-space: nowrap; }
+  .plmove button:disabled, .plbtn:disabled { opacity: .45; cursor: default; }
+  .plmove .go, .plbtn.go { flex: 1; border-color: rgba(76, 195, 138, .4); background: rgba(76, 195, 138, .12); color: var(--win); }
+  .plmove .go { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .plbtn.on { border-color: var(--win); background: rgba(76, 195, 138, .26); color: var(--win); }
+  .plbtn.plghost { background: none; color: var(--muted); }
+  .plbtn.bad { color: var(--bad); }
+  .pldet { display: grid; gap: 14px; min-width: 0; padding: 16px; border: 1px solid var(--acc); border-radius: 14px; background: var(--card); }
+  .pltop { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 12px; align-items: start; }
+  .pltop h3 { margin: 0; font-size: 18px; font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; }
+  .pltop small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .pllinks { display: flex; flex-wrap: wrap; gap: 0 14px; font-size: 13px; }
+  .pllinks a, .pllinks button { color: var(--ink); font: 500 13px var(--sans); text-decoration: none; padding: 6px 0; background: none; border: 0; cursor: pointer; }
+  .pllinks a:hover, .pllinks button:hover { text-decoration: underline; }
+  .plsteps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
+  .plsteps button { width: 100%; display: grid; gap: 4px; padding: 0; border: 0; background: none; color: var(--faint); font: 500 10px/1.2 var(--sans); text-align: left; cursor: pointer; }
+  .plsteps i { display: block; height: 6px; border-radius: 3px; background: var(--line2); }
+  .plsteps .done i { background: var(--win); }
+  .plsteps .now i { background: var(--acc); }
+  .plsteps .now { color: var(--ink); }
+  .plsteps span { display: none; overflow-wrap: anywhere; }
+  .plnow { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  .plnow b { color: var(--ink); font-size: 15px; font-weight: 600; }
+  .plnow p { margin: 0; color: var(--ink); font-size: 14px; line-height: 1.4; }
+  .plsug { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border: 1px dashed rgba(76, 195, 138, .5); border-radius: 10px; font-size: 13px; }
+  .plsug span { flex: 1 1 200px; min-width: 0; }
+  .placts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .plfold { border-top: 1px solid var(--line); min-width: 0; }
+  .plfold > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; min-height: 48px; font-size: 15px; font-weight: 500; }
+  .plfold > summary::-webkit-details-marker { display: none; }
+  .plfold > summary span { flex: 1; min-width: 0; }
+  .plfold > summary small { font-size: 12px; font-weight: 400; color: var(--muted); text-align: right; overflow-wrap: anywhere; }
+  .plfold > summary::after { content: ''; width: 6px; height: 6px; border: solid var(--faint); border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); margin: 0 4px 4px 0; flex: none; }
+  .plfold[open] > summary::after { transform: rotate(225deg); margin-bottom: 0; }
+  .plsec { display: grid; gap: 10px; padding-bottom: 12px; min-width: 0; }
+  .plhint { margin: 0; font-size: 12px; line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }
+  .plhint.warn { color: var(--amb); }
+  .plhint.ok { color: var(--win); }
+  .plhint a { color: var(--ink); font-weight: 500; }
+  .plf { display: grid; gap: 4px; min-width: 0; font-size: 12px; color: var(--muted); }
+  .plf input, .plf textarea, .plf select, .pladd textarea { width: 100%; min-width: 0; height: 44px; border-radius: 10px; border: 1px solid var(--line2); background: var(--card2); color: var(--ink); padding: 0 12px; font: inherit; font-size: 16px; }
+  .plf textarea, .pladd textarea { height: auto; min-height: 64px; padding: 10px 12px; resize: vertical; line-height: 1.4; }
+  .plf input:focus, .plf textarea:focus, .plf select:focus, .pladd textarea:focus { outline: none; border-color: var(--acc); }
+  .plf [aria-invalid="true"] { border-color: var(--bad); }
+  .plgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+  .plgrid .wide { grid-column: 1 / -1; }
+  .pladd { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+  .pllist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0; }
+  .pll { display: grid; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+  .pll.on { border-color: rgba(76, 195, 138, .6); }
+  .pll1 { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; }
+  .pll1 a { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-weight: 500; text-decoration: none; }
+  .plp { flex: none; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--line2); font: 600 11px var(--mono); color: var(--muted); }
+  .ploid { flex: none; font: 500 11px var(--mono); color: var(--faint); }
+  .pll3 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .pll3 span { flex: 1 1 160px; min-width: 0; }
+  .plccs { display: flex; flex-wrap: wrap; gap: 6px; }
+  .plcc { min-height: 36px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--line2); background: var(--card2); color: var(--muted); font: 500 13px var(--sans); cursor: pointer; }
+  .plcc[aria-pressed="true"] { color: var(--ink); border-color: var(--acc); background: rgba(217, 164, 65, .14); }
+  .plcc.sug { border-style: dashed; }
+  .plcf { border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; min-width: 0; }
+  .plcf > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 8px; min-height: 44px; padding-top: 12px; font-size: 14px; font-weight: 500; }
+  .plcf > summary::-webkit-details-marker { display: none; }
+  .plcf > summary small { margin-left: auto; font-size: 12px; font-weight: 400; color: var(--muted); text-align: right; }
+  .plcf dl { margin: 0 0 12px; display: grid; gap: 8px; }
+  .plcf > .plhint { margin-bottom: 10px; }
+  .plcf dl div { display: grid; gap: 2px; font-size: 13px; }
+  .plcf dt { color: var(--muted); font-size: 12px; }
+  .plcf dd { margin: 0; line-height: 1.4; overflow-wrap: anywhere; }
+  .plcf dd.hot { color: var(--amb); }
+  .pltag { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--line2); font: 600 10px var(--mono); color: var(--faint); vertical-align: 1px; }
+  .pltag.fact { color: var(--win); border-color: rgba(76, 195, 138, .4); }
+  .pltag.estimate { color: var(--amb); border-color: rgba(217, 164, 65, .4); }
+  .plcf a { color: var(--muted); font-size: 12px; }
+  .plimg { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 12px; align-items: center; }
+  .plsegs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .plseg { display: inline-flex; padding: 3px; border-radius: 10px; border: 1px solid var(--line); background: var(--card2); }
+  .plseg button { min-height: 34px; padding: 0 12px; border: 0; border-radius: 8px; background: none; color: var(--muted); font: 500 13px var(--sans); cursor: pointer; }
+  .plseg button[aria-pressed="true"] { color: var(--ink); background: rgba(217, 164, 65, .14); }
+  .plfields { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0; }
+  .plfield { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; align-items: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); min-width: 0; }
+  .plfield b { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .plfield small { grid-column: 1 / -1; font-size: 12px; color: var(--faint); overflow-wrap: anywhere; }
+  .plfv { grid-column: 1 / -1; margin: 0; font: 14px/1.45 var(--sans); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+  .plfv.none { color: var(--faint); }
+  .plfield .plbtn { grid-column: 2; grid-row: 1; min-height: 32px; }
+  .plmoney { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--card2); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+  .plmoney b { font-size: 15px; }
+  .plhist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+  .plradar { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid rgba(76, 195, 138, .4); border-radius: 10px; font-size: 13px; line-height: 1.4; }
+  .plradar.docs { border-color: rgba(217, 164, 65, .5); }
+  .plradar.block { border-color: rgba(229, 72, 77, .6); }
+  .plradar ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--muted); }
+  .plradar li.block { color: var(--bad); }
+  .plradar span { color: var(--muted); font-size: 12px; }
+  .plhist b { color: var(--ink); font-weight: 500; }
+  .plset { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+  .plset .plccs { max-height: 260px; overflow: auto; }
+  .plempty { margin: 0; padding: 24px 12px; text-align: center; color: var(--muted); font-size: 14px; }
+  @media (pointer: coarse) { .plmove button, .plbtn, .plcc, .plseg button { min-height: 44px; } }
+  @media (min-width: 760px) {
+    .plgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .plsteps span { display: block; }
+    .pldet { padding: 20px; }
+  }
+  @media (min-width: 1000px) {
+    .plboard { grid-auto-flow: column; grid-auto-columns: minmax(220px, 1fr); overflow-x: auto; padding-bottom: 8px; }
+    .plboard.one { grid-auto-flow: row; grid-auto-columns: auto; }
+    .plcol { background: rgba(237, 237, 237, .02); border-color: var(--line); min-height: 160px; }
+    .plboard.one .plcards { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  }
+</style>
+<style nonce="__NONCE__">
   /* 🔎 Sourcing (sourcing.mjs): the supplier panel on a launch card, between the decision and the checklist. */
   .sx { min-width: 0; }
   .sxbox { background: var(--card); border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
@@ -3373,6 +3524,701 @@ if (st.scope === 'tiktok') { document.body.classList.add('tt'); ttLoad(); } else
 </script>
 <script nonce="__NONCE__">
 'use strict';
+// ---- 🧭 Pipeline (pipeline.mjs): every approved product from Approved to Launched, one stage after the other, with its
+// sourcing request ready to copy, its 1688 links and its target markets. A script of its own, so the code above stays as
+// it is: it adds its button next to 🚀 and its view after the launch view, wraps load() so the view takes over while it
+// is open, and steps aside when another view or tab is picked (as 🚀 does). The stages, links, pack and texts come from
+// /pipeline.js (window.PIPELINE), the code the Worker runs too. Changes save one after the other.
+const PL = { data: null, focus: '', f: { stage: '', cc: '', stuck: 0 }, lang: store.get('wh-pl-lang') === 'zh' ? 'zh' : 'en', tpl: '', chain: Promise.resolve(), busy: 0, timers: new Map(),
+  later: new Map(), folds: new Set(['links', 'pack']), cf: new Set(), settings: false, draft: null, drag: '', img: new Map() };
+const PL_NONCE = (document.currentScript && document.currentScript.nonce) || '';
+// /pipeline.js runs with the board's own sourcing and launch code (window.SOURCING, window.LAUNCH): it loads after them.
+const plReady = new Promise((ok, no) => {
+  const go = () => {
+    if (window.PIPELINE) { ok(); return; }
+    const s = document.createElement('script');
+    s.src = '/pipeline.js';
+    s.nonce = PL_NONCE;
+    s.addEventListener('load', () => (window.PIPELINE ? ok() : no(new Error('the pipeline code did not run'))), { once: true });
+    s.addEventListener('error', () => no(new Error('the pipeline code did not load')), { once: true });
+    document.head.append(s);
+  };
+  if (window.SOURCING && window.LAUNCH) { go(); return; }
+  const k = $('sxkit');
+  if (!k) { no(new Error('the sourcing code is missing')); return; }
+  k.addEventListener('load', () => (window.SOURCING && window.LAUNCH ? go() : no(new Error('the sourcing code did not run'))), { once: true });
+  k.addEventListener('error', () => no(new Error('the sourcing code did not load')), { once: true });
+});
+plReady.catch(() => {}); // said when the view opens
+const plBtn = document.createElement('button');
+plBtn.id = 'plseg';
+plBtn.setAttribute('aria-pressed', 'false');
+plBtn.setAttribute('aria-label', 'Pipeline');
+plBtn.title = 'Pipeline: every approved product, from sourcing to launch';
+plBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="11" rx="1.5"/><rect x="17" y="4" width="4" height="6" rx="1.5"/></svg> <small id="npipe"></small>';
+if ($('lnseg')) $('lnseg').after(plBtn); else document.querySelector('.seg').append(plBtn);
+const plBox = document.createElement('section');
+plBox.className = 'plbox';
+plBox.id = 'plbox';
+plBox.setAttribute('aria-label', 'Pipeline');
+plBox.hidden = true;
+if ($('lnbox')) $('lnbox').after(plBox); else document.querySelector('.wrap').append(plBox);
+
+const pl$ = (id) => document.getElementById(id);
+const plK = () => window.PIPELINE;
+const plItem = (key) => (PL.data && key ? PL.data.items.find((i) => i.key === key) : null) || null;
+const plImg = (f) => (safe(f && f.img) ? `<img src="${safe(f.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<i>${esc(String((f && f.title) || '?').slice(0, 1))}</i>`);
+const plA = (u, t) => (safe(u) ? `<a href="${safe(u)}" target="_blank" rel="noopener noreferrer">${esc(t)} ↗</a>` : '');
+const plSaved = (t) => { const el = pl$('plsaved'); if (el) el.textContent = t; };
+const PL_SRC = { eu: 'EU', world: 'Outside EU', google: 'Google', tiktok: 'TikTok' };
+const PL_RISK = { block: 'Block', docs: 'Docs', ok: 'OK' };
+const plKb = (n) => (n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
+const plActive = (it) => !it.dropped && !(it.stage === 'launched' && it.outcome);
+const plCount = () => { const el = pl$('npipe'); if (el && PL.data) el.textContent = PL.data.items.filter(plActive).length || ''; };
+const plStage = (k) => plK().stageOf(k) || { k, label: k, long: k, todo: '', who: '', next: '' };
+const plPack = (it) => plK().packOf(it, PL.data.countries);
+
+async function plLoad() {
+  await PL.chain; // saves on their way land first
+  const res = await fetch('/api/pipeline', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+  if (res.status === 401) { location.reload(); return; }
+  const j = await res.json();
+  if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+  PL.data = j;
+  if (!PL.tpl || !plK().TEMPLATES[PL.tpl]) PL.tpl = j.settings.template;
+  if (PL.focus && !plItem(PL.focus)) PL.focus = '';
+  plCount();
+}
+// The view, as 🚀: the hunt's controls and cards step aside (body.plv), the pipeline comes in.
+async function plView() {
+  if (typeof lnLeave === 'function') lnLeave(); // from the Launch view
+  if (typeof ecLeave === 'function') ecLeave(); // from the € view
+  for (const b of document.querySelectorAll('[data-view]')) b.setAttribute('aria-pressed', 'false');
+  for (const id of ['lnseg', 'ecseg']) if ($(id)) $(id).setAttribute('aria-pressed', 'false');
+  plBtn.setAttribute('aria-pressed', 'true');
+  document.body.classList.remove('inbox');
+  document.body.classList.add('plv');
+  $('grid').classList.remove('one');
+  $('grid').innerHTML = '';
+  for (const id of ['allrow', 'allrow2', 'count', 'empty', 'moreBtn', 'ibox', 'dock', 'zero', 'pnote', 'learn']) if ($(id)) $(id).hidden = true;
+  radar();
+  plBox.hidden = false;
+  const shown = PL.data && window.PIPELINE ? JSON.stringify(PL.data.items) : '';
+  if (shown) plRender();
+  else plBox.innerHTML = '<div class="sload"><i class="spin"></i>Loading…</div>';
+  try {
+    await plReady;
+    await plLoad();
+    if (st.view !== 'pipeline') return;
+    if (JSON.stringify(PL.data.items) !== shown) plRender(); // unchanged: no new render, so a field you tapped keeps its keyboard
+  } catch (e) {
+    if (st.view === 'pipeline') plBox.innerHTML = `<p class="plempty">Could not load the pipeline: ${esc(e.message)}</p>`;
+  }
+}
+function plLeave() {
+  if (!document.body.classList.contains('plv')) return;
+  plFlush();
+  document.body.classList.remove('plv');
+  plBox.hidden = true;
+  plBtn.setAttribute('aria-pressed', 'false');
+}
+// While the view is open, load() (every view's and filter's way in) opens it; any other view leaves it first.
+if (typeof load === 'function') {
+  const plBase = load;
+  load = function (append) {
+    if (st.view === 'pipeline') {
+      if (!append) { seq++; plView(); }
+      return Promise.resolve();
+    }
+    plLeave();
+    return plBase.apply(this, arguments);
+  };
+}
+plBtn.addEventListener('click', () => goView('pipeline'));
+for (const b of document.querySelectorAll('[data-scope]')) b.addEventListener('click', () => { if (st.view !== 'pipeline') plLeave(); });
+
+// Rendering ------------------------------------------------------------------------------------------------------------
+function plRender() {
+  if (!PL.data || !window.PIPELINE) return;
+  const it = plItem(PL.focus);
+  plBox.innerHTML = `<div class="plhead"><h2>Pipeline</h2><small class="plsaved" id="plsaved" aria-live="polite"></small>
+      <p>Every approved product, from sourcing to launch. Tap one for its sourcing request: every field is ready to copy.</p></div>
+    ${it ? `<div id="pldet">${plDetHtml(it)}</div>` : ''}
+    <div class="plbar" id="plbar">${plBarHtml()}</div>
+    ${PL.settings ? plSetHtml() : ''}
+    <div class="plboard${PL.f.stage ? ' one' : ''}" id="plboard">${plBoardHtml()}</div>`;
+  if (it) plSums(it);
+}
+// After a save: what changed follows; a field you are typing in keeps what you typed.
+function plRefresh() {
+  const it = plItem(PL.focus);
+  const det = pl$('pldet') && pl$('pldet').firstElementChild;
+  if (!!it !== !!det || (it && det.dataset.key !== it.key)) { plRender(); return; }
+  const a = document.activeElement;
+  const busy = (el) => el && a && el.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
+  if (it) {
+    for (const [id, fn] of [['pltop', plTopHtml], ['plnowsec', plNowHtml], ['plnotebox', plNoteHtml], ['pllinksec', plLinksHtml], ['plmktsec', plMarketsHtml], ['plform', plFormHtml], ['plout', plOutHtml], ['plhistsec', plHistHtml]]) {
+      const el = pl$(id);
+      if (el && !busy(el)) el.innerHTML = fn(it);
+    }
+    plSums(it);
+  }
+  if (pl$('plbar') && !busy(pl$('plbar'))) pl$('plbar').innerHTML = plBarHtml();
+  if (pl$('plboard')) pl$('plboard').innerHTML = plBoardHtml();
+}
+function plBarHtml() {
+  const d = PL.data;
+  const K = plK();
+  const live = d.items.filter((i) => !i.dropped);
+  const chip = (k, label, n) => `<button class="chip" data-pl-stage="${k}" aria-pressed="${PL.f.stage === k}">${esc(label)}<small>${n}</small></button>`;
+  return `<div class="plchips" role="group" aria-label="Stage">${chip('', 'All', live.length)}${K.STAGES.map((s) => chip(s.k, s.label, live.filter((i) => i.stage === s.k).length)).join('')}${chip('dropped', 'No go', d.items.length - live.length)}</div>
+    <span class="selw"><select id="plcc" class="chip" aria-label="Target market">${['', ...d.settings.markets].map((cc) => `<option value="${cc}"${PL.f.cc === cc ? ' selected' : ''}>${cc ? esc(flag(cc) + ' ' + ((d.countries[cc] || {}).name || cc)) : 'All countries'}</option>`).join('')}</select></span>
+    <span class="selw"><select id="plstuck" class="chip" aria-label="Days in its stage">${[[0, 'Any time in stage'], [3, 'Stuck 3+ days'], [7, 'Stuck 7+ days'], [14, 'Stuck 14+ days']].map(([v, t]) => `<option value="${v}"${PL.f.stuck === v ? ' selected' : ''}>${t}</option>`).join('')}</select></span>
+    <button class="chip" data-pl="settings" aria-expanded="${PL.settings}">Countries</button>`;
+}
+function plShown() {
+  const K = plK();
+  return PL.data.items.filter((i) => (PL.f.stage === 'dropped' ? i.dropped : !i.dropped) && (!PL.f.stage || PL.f.stage === 'dropped' || i.stage === PL.f.stage)
+    && (!PL.f.cc || K.marketsOf(i).includes(PL.f.cc)) && i.days >= PL.f.stuck);
+}
+function plBoardHtml() {
+  const K = plK();
+  if (!PL.data.items.length) return '<p class="plempty">No approved product yet. Approve one (✓ in the Inbox, or Approved on the TikTok tab) and it starts here, in Approved.</p>';
+  const items = plShown();
+  if (!items.length) return '<p class="plempty">Nothing here with these filters.</p>';
+  const cols = PL.f.stage === 'dropped' ? [{ k: 'dropped', label: 'No go' }] : PL.f.stage ? [plStage(PL.f.stage)] : K.STAGES;
+  return cols.map((s) => {
+    const xs = s.k === 'dropped' ? items : items.filter((x) => x.stage === s.k);
+    return `<section class="plcol${xs.length ? '' : ' plnone'}" data-pl-col="${s.k}" aria-label="${esc(s.label)}"><h3><span class="pln">${s.k === 'dropped' ? '×' : K.stageIndex(s.k) + 1}</span>${esc(s.label)}<small>${xs.length}</small></h3>
+      <div class="plcards">${xs.map(plCardHtml).join('')}</div></section>`;
+  }).join('');
+}
+function plCardHtml(it) {
+  const K = plK();
+  const f = it.facts || {};
+  const i = K.stageIndex(it.stage);
+  const s = K.STAGES[i];
+  const next = K.STAGES[i + 1];
+  const links = it.links.filter((l) => l.url).length;
+  const sub = [PL_SRC[f.source] || '', it.risk && it.risk.level === 'block' ? '⛔ Block' : '', links ? `${links} link${links === 1 ? '' : 's'}` : '', K.marketsOf(it).slice(0, 6).map(flag).join(' ')].filter(Boolean).join(' · ');
+  const decided = it.stage === 'launched' && it.outcome;
+  const what = it.dropped ? 'No go on the launch card' : decided ? `Decided: <b>${it.outcome === 'scale' ? 'Scale' : 'Kill'}</b>` : `Next: <b>${esc(s.todo)}</b> · ${esc(s.who)}`;
+  return `<article class="plcard${it.days >= 7 && plActive(it) ? ' stuck' : ''}${PL.focus === it.key ? ' on' : ''}" draggable="true" data-key="${esc(it.key)}">
+    <button class="plopen" data-pl-open="${esc(it.key)}" aria-expanded="${PL.focus === it.key}"><span class="plth">${plImg(f)}</span><span class="plt"><b>${esc(it.title || f.title)}</b><small>${esc(sub)}</small></span></button>
+    <div class="plnext">${what} <span class="pldays" title="Days in this stage">${it.days}d</span></div>
+    <div class="plmove">${it.dropped ? '<button data-pl-act="restore">Restore</button>'
+      : `<button data-pl-act="back"${i ? '' : ' disabled'} aria-label="Back to ${esc(i ? K.STAGES[i - 1].label : 'nothing')}">◀</button>${next ? `<button class="go" data-pl-act="next" aria-label="Move to ${esc(next.label)}">${esc(next.label)} ▶</button>` : ''}`}</div>
+  </article>`;
+}
+// The product in focus: its stage, note, 1688 links, target markets, sourcing request and history.
+function plDetHtml(it) {
+  const fold = (k, title, body) => `<details class="plfold" data-pl-fold="${k}"${PL.folds.has(k) ? ' open' : ''}><summary><span>${esc(title)}</span><small id="plsum-${k}"></small></summary><div class="plsec">${body}</div></details>`;
+  return `<article class="pldet" data-key="${esc(it.key)}">
+    <div class="pltop" id="pltop">${plTopHtml(it)}</div>
+    <div class="plsec" id="plnowsec">${plNowHtml(it)}</div>
+    <div id="plnotebox">${plNoteHtml(it)}</div>
+    ${fold('links', '1688 links', `<div class="plsec" id="pllinksec">${plLinksHtml(it)}</div>`)}
+    ${fold('markets', 'Target markets', `<div class="plsec" id="plmktsec">${plMarketsHtml(it)}</div>`)}
+    ${fold('pack', 'Sourcing request', `<div id="plform">${plFormHtml(it)}</div><div class="plsec" id="plout">${plOutHtml(it)}</div>`)}
+    ${fold('hist', 'History', `<div id="plhistsec">${plHistHtml(it)}</div>`)}
+  </article>`;
+}
+function plTopHtml(it) {
+  const f = it.facts || {};
+  const price = f.price != null ? money(f.price, f.cur) + (f.source === 'tiktok' ? ' on TikTok' : ' in their shop') : '';
+  return `<span class="plth big">${plImg(f)}</span><div class="plt"><h3>${esc(it.title || f.title)}</h3><small>${esc([PL_SRC[f.source], f.approved_at ? 'approved ' + day(f.approved_at) : '', price].filter(Boolean).join(' · '))}</small>
+      <div class="pllinks">${f.source === 'tiktok' ? plA(f.product, 'TikTok') + plA(f.ad, 'Meta ads') : plA(f.ad, 'Ad') + plA(f.product || f.store, 'Shop')}<button data-pl="launch">🚀 Launch card</button></div></div>
+    <button class="plbtn plghost" data-pl="close" aria-label="Close">✕</button>`;
+}
+function plNowHtml(it) {
+  const K = plK();
+  const i = K.stageIndex(it.stage);
+  const s = K.STAGES[i];
+  const next = K.STAGES[i + 1];
+  const prev = K.STAGES[i - 1];
+  const sug = it.dropped ? null : K.suggestOf(it);
+  const steps = K.STAGES.map((x, j) => `<li><button data-pl-to="${x.k}" class="${j < i ? 'done' : j === i ? 'now' : ''}" aria-label="Move to ${esc(x.label)}"${j === i ? ' aria-current="step"' : ''}${it.dropped ? ' disabled' : ''}><i></i><span>${esc(x.label)}</span></button></li>`).join('');
+  return `<ol class="plsteps" aria-label="Stages">${steps}</ol>
+    <div class="plnow"><span>Stage ${i + 1} of ${K.STAGES.length} · since ${esc(it.stage_at ? day(it.stage_at) : '–')} (${it.days} day${it.days === 1 ? '' : 's'})${it.card ? '' : ' · not on a launch card yet: your first change here starts one'}</span>
+      <b>${esc(s.long)}</b><p>${esc(it.stage === 'launched' && it.outcome ? `Decided: ${it.outcome === 'scale' ? 'scale it' : 'kill it'}.` : s.next)}</p><span>Who: ${esc(s.who)}</span></div>
+    ${it.dropped ? '<p class="plhint warn">No go on the launch card: off the pipeline. Restore brings it back where it was.</p>' : ''}
+    ${sug ? `<div class="plsug"><span>The data says <b>${esc(plStage(sug.stage).label)}</b>: ${esc(sug.why)}.</span><button class="plbtn go" data-pl-to="${sug.stage}">Move there</button></div>` : ''}
+    <div class="placts">${prev && !it.dropped ? `<button class="plbtn" data-pl-act="back">◀ ${esc(prev.label)}</button>` : ''}${next && !it.dropped ? `<button class="plbtn go" data-pl-act="next">${esc(next.label)} ▶</button>` : ''}
+      ${it.stage === 'launched' && !it.dropped ? `<button class="plbtn${it.outcome === 'scale' ? ' on' : ''}" data-pl-out="scale" aria-pressed="${it.outcome === 'scale'}">Scale</button><button class="plbtn bad${it.outcome === 'kill' ? ' on' : ''}" data-pl-out="kill" aria-pressed="${it.outcome === 'kill'}">Kill</button>` : ''}
+      <button class="plbtn plghost" data-pl-act="${it.dropped ? 'restore' : 'drop'}">${it.dropped ? 'Restore' : 'No go'}</button></div>`;
+}
+function plNoteHtml(it) {
+  return `<label class="plf"><span>Your note on “${esc(plStage(it.stage).label)}”</span><textarea id="plnote" rows="2" maxlength="1000" placeholder="What happened, what you wait for">${esc((it.notes || {})[it.stage] || '')}</textarea></label>`;
+}
+function plLinksHtml(it) {
+  const K = plK();
+  const links = it.links.filter((l) => l.url);
+  const chosen = links.find((l) => l.id === it.chosen_id);
+  const room = K.MAX_LINKS - links.length;
+  return `${room > 0 ? `<div class="pladd"><textarea id="plpaste" rows="2" maxlength="2000" aria-label="1688 link" placeholder="Paste the 1688 link you found (or what the 1688 app shares)"></textarea><button class="plbtn go" data-pl="add">Add</button></div>
+      <p class="plhint" id="plparse">Up to ${K.MAX_LINKS} links; AliExpress and Alibaba work too. Each is cleaned to the offer’s own address and its offer id read; price and MOQ come along when the app shares them.</p>`
+    : `<p class="plhint">${K.MAX_LINKS} links: remove one to add another, or compare more in 🔎 Sourcing.</p>`}
+    <ol class="pllist">${links.map((l) => plLinkHtml(it, l)).join('') || '<li class="plhint">No link yet. Search 1688 with the Chinese words (Sourcing request, below) or ask your agent, then paste the link here.</li>'}</ol>
+    <p class="plhint">${chosen ? 'The chosen one is in 🔎 Sourcing’s comparison and on the launch card.' : 'Choose the one you go with: its price lands in 🔎 Sourcing’s comparison and on the launch card.'} <button class="plbtn plghost" data-pl="launch">Compare in 🔎 Sourcing</button></p>`;
+}
+function plLinkHtml(it, l) {
+  const on = l.id === it.chosen_id;
+  const x = l.x || {};
+  const cost = x.unit != null ? `€${x.unit.toFixed(2)} a unit${x.landed != null ? ` · €${x.landed.toFixed(2)} at the door in NL (🔎 Sourcing)` : ''}` : 'No price yet';
+  const warn = ['shop', 'search', 'short'].includes(l.link_kind) ? (plK().linkOf(l.url) || {}).note : '';
+  const cur = l.currency || 'CNY';
+  return `<li class="pll${on ? ' on' : ''}" data-pl-id="${esc(l.id)}">
+    <div class="pll1"><span class="plp">${esc(l.label || l.platform)}</span>${plA(l.url, l.url.replace(/^https:\/\//, ''))}${l.offer_id ? `<span class="ploid">#${esc(l.offer_id)}</span>` : ''}</div>
+    ${warn ? `<p class="plhint warn">${esc(warn)}</p>` : ''}
+    <div class="plgrid"><label class="plf"><span>Price per unit</span><input type="text" inputmode="decimal" data-pl-lf="unit_price" value="${esc(l.unit_price ?? '')}" maxlength="12" autocomplete="off"></label>
+      <label class="plf"><span>Currency</span><select data-pl-lf="currency">${[['CNY', '¥ yuan'], ['USD', '$ dollar'], ['EUR', '€ euro']].map(([c, t]) => `<option value="${c}"${cur === c ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+      <label class="plf"><span>MOQ (units)</span><input type="text" inputmode="numeric" data-pl-lf="moq" value="${esc(l.moq ?? '')}" maxlength="8" autocomplete="off"></label>
+      <label class="plf wide"><span>Notes</span><input type="text" data-pl-lf="notes" value="${esc(l.notes || '')}" maxlength="1000" autocomplete="off" placeholder="What the agent says: same product? factory? sample price?"></label></div>
+    <div class="pll3"><span>${esc(cost)}</span><button class="plbtn ${on ? 'on' : 'go'}" data-pl="choose" aria-pressed="${on}">${on ? '✓ Chosen' : 'Choose'}</button><button class="plbtn plghost" data-pl="unlink">Remove</button></div>
+  </li>`;
+}
+function plMarketsHtml(it) {
+  const K = plK();
+  const d = PL.data;
+  const mine = Array.isArray(it.markets);
+  const sel = K.marketsOf(it);
+  const ads = it.ad_markets || [];
+  const adsText = ads.length ? ads.map((a) => `${flag(a.cc)} ${a.cc}${a.ads != null ? ` (${a.ads} ad${a.ads === 1 ? '' : 's'})` : a.pct != null ? ` ${a.pct}%` : ''}`).join(' · ') + (ads.some((a) => a.eu) ? ' (EU)' : '') : 'not known';
+  const r = it.risk;
+  const radar = r ? `<div class="plradar ${esc(r.level)}"><b>Risk radar (EU rules): ${esc(PL_RISK[r.level] || r.level)}</b>${r.reasons.length ? `<ul>${r.reasons.map((x) => `<li class="${esc(x.level)}">${esc(x.short)}: ${esc(x.text)}</li>`).join('')}</ul>` : '<span>Nothing in its name or Jev’s answers that needs papers or care.</span>'}${r.ask && r.ask.length ? '<span>The documents it needs are in the sourcing request (agent form and free text).</span>' : ''}</div>` : '';
+  return `${radar}<p class="plhint">Runs ads in: ${esc(adsText)}</p>
+    <div class="plccs" role="group" aria-label="Target markets">${d.settings.markets.map((cc) => `<button class="plcc${!mine && sel.includes(cc) ? ' sug' : ''}" data-pl-cc="${cc}" aria-pressed="${sel.includes(cc)}" title="${esc((d.countries[cc] || {}).name || cc)}">${flag(cc)} ${cc}</button>`).join('')}</div>
+    <p class="plhint">${mine ? 'Your target markets. <button class="plbtn plghost" data-pl="mkt-reset">Use the suggested ones</button>' : 'Suggested (dashed): where it runs ads, else the first four of your list. Tap a country to pick your own.'}</p>
+    ${sel.map((cc) => plCountryHtml(it, cc)).join('')}`;
+}
+function plCountryHtml(it, cc) {
+  const c = PL.data.countries[cc];
+  if (!c) return '';
+  const electric = ((it.facts || {}).risks || []).some((r) => r && r.k === 'electric');
+  const tag = (s) => `<span class="pltag ${esc(s)}">${esc(s)}</span>`;
+  const src = (u) => (safe(u) ? ` <a href="${safe(u)}" target="_blank" rel="noopener noreferrer">source ↗</a>` : '');
+  const row = (label, html, hot) => `<div><dt>${esc(label)}</dt><dd${hot ? ' class="hot"' : ''}>${html}</dd></div>`;
+  const items = (xs) => xs.map((x) => row(x.label, esc(x.text) + tag(x.status) + src(x.source))).join('');
+  return `<details class="plcf" data-pl-cf="${cc}"${PL.cf.has(cc) ? ' open' : ''}><summary>${flag(cc)} ${esc(c.name)}<small>${esc(`${c.cur} · ${c.ship.min}–${c.ship.max} days`)}</small></summary>
+    <p class="plhint">${esc(c.short)}</p>
+    <dl>${row('Currency and language', esc(`${c.cur} · ${c.lang}`))}
+      ${row('Shipping from China', `${esc(c.ship.text)}${tag(c.ship.status)}${src(c.ship.source)}<br><small>${esc(c.ship.note)}</small>`)}
+      ${row('Plug and voltage', esc(`Type ${c.power.plug} · ${c.power.volt}`) + (electric ? ' · it is electric: plug and voltage must match' : '') + src(c.power.source), electric)}
+      ${items(c.items)}</dl>
+    ${c.restrictions.length ? `<b>Restrictions</b><dl>${items(c.restrictions)}</dl>` : '<p class="plhint">No restriction listed here yet: check the product’s own category.</p>'}
+    <p class="plhint">As of ${esc(c.as_of)}. General research, not legal advice: check before you rely on it.</p></details>`;
+}
+function plFormHtml(it) {
+  const K = plK();
+  const p = it.pack || {};
+  const pk = plPack(it);
+  const field = (k, label, ph, o = {}) => (o.long
+    ? `<label class="plf wide"><span>${esc(label)}</span><textarea data-pl-pack="${k}" rows="2" maxlength="${o.max}" placeholder="${esc(ph)}">${esc(p[k] ?? '')}</textarea></label>`
+    : `<label class="plf${o.wide ? ' wide' : ''}"><span>${esc(label)}</span><input type="text" data-pl-pack="${k}" value="${esc(p[k] ?? '')}" maxlength="${o.max}" placeholder="${esc(ph)}"${o.num ? ' inputmode="numeric"' : ''} autocomplete="off"></label>`);
+  const tr = (text, to) => `https://translate.google.com/?sl=auto&tl=${to}&op=translate&text=${encodeURIComponent(text)}`;
+  const zhHint = pk.zh_from === 'hunt' ? 'Chinese words from the hunt (lib/1688-terms.json).' : pk.zh_from === 'guess' ? 'Chinese words guessed from the English: check them' : pk.zh_from === 'yours' ? '' : 'No Chinese words yet:';
+  return `<div class="plgrid">
+      ${field('title_en', 'Product title in English', pk.title, { wide: true, max: 150 })}
+      <label class="plf wide"><span>Chinese words for 1688 (also 🔎 Sourcing’s)</span><input type="text" id="plzh" value="${esc(it.zh || '')}" maxlength="100" placeholder="${esc(pk.zh || 'e.g. 姿势矫正器')}" autocomplete="off" spellcheck="false"></label>
+      ${field('variants', 'Variants: colours, sizes (as on their page)', 'e.g. Black, Grey · S, M, L', { long: true, max: 300 })}
+      ${field('features', 'Must have', 'e.g. USB-C charging, two heat levels', { long: true, max: 500 })}
+      ${field('quality', 'Quality requirements', K.QUALITY, { long: true, max: 500 })}
+      ${field('sample_qty', 'Samples', '2', { num: true, max: 3 })}
+      ${field('test_qty', 'Test order (units)', '50', { num: true, max: 6 })}
+    </div>
+    <p class="plhint" id="plformhint">${pk.not_english ? `The title is not in English: <a href="${esc(tr(pk.title, 'en'))}" target="_blank" rel="noopener noreferrer">translate it ↗</a> and put it above. ` : ''}${zhHint ? `${esc(zhHint)} <a href="${esc(tr(pk.title, 'zh-CN'))}" target="_blank" rel="noopener noreferrer">translate the title to Chinese ↗</a>, or ask your agent.` : ''}</p>
+    <div class="plimg"><span class="plth big">${plImg(it.facts)}</span><div class="plsec">
+      <div class="placts"><button class="plbtn go" data-pl="img"${safe(pk.image) ? '' : ' disabled'}>Download photo</button><button class="plbtn" data-pl-copy="image_url"${safe(pk.image) ? '' : ' disabled'}>Copy photo link</button></div>
+      <p class="plhint" id="plimgst">${esc(PL.img.get(it.key) || 'Agents’ forms take gif, jpg or png up to 3 MB: a bigger photo, or another type, is saved as a JPG under 3 MB.')}</p></div></div>`;
+}
+function plOutHtml(it) {
+  const K = plK();
+  const pk = plPack(it);
+  const t = K.TEMPLATES[PL.tpl] || K.TEMPLATES.generic;
+  const fields = K.fieldsOf(pk, PL.tpl, PL.lang);
+  const m = pk.money;
+  const money = m.known ? `<b>${esc(m.text)}</b>: the most one unit may cost so an order still leaves a margin. From ${m.from === 'launch card' ? 'the launch card’s price' : 'their price'} €${m.price.toFixed(2)}, VAT ${m.vat}%, fees ${m.fees}%, ${m.ship_known ? 'its shipping' : 'shipping not known yet'}, ${m.rule === 'cpa' ? `your €${m.cpa} target CPA` : 'break-even ROAS 3'}; ¥${m.fx.CNY} for €1.` : esc(m.why);
+  const miss = { photo: 'a photo', link: 'a link', markets: 'target markets', price: 'a selling price for the target price', zh: 'Chinese words' };
+  return `<p class="plmoney">${money}</p>
+    <div class="plsegs"><div class="plseg" role="group" aria-label="Agent form">${Object.entries(K.TEMPLATES).map(([k, x]) => `<button data-pl-tpl="${k}" aria-pressed="${PL.tpl === k}">${esc(x.label)}</button>`).join('')}</div>
+      <div class="plseg" role="group" aria-label="Language"><button data-pl-lang="en" aria-pressed="${PL.lang === 'en'}">English</button><button data-pl-lang="zh" aria-pressed="${PL.lang === 'zh'}">中文</button></div></div>
+    <p class="plhint">${esc(t.hint)}</p>
+    <ol class="plfields">${fields.map((x) => `<li class="plfield" data-pl-field="${x.k}"><b>${esc(x.label)}</b>${x.file ? `<button class="plbtn" data-pl="img"${x.value ? '' : ' disabled'}>Download</button>` : x.value ? `<button class="plbtn" data-pl-copy="${x.k}">Copy</button>` : ''}
+        <p class="plfv${x.value ? '' : ' none'}">${esc(x.file ? (x.value ? 'The product photo: download it, then upload it' : 'No photo') : x.value || 'Not filled in')}</p>${x.note ? `<small>${esc(x.note)}</small>` : ''}</li>`).join('')}</ol>
+    <div class="placts"><button class="plbtn go" data-pl="copyall">Copy all</button></div>
+    ${pk.missing.length ? `<p class="plhint warn">Still missing: ${esc(pk.missing.map((k) => miss[k]).join(', '))}.</p>` : '<p class="plhint ok">Complete: every field is ready to copy.</p>'}`;
+}
+function plHistHtml(it) {
+  const by = { you: 'you', link: 'a link pasted', choose: 'a supplier chosen', copy: 'the request copied', outcome: 'your decision' };
+  return it.history.length ? `<ol class="plhist">${it.history.map((h) => `<li>${esc(day(h.at))}: ${h.from === h.to ? `<b>${esc(h.note)}</b>` : `${esc(h.from ? plStage(h.from).label : 'start')} → <b>${esc(plStage(h.to).label)}</b>${h.note ? ' · ' + esc(h.note) : ''}`} <small>(${esc(by[h.by] || h.by)})</small></li>`).join('')}</ol>`
+    : '<p class="plhint">No move yet.</p>';
+}
+// The small text on each fold: what is in it.
+function plSums(it) {
+  const K = plK();
+  const set = (k, t) => { const el = pl$('plsum-' + k); if (el) el.textContent = t; };
+  const links = it.links.filter((l) => l.url);
+  const chosen = links.find((l) => l.id === it.chosen_id);
+  set('links', links.length ? `${links.length} of ${K.MAX_LINKS}${chosen ? ' · one chosen' : ''}` : 'paste the one you found');
+  const sel = K.marketsOf(it);
+  set('markets', sel.length ? sel.join(', ') + (Array.isArray(it.markets) ? '' : ' (suggested)') : 'none');
+  const pk = plPack(it);
+  set('pack', pk.missing.some((k) => k === 'photo' || k === 'link' || k === 'markets') ? 'missing a part' : 'ready to copy');
+  set('hist', String(it.history.length));
+}
+function plSetHtml() {
+  const d = PL.data;
+  const on = PL.draft || new Set(d.settings.markets);
+  return `<section class="plset" aria-label="Countries"><b>Countries in your list</b><p class="plhint">The target markets you can pick, in this order. A country that is not here: docs/pipeline/README.md says how to add one.</p>
+    <div class="plccs">${d.all_countries.map((c) => `<button class="plcc" data-pl-setcc="${c.cc}" aria-pressed="${on.has(c.cc)}">${flag(c.cc)} ${esc(c.name)}</button>`).join('')}</div>
+    <div class="placts"><button class="plbtn go" data-pl="set-save">Save</button><button class="plbtn plghost" data-pl="settings">Close</button></div></section>`;
+}
+
+// Saving -----------------------------------------------------------------------------------------------------------------
+// Saves go out one after the other, so an older one never lands after a newer one. key: the product (none: settings).
+function plPost(key, body) {
+  PL.busy++;
+  plSaved('Saving…');
+  const run = async () => {
+    const res = await fetch('/api/pipeline', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(key ? Object.assign({ key }, body) : body) });
+    if (res.status === 401) { location.reload(); throw new Error('Log in first'); }
+    // 503: its tables are not there yet. A test link (Preview board) makes no tables; the deploy after the merge does.
+    if (res.status === 503) throw new Error('its tables are made by the deploy after the merge (a test link makes none)');
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+    return j;
+  };
+  const p = PL.chain.then(run);
+  PL.chain = p.then(() => {}, () => {});
+  p.then(() => { if (--PL.busy === 0) plSaved('Saved ✓'); }, (e) => { PL.busy--; plSaved(''); toast('Could not save: ' + e.message, ''); });
+  return p;
+}
+// An answer: the item now (the board's part, where it runs ads, stays as the list gave it).
+function plTake(j, key) {
+  if (!j || !j.item || !PL.data) return null;
+  const items = PL.data.items;
+  const i = items.findIndex((x) => x.key === key || x.key === j.item.key);
+  const old = i >= 0 ? items[i] : {};
+  const it = Object.assign({}, old, j.item, { ad_markets: old.ad_markets || [], suggested: old.suggested || [], zh_hunt: old.zh_hunt || '', risk: old.risk || null });
+  delete it.partial;
+  if (i >= 0) items[i] = it; else items.push(it);
+  if (PL.focus === key) PL.focus = it.key;
+  // The launch view and the sourcing panel read their own data again when they open; the 🚀 count follows a new card.
+  if (j.launch && typeof LN !== 'undefined' && Array.isArray(LN.list)) { const k = LN.list.findIndex((x) => x.key === j.launch.key); if (k >= 0) LN.list[k] = j.launch; }
+  if (typeof SX !== 'undefined' && SX.cache) SX.cache.delete(it.key);
+  if (j.started) { if (typeof lnLoad === 'function') lnLoad().catch(() => {}); toast('Launch card started: the pipeline lives on it', ''); }
+  plCount();
+  return it;
+}
+const plSave = (key, body) => plPost(key, body).then((j) => { plTake(j, key); plRefresh(); return j; });
+function plQueue(id, fn, wait) {
+  clearTimeout(PL.timers.get(id));
+  PL.timers.set(id, setTimeout(() => { PL.timers.delete(id); fn(); }, wait));
+}
+function plFlush() {
+  const fns = [...PL.timers.entries()];
+  PL.timers.clear();
+  for (const [, t] of fns) clearTimeout(t);
+  for (const [id] of fns) (PL.later.get(id) || (() => {}))();
+  PL.later.clear();
+}
+// The save each timer would make (PL.later), so leaving the view sends it at once.
+function plLater(id, fn, wait) {
+  PL.later.set(id, fn);
+  plQueue(id, () => { PL.later.delete(id); fn(); }, wait);
+}
+async function plMove(it, to, b) {
+  if (!it || !to || to === it.stage) return;
+  plFlush();
+  if (b) b.disabled = true;
+  try {
+    const x = plTake(await plPost(it.key, { stage: to }), it.key);
+    plRefresh();
+    toast(`${x ? x.title : 'Product'}: ${plStage(to).label}`, '');
+  } catch (e) {
+    // said by plPost
+  } finally {
+    if (b && b.isConnected) b.disabled = false;
+  }
+}
+async function plDo(it, body, b, done) {
+  if (!it) return;
+  plFlush();
+  const label = b ? b.textContent : '';
+  if (b) b.disabled = true;
+  try {
+    const j = await plPost(it.key, body);
+    const x = plTake(j, it.key);
+    plRefresh();
+    if (done) done(j, x);
+  } catch (e) {
+    // said by plPost
+  } finally {
+    if (b && b.isConnected) { b.disabled = false; b.textContent = label; }
+  }
+}
+
+// Copy, the photo, the launch card -----------------------------------------------------------------------------------------
+async function plCopyText(text, what) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(`Copied: ${what}`, '');
+    return true;
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.readOnly = true;
+    ta.className = 'plclip';
+    document.body.append(ta);
+    ta.select();
+    const ok = !!(document.execCommand && document.execCommand('copy'));
+    ta.remove();
+    toast(ok ? `Copied: ${what}` : 'Select the text and copy it', '');
+    return ok;
+  }
+}
+function plCopyField(it, k) {
+  const pk = plPack(it);
+  if (k === 'image_url') { if (pk.image) plCopyText(pk.image, 'the photo link'); return; }
+  const f = plK().fieldsOf(pk, PL.tpl, PL.lang).find((x) => x.k === k);
+  if (f && f.value) plCopyText(f.value, f.label);
+}
+async function plCopyAll(it) {
+  const K = plK();
+  const ok = await plCopyText(K.copyAllOf(K.fieldsOf(plPack(it), PL.tpl, PL.lang)), 'the whole request');
+  if (ok && it.stage === 'approved' && !it.dropped) plDo(it, { copied: true }, null, () => toast('Copied. Stage: Request ready', ''));
+}
+// Fits an agent's upload: gif, jpg or png up to 3 MB as it is; anything bigger or of another type becomes a JPG under 3 MB.
+async function plFit(blob, max = 3 * 1024 * 1024) {
+  if (/^image\/(jpeg|png|gif)$/.test(blob.type) && blob.size <= max) return blob;
+  const bmp = await createImageBitmap(blob);
+  let scale = Math.min(1, 2400 / Math.max(bmp.width, bmp.height));
+  let q = 0.92;
+  for (let i = 0; i < 12; i++) {
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(bmp.width * scale));
+    c.height = Math.max(1, Math.round(bmp.height * scale));
+    const g = c.getContext('2d');
+    g.fillStyle = '#fff'; // a transparent PNG gets a white background, as a JPG has no transparency
+    g.fillRect(0, 0, c.width, c.height);
+    g.drawImage(bmp, 0, 0, c.width, c.height);
+    const out = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', q));
+    if (out && out.size <= max) return out;
+    if (q > 0.65) q -= 0.12; else scale *= 0.8;
+  }
+  throw new Error('could not make it smaller than 3 MB');
+}
+async function plDownload(it, b) {
+  if (!it) return;
+  const label = b.textContent;
+  b.disabled = true;
+  b.textContent = 'Getting the photo…';
+  const say = (t) => { PL.img.set(it.key, t); const el = pl$('plimgst'); if (el) el.textContent = t; };
+  try {
+    const res = await fetch('/api/pipeline/image?key=' + encodeURIComponent(it.key), { credentials: 'same-origin' }); // also before it has a launch card
+    if (res.status === 401) { location.reload(); return; }
+    if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || 'HTTP ' + res.status); }
+    const blob = await res.blob();
+    const name = (/filename="([^"]+)"/.exec(res.headers.get('content-disposition') || '') || [])[1] || 'product.jpg';
+    const out = await plFit(blob);
+    const file = out === blob ? name : name.replace(/\.[a-z0-9]+$/i, '') + '.jpg';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(out);
+    a.download = file;
+    a.hidden = true;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    say(out === blob ? `Saved ${file}: ${plKb(blob.size)}, fits the 3 MB limit.` : `The photo was ${plKb(blob.size)}${/^image\/(jpeg|png|gif)$/.test(blob.type) ? '' : ' (' + blob.type.replace('image/', '').toUpperCase() + ')'}: saved as ${file}, a ${plKb(out.size)} JPG under 3 MB.`);
+  } catch (e) {
+    say('Could not save the photo: ' + e.message + '. Copy the photo link and save it from there.');
+  } finally {
+    if (b.isConnected) { b.disabled = false; b.textContent = label; }
+  }
+}
+async function plToLaunch(it) {
+  if (!it) return;
+  if (!it.card) await plDo(it, { start: true });
+  const x = plItem(PL.focus) || it;
+  if (!x.card) return;
+  plFlush();
+  if (typeof LN !== 'undefined') Object.assign(LN, { focus: x.key, open: new Set(['sourcing']) });
+  goView('launch');
+}
+
+// The product's panel under the sticky view bar, not behind it; closed, its card back in sight.
+function plTop() {
+  const rail = document.querySelector('.rail');
+  window.scrollTo({ top: Math.max(0, plBox.getBoundingClientRect().top + scrollY - (rail ? rail.getBoundingClientRect().height : 0) - 8) });
+}
+function plBack(key) {
+  const c = key && [...plBox.querySelectorAll('#plboard .plcard')].find((x) => x.dataset.key === key);
+  if (c) c.scrollIntoView({ block: 'center' });
+}
+
+// Events -----------------------------------------------------------------------------------------------------------------
+plBox.addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b || b.disabled || !PL.data) return;
+  const card = b.closest('[data-key]');
+  const it = plItem(card ? card.dataset.key : PL.focus);
+  const K = plK();
+  const d = b.dataset;
+  if (d.plStage !== undefined) { PL.f.stage = PL.f.stage === d.plStage ? '' : d.plStage; plRender(); return; }
+  if (d.plOpen) { plFlush(); const was = PL.focus; PL.focus = PL.focus === d.plOpen ? '' : d.plOpen; plRender(); if (PL.focus) plTop(); else plBack(was); return; }
+  if (d.plTpl) { PL.tpl = d.plTpl; if (it) pl$('plout').innerHTML = plOutHtml(it); plPost(null, { settings: { template: d.plTpl } }).then((j) => { PL.data.settings = j.settings; }, () => {}); return; }
+  if (d.plLang) { PL.lang = d.plLang; store.set('wh-pl-lang', PL.lang); if (it) pl$('plout').innerHTML = plOutHtml(it); return; }
+  if (d.plSetcc) { const on = PL.draft || (PL.draft = new Set(PL.data.settings.markets)); if (on.has(d.plSetcc)) on.delete(d.plSetcc); else on.add(d.plSetcc); b.setAttribute('aria-pressed', String(on.has(d.plSetcc))); return; }
+  if (d.plCopy) { plCopyField(it, d.plCopy); return; }
+  if (d.plCc) {
+    const cur = K.marketsOf(it);
+    const next = cur.includes(d.plCc) ? cur.filter((x) => x !== d.plCc) : PL.data.settings.markets.filter((x) => cur.includes(x) || x === d.plCc);
+    it.markets = next; // at once on the screen; the save follows
+    plRefresh();
+    plSave(it.key, { markets: next }).catch(() => {});
+    return;
+  }
+  if (d.plTo) { plMove(it, d.plTo, b); return; }
+  if (d.plOut) { plDo(it, { outcome: it.outcome === d.plOut ? '' : d.plOut }, b, (j, x) => toast(x && x.outcome ? `Decided: ${x.outcome === 'scale' ? 'scale it' : 'kill it'}` : 'Decision taken back', '')); return; }
+  const act = d.plAct || d.pl;
+  const li = b.closest('[data-pl-id]');
+  const id = li ? Number(li.dataset.plId) : 0;
+  if (act === 'next' || act === 'back') { const i = K.stageIndex(it.stage) + (act === 'next' ? 1 : -1); if (K.STAGES[i]) plMove(it, K.STAGES[i].k, b); return; }
+  if (act === 'drop' || act === 'restore') { plDo(it, { drop: act === 'drop' }, b, () => toast(act === 'drop' ? 'No go: off the pipeline (and on the launch card)' : 'Back in the pipeline', '')); return; }
+  if (act === 'close') { plFlush(); const was = PL.focus; PL.focus = ''; plRender(); plBack(was); return; }
+  if (act === 'settings') { PL.settings = !PL.settings; PL.draft = null; plRender(); return; }
+  if (act === 'set-save') {
+    const m = PL.data.settings.markets.filter((cc) => PL.draft && PL.draft.has(cc)).concat(PL.data.all_countries.map((c) => c.cc).filter((cc) => PL.draft && PL.draft.has(cc) && !PL.data.settings.markets.includes(cc)));
+    plPost(null, { settings: { markets: PL.draft ? m : PL.data.settings.markets } }).then((j) => { Object.assign(PL.data, { settings: j.settings, countries: j.countries }); PL.settings = false; PL.draft = null; plRender(); toast('Countries saved', ''); }, () => {});
+    return;
+  }
+  if (act === 'launch') { plToLaunch(it); return; }
+  if (act === 'copyall') { plCopyAll(it); return; }
+  if (act === 'img') { plDownload(it, b); return; }
+  if (act === 'mkt-reset') { it.markets = null; plRefresh(); plSave(it.key, { markets: null }).catch(() => {}); return; }
+  if (act === 'add') {
+    const t = pl$('plpaste');
+    const paste = t ? t.value.trim() : '';
+    if (!paste) { toast('Paste the 1688 link first', ''); if (t) t.focus(); return; }
+    plDo(it, { links: { paste } }, b, (j) => {
+      const n = (j.added || []).length;
+      const extra = [(j.skipped || []).length ? `${j.skipped.length} already there` : '', j.over ? `${j.over} over the limit of ${K.MAX_LINKS}` : ''].filter(Boolean).join(', ');
+      toast(n ? `${n} link${n === 1 ? '' : 's'} added${extra ? ` (${extra})` : ''}` : (j.skipped[0] || {}).error || 'Nothing added', '');
+    });
+    return;
+  }
+  if (act === 'choose') {
+    const on = b.getAttribute('aria-pressed') === 'true';
+    if (typeof lnFlush === 'function') lnFlush(); // the launch card's own saves land first: the server merges the supplier into them
+    plDo(it, { choose: on ? null : id }, b, (j) => toast(on ? 'No supplier chosen: the launch card keeps its numbers' : `Chosen: on the launch card at €${(j.launch && j.launch.steps.sourcing && j.launch.steps.sourcing.v.unit != null ? j.launch.steps.sourcing.v.unit : 0).toFixed(2)} a unit`, ''));
+    return;
+  }
+  if (act === 'unlink') {
+    if (!b.dataset.sure) { // a second tap, so a slip never loses a link
+      b.dataset.sure = '1';
+      b.textContent = 'Tap again to remove';
+      setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = 'Remove'; } }, 3000);
+      return;
+    }
+    plDo(it, { link: { id, remove: true } }, b, () => toast('Link removed', ''));
+  }
+});
+plBox.addEventListener('input', (e) => {
+  const x = e.target;
+  const it = plItem(PL.focus);
+  if (!it || !PL.data) return;
+  const K = plK();
+  if (x.dataset.plPack !== undefined) {
+    const raw = {};
+    for (const y of plBox.querySelectorAll('[data-pl-pack]')) raw[y.dataset.plPack] = y.value;
+    const wrong = K.badPack(raw);
+    for (const y of plBox.querySelectorAll('[data-pl-pack]')) if (!wrong.includes(y.dataset.plPack)) y.removeAttribute('aria-invalid');
+    it.pack = K.cleanPack(raw);
+    pl$('plout').innerHTML = plOutHtml(it);
+    plSums(it);
+    if (!wrong.length) { const key = it.key; const pack = it.pack; plLater('pack:' + key, () => plSave(key, { pack }).catch(() => {}), 700); }
+  } else if (x.id === 'plnote') {
+    const key = it.key;
+    const stage = it.stage;
+    it.notes = Object.assign({}, it.notes, { [stage]: x.value });
+    plLater('note:' + key + ':' + stage, () => plPost(key, { note: { stage, text: x.value } }).then((j) => plTake(j, key), () => {}), 700);
+  } else if (x.id === 'plzh') {
+    it.zh = x.value.trim();
+    pl$('plout').innerHTML = plOutHtml(it);
+  } else if (x.id === 'plpaste') {
+    const found = K.linksIn(x.value);
+    const el = pl$('plparse');
+    if (!el) return;
+    el.className = 'plhint' + (x.value.trim() && !found.length ? ' warn' : found.some((l) => l.kind !== 'offer') ? ' warn' : found.length ? ' ok' : '');
+    el.textContent = !x.value.trim() ? `Up to ${K.MAX_LINKS} links.` : !found.length ? K.noLinkWhy(x.value)
+      : found.map((l) => `${l.label}${l.id ? ' offer #' + l.id : ' ' + l.kind}: ${l.url.replace(/^https:\/\//, '')}${l.price != null ? ` · ${{ CNY: '¥', USD: '$', EUR: '€' }[l.currency] || ''}${l.price}` : ''}${l.moq != null ? ` · MOQ ${l.moq}` : ''}${l.note ? ' · ' + l.note : ''}`).join('\n');
+  }
+});
+plBox.addEventListener('change', (e) => {
+  const x = e.target;
+  if (!PL.data) return;
+  if (x.id === 'plcc') { PL.f.cc = x.value; pl$('plboard').innerHTML = plBoardHtml(); return; }
+  if (x.id === 'plstuck') { PL.f.stuck = Number(x.value) || 0; pl$('plboard').innerHTML = plBoardHtml(); return; }
+  const it = plItem(PL.focus);
+  if (!it) return;
+  const K = plK();
+  if (x.dataset.plPack !== undefined) {
+    if (K.badPack({ [x.dataset.plPack]: x.value }).length) { x.setAttribute('aria-invalid', 'true'); return; }
+    plFlush(); // the pack's save goes now
+  } else if (x.id === 'plnote') plFlush();
+  else if (x.id === 'plzh') {
+    plSave(it.key, { zh: x.value.trim() }).catch(() => {});
+  } else if (x.dataset.plLf) {
+    const li = x.closest('[data-pl-id]');
+    const field = x.dataset.plLf;
+    plDo(it, { link: { id: Number(li.dataset.plId), set: { [field]: x.value } } }, null, (j) => { if (j.launch) toast('Saved: the launch card follows the new price', ''); });
+  }
+});
+plBox.addEventListener('toggle', (e) => {
+  const t = e.target;
+  if (t.dataset && t.dataset.plFold) { if (t.open) PL.folds.add(t.dataset.plFold); else PL.folds.delete(t.dataset.plFold); }
+  if (t.dataset && t.dataset.plCf) { if (t.open) PL.cf.add(t.dataset.plCf); else PL.cf.delete(t.dataset.plCf); }
+}, true);
+plBox.addEventListener('error', (e) => { if (e.target.tagName === 'IMG') { const i = document.createElement('i'); i.textContent = '?'; e.target.replaceWith(i); } }, true);
+// Drag a card onto another stage (a column, or a stage chip): the same move as its buttons, forward or back.
+const plTarget = (e) => (e.target.closest ? e.target.closest('[data-pl-col], [data-pl-stage]') : null);
+plBox.addEventListener('dragstart', (e) => {
+  const c = e.target.closest && e.target.closest('.plcard');
+  if (!c) return;
+  PL.drag = c.dataset.key;
+  c.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', PL.drag);
+});
+plBox.addEventListener('dragend', () => { PL.drag = ''; for (const x of plBox.querySelectorAll('.dragging, .drop')) x.classList.remove('dragging', 'drop'); });
+plBox.addEventListener('dragover', (e) => {
+  const t = plTarget(e);
+  const k = t ? t.dataset.plCol || t.dataset.plStage : '';
+  if (!PL.drag || !k) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  for (const x of plBox.querySelectorAll('.drop')) if (x !== t) x.classList.remove('drop');
+  t.classList.add('drop');
+});
+plBox.addEventListener('dragleave', (e) => { const t = plTarget(e); if (t && !t.contains(e.relatedTarget)) t.classList.remove('drop'); });
+plBox.addEventListener('drop', (e) => {
+  const t = plTarget(e);
+  const k = t ? t.dataset.plCol || t.dataset.plStage : '';
+  const it = plItem(PL.drag);
+  PL.drag = '';
+  for (const x of plBox.querySelectorAll('.dragging, .drop')) x.classList.remove('dragging', 'drop');
+  if (!k || !it) return;
+  e.preventDefault();
+  if (k === 'dropped') { if (!it.dropped) plDo(it, { drop: true }, null, () => toast('No go: off the pipeline (and on the launch card)', '')); return; }
+  if (it.dropped) { toast('Restore it first: it is a No go', ''); return; }
+  plMove(it, k);
+});
+addEventListener('pagehide', plFlush);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') plFlush(); });
+</script>
+<script nonce="__NONCE__">
+'use strict';
 // ---- 🔎 Sourcing (sourcing.mjs): the supplier match pipeline, a panel on the launch card in 🚀 Launch, between the
 // decision and the checklist. A script of its own, so the launch view's code stays as it is: after each render of that
 // view it puts its panel back (one element, kept with its folds and what you typed in it). The links, the comparison and
@@ -3790,7 +4636,7 @@ function crLine(a, inbox, kind = 'ad') {
   const m = crMemo(a, kind);
   CR.lines.set(m.key + '|' + kind, a);
   CR.who.set(m.key, kind === 'tt' || (kind === 'ln' && m.x.source === 'tiktok') ? { tiktok: m.x.id } : { id: m.x.id });
-  const live = v.reasons.filter((r) => r.level === 'block' || r.level === 'docs');
+  const live = v.reasons.filter((r) => r.level === 'block' || r.level === 'docs' || r.level === 'info'); // info: a note (Digital), never a block
   const said = [v.mine ? 'your call' : '', live.slice(0, 3).map((r) => r.short).join(' · ') + (live.length > 3 ? ` +${live.length - 3}` : '')].filter(Boolean).join(' · ') || 'no flags';
   const ret = v.returns.length ? `<span class="crret" title="${esc(v.returns.map((r) => r.text).join('. '))}">↩ ${esc(v.returns.map((r) => r.short).join(' · '))}</span>` : '';
   const attrs = `class="crl ${esc(v.level)}${inbox ? ' crin' : ''}" data-crkey="${esc(m.key)}" data-crkind="${esc(kind)}"`;
