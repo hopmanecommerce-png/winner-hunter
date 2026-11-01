@@ -47,7 +47,7 @@ const twinsOn = async (s) => (await s.get('/api/ads?view=all&limit=100')).ads.fi
 // The table, the numbers, the verdict
 // ---------------------------------------------------------------------------
 
-test('migration 0018: only CREATE … IF NOT EXISTS (safe on every deploy, nothing dropped or changed); the log takes approved or rejected', () => {
+test('migration 0020: only CREATE … IF NOT EXISTS (safe on every deploy, nothing dropped or changed); the log takes approved or rejected', () => {
   const st = statements(MIGRATION);
   assert.deepStrictEqual(st.map((x) => x.split('(')[0].trim()), ['CREATE TABLE IF NOT EXISTS econ_inputs', 'CREATE TABLE IF NOT EXISTS econ_settings', 'CREATE TABLE IF NOT EXISTS decision_log', 'CREATE INDEX IF NOT EXISTS decision_log_product ON decision_log']);
   assert.doesNotMatch(MIGRATION.replace(/--.*$/gm, ''), /\b(DROP|ALTER|DELETE|UPDATE|INSERT|REPLACE)\b/i);
