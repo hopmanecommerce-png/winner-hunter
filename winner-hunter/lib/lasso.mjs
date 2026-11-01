@@ -47,7 +47,7 @@ export const URLSCAN_QUERIES = [
 // DuckDuckGo Tracker Radar (its crawler's CNAME list, public on GitHub, updated about monthly).
 export const DDG_URL = 'https://raw.githubusercontent.com/duckduckgo/tracker-radar/main/domains/US/vercel-dns-016.com.json';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
-const HTML_MAX = 2e6;
+const HTML_MAX = 8e6; // some store pages are 3 MB, with Lasso's tag near the end
 
 const attr = (tag, name) => (tag.match(new RegExp(`\\b${name}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i')) || []).slice(2).find((x) => x != null) || '';
 const HEX24 = /^[0-9a-f]{24}$/i;
@@ -79,15 +79,15 @@ export function lassoTag(html) {
 }
 
 /**
- * Every sign of Lasso in a store page: 'tag' (lassoTag), 'inline' (Lasso's own code pasted into the theme:
- * __LASSO_GUARD__, lasso_sid, proceedToCheckout…), 'theme' (the theme's name says Lasso; a theme can be a copy, so
- * this one alone proves nothing).
+ * Every sign of Lasso in a store page: 'tag' (lassoTag), 'inline' (Lasso's own code pasted into the theme, or the
+ * theme's glue code for it: __LASSO_GUARD__, lasso_sid, __lassoGuardToLasso, data-lasso-patched…), 'theme' (the
+ * theme's name says Lasso; a theme can be a copy, so this one alone proves nothing).
  */
 export function lassoMarks(html) {
   const s = String(html || '');
   const marks = [];
   if (lassoTag(s)) marks.push('tag');
-  if (/__LASSO_GUARD__|__lasso_token__|initLassoCartIntegration|["']lasso_sid["']/.test(s)) marks.push('inline');
+  if (/__LASSO_GUARD__|__lasso_token__|initLassoCartIntegration|["']lasso_sid["']|__lassoGuardToLasso|data-lasso-patched|lasso-checkout-guard/.test(s)) marks.push('inline');
   if (/Shopify\.theme\s*=\s*\{"name":"[^"]*lasso/i.test(s)) marks.push('theme');
   return marks;
 }

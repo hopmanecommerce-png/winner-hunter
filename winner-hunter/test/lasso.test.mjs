@@ -39,6 +39,7 @@ test('the Lasso tag: on the store\'s own checkout host, on Lasso\'s, and the oth
 test('the signs of Lasso: tag, pasted code, theme name; the checkout page itself', () => {
   assert.deepStrictEqual(lassoMarks(storePage(TAG_V4)), ['tag']);
   assert.deepStrictEqual(lassoMarks('<script>!function(){if(!window.__LASSO_GUARD__){window.__LASSO_GUARD__=!0;}}()</script>'), ['inline']);
+  assert.deepStrictEqual(lassoMarks("<script>function lassoArmed() { return !!document.querySelector('[data-lasso-patched]'); }</script>"), ['inline'], "a theme's own glue code for Lasso");
   assert.deepStrictEqual(lassoMarks('Shopify.theme = {"name":"Verlimo Lasso Whop ","id":1};'), ['theme']);
   assert.deepStrictEqual(lassoMarks(storePage('<a href="/cart">Cart</a>')), []);
   assert.ok(isLassoCheckout(SKELETON));
@@ -150,6 +151,8 @@ test('the store checks: live, Shopify, its Lasso tag, language and currency; the
   const s = await checkStore('shop-a.test', { doFetch });
   assert.deepStrictEqual([s.live, s.shopify, s.myshopify, s.lasso.storeId, s.marks, s.lang, s.currency, s.country, s.siteName, s.title],
     [true, true, 'a1b2c3-xy.myshopify.com', ID, ['tag'], 'en', 'EUR', 'NL', 'Shop & Co', 'Shop & Co']);
+  const big = await checkStore('big.test', { doFetch: async () => html(storePage('x'.repeat(3e6) + TAG_V4)) });
+  assert.strictEqual(big.lasso && big.lasso.storeId, ID, 'a 3 MB page with the tag near the end');
   const down = await checkStore('gone.test', { doFetch });
   assert.deepStrictEqual([down.live, down.status, down.error], [false, 0, 'network']);
   assert.strictEqual((await checkStore('closed.test', { doFetch })).live, false);
@@ -219,6 +222,19 @@ test('a run: verified stores saved once (one per Shopify store), first_seen kept
   assert.strictEqual(after['shop-b.test'].first_seen, '2026-11-01T06:00:00.000Z', 'first_seen kept');
   assert.strictEqual(after['shop-b.test'].last_seen, '2026-11-08T06:00:00.000Z');
   assert.strictEqual(after['shop-a.test'].verdict, 'script');
+});
+
+test('a run: one Shopify store on two domains keeps the domain D1 already has, also when the other one has more sources', async () => {
+  const mem = memoryDb();
+  const db = d1Client({ accountId: 'a', databaseId: 'b', token: 't' }, { doFetch: d1Rest(mem).doFetch, retryMs: 0 });
+  const quiet = { db, log: () => {}, doFetch: fakeWeb().doFetch };
+  await run({}, { ...quiet, now: () => Date.parse('2026-11-01T06:00:00Z'), ...sources() });
+  // A week later shop-a.test is also in OTX (two sources), mirror.test only in urlscan.
+  const more = sources();
+  const otx = async (target) => (target === LASSO_CNAME ? { passive_dns: [{ record_type: 'CNAME', hostname: 'checkout.shop-a.test', address: LASSO_CNAME }, ...(await more.otx(target)).passive_dns] } : more.otx(target));
+  const t = await run({}, { ...quiet, now: () => Date.parse('2026-11-08T06:00:00Z'), ...more, otx });
+  assert.deepStrictEqual([t.mirrors, t.new], [1, 0]);
+  assert.deepStrictEqual(mem.prepare('SELECT domain FROM lasso_stores ORDER BY domain').all().map((r) => r.domain), ['mirror.test', 'shop-b.test']);
 });
 
 test('a run: one source failing is yellow, every source failing is red; a D1 failure is red; time up is yellow', async () => {

@@ -168,9 +168,9 @@ export async function run(cfg = {}, deps = {}) {
   const cands = [...candidatesOf({ otx: otxAnswers, urlscan: urlscanAnswers, ddg: ddgList, known }).values()].sort((a, b) => (a.store < b.store ? -1 : 1));
   t.candidates = cands.length;
 
-  // 2. + 3. Checked on the store itself, then its best sellers.
+  // 2. Each candidate checked on the store itself.
   const knownSet = new Set(known.map((k) => cleanHost(k.domain)));
-  const seenShop = new Map(); // one Shopify store on several domains: saved once
+  const found = [];
   const gone = [];
   let late = 0;
   await pool(cands, 6, async (c) => {
@@ -191,16 +191,24 @@ export async function run(cfg = {}, deps = {}) {
       return;
     }
     const meta = await shopMeta(c.store, { doFetch });
-    const shop = s.myshopify || (meta && meta.myshopify) || '';
-    if (shop && seenShop.has(shop)) {
-      t.mirrors++;
-      return;
-    }
-    if (shop) seenShop.set(shop, c.store);
-    const b = await bestSellers(c.store, { n: 10, doFetch });
-    const products = meta && meta.products != null ? meta.products : await catalogSize(c.store, { doFetch });
     // The checkout host as far as it is known: the script's, the one that served Lasso, or the CNAME from the source.
     const checkoutHost = tagHost || (co.lasso ? host : c.checkoutHost);
+    found.push({ c, s, meta, verdict, checkoutHost, shop: s.myshopify || (meta && meta.myshopify) || c.store });
+  });
+
+  // One row per Shopify store, the same domain every week: the one D1 already has, else the one with the most
+  // sources, else the first by name. Its other domains are left out (counted as mirrors).
+  const byShop = new Map();
+  for (const f of found) byShop.set(f.shop, [...(byShop.get(f.shop) || []), f]);
+  const rank = (a, b) => knownSet.has(b.c.store) - knownSet.has(a.c.store) || b.c.sources.size - a.c.sources.size || (a.c.store < b.c.store ? -1 : 1);
+  const picked = [...byShop.values()].map((g) => g.sort(rank)[0]);
+  t.mirrors = found.length - picked.length;
+
+  // 3. Its best sellers and product count (without them when time is up: the store is still saved).
+  await pool(picked, 6, async ({ c, s, meta, verdict, checkoutHost }) => {
+    const intime = now() <= deadline;
+    const b = intime ? await bestSellers(c.store, { n: 10, doFetch }) : {};
+    const products = meta && meta.products != null ? meta.products : intime ? await catalogSize(c.store, { doFetch }) : null;
     t.rows.push(rowOf(c, s, verdict, checkoutHost, topProducts(b.products, 5), products, meta));
     t[verdict]++;
   });
