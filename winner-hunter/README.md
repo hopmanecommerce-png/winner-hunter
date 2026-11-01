@@ -206,8 +206,8 @@ cap of credits per run (300 credits ≈ $0.56 at the $47 pack); tick **Dry run**
 
 The **Google** tab shows our four rules on every card, each with how it was checked: **✓** exactly as on Meta (Shopify store,
 ad 7–42 days live), **≈** approximated with Google's data (75+ ads: Google's estimate of the ads shown in the last 3 days;
-500+ EU reach a day: Google's impression ranges, where it publishes them), **?** not checked (Google published no figure:
-never shown as a pass). Restricted categories, Jev's risks, best sellers and your decisions work as on the other tabs. A card
+500+ EU reach a day: Google's EU impression ranges, where it publishes them), **?** not checked (no EU figure, or an ad
+shown only outside the EU: never shown as a pass). Restricted categories, Jev's risks, best sellers and your decisions work as on the other tabs. A card
 says **Also on Meta**, **Also on TikTok** or **Not on Meta**; a Meta card says **Also on Google**. Every field, cost and open
 question: [docs/google-ads/README.md](../docs/google-ads/README.md).
 

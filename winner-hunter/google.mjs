@@ -128,7 +128,7 @@ async function night({ api, db = null, doFetch = globalThis.fetch, keywords = []
   const write = !!db && !dryRun;
   Object.assign(t, { id: startIso, started_at: startIso, status: 'running', dry_run: !write, sample: !!sample, regions, cursor: null, keywords: 0, searches: 0, targets: 0,
     pages: 0, details: 0, cached: 0, gated: 0, few_ads: 0, no_window: 0, stores: 0, shopify: 0, not_shopify: 0, no_product: 0, restricted: 0, pending: 0, undecided: 0, products: 0,
-    winners: 0, partial: 0, saved: 0, rechecked: 0, skipped_recent: 0, failed_calls: 0, stopped: 'done', error: '', health: null, alert: '', credits: api.stats() });
+    winners: 0, partial: 0, saved: 0, rechecked: 0, retired: 0, skipped_recent: 0, failed_calls: 0, stopped: 'done', error: '', health: null, alert: '', credits: api.stats() });
   const warnings = [];
   const warn = (m) => {
     warnings.push(String(m).slice(0, 200));
@@ -142,7 +142,11 @@ async function night({ api, db = null, doFetch = globalThis.fetch, keywords = []
   await progress();
 
   // ---- what D1 knows: looked at lately, ads already paid for, stores, products (their ad_id never changes) ----
-  const read = async (sql, args = []) => (db ? db.query(sql, args) : []);
+  // A table that is not there yet (a dry run before the first migration): nothing known.
+  const read = async (sql, args = []) => (db ? db.query(sql, args).catch((e) => {
+    if (/no such table/i.test(e.message)) return [];
+    throw e;
+  }) : []);
   const ago = (days) => new Date(started - days * DAY).toISOString();
   const lately = new Set((await read('SELECT target FROM google_targets WHERE checked_at >= ?1', [ago(RECHECK_DAYS)])).map((r) => r.target));
   const paid = new Map((await read('SELECT * FROM google_ads WHERE details_at >= ?1', [ago(DETAILS_DAYS)])).map((r) => [r.creative_id, r]));
@@ -223,6 +227,11 @@ async function night({ api, db = null, doFetch = globalThis.fetch, keywords = []
     for (let p = 0; p < Math.max(1, pages); p++) {
       const page = await api.companyAds({ ...q, startDate: day0, endDate: day1, cursor });
       t.pages++;
+      // No answer to read (a 404, or success false): unknown, not "no ads". A later page without one: the pages so far.
+      if (!page) {
+        if (p === 0) return { none: true };
+        break;
+      }
       if (p === 0) estimate = page.estimate;
       for (const a of page.ads) if (!ads.has(a.creativeId)) ads.set(a.creativeId, a);
       if (!page.cursor || !page.ads.length) {
@@ -323,6 +332,11 @@ async function night({ api, db = null, doFetch = globalThis.fetch, keywords = []
       }
     }
     const list = await listOf(x);
+    if (list.none) {
+      // Google's library had no answer for it (paid only when the vendor says so): not looked at again for 3 days.
+      doneTargets.push({ target: x.id, name: x.name || x.value, estimate: null, result: 'no answer' });
+      return;
+    }
     const counts = { estimate: list.estimate, windowDays: RUNNING_DAYS, listed: list.listed, complete: list.complete };
     const name = (list.ads[0] && list.ads[0].advertiser) || x.name || x.value;
     // The 75+ rule as googleRules reads it: Google's estimate, else the ads counted when every page was read.
@@ -346,9 +360,17 @@ async function night({ api, db = null, doFetch = globalThis.fetch, keywords = []
       return;
     }
     const got = await Promise.all([...pick, ...theirs].map((a) => claims.get(a.creativeId)));
-    const err = got.find((r) => r.error);
-    if (err) throw err.error; // the key, the credits or the cap: the run stops; another error skips this advertiser
+    // What its other ads found is kept whatever happened to one of them.
     for (const r of got) if (r.key) touched.add(r.key);
+    const stopper = got.find((r) => r.error && r.error.stop);
+    if (stopper) throw stopper.error; // the key, the credits, the cap or an outage: the run stops (after saving what it has)
+    const broken = got.filter((r) => r.error);
+    if (broken.length) {
+      // One ad whose details failed (asked again next run): this advertiser is looked at again, the others go on.
+      t.failed_calls += broken.length;
+      warn(`${x.kind === 'adv' ? 'Advertiser' : 'Domain'} ${x.value}: ${broken.length} ad(s) not read (${broken[0].error.message}): asked again next run`);
+      return;
+    }
     if (got.some((r) => r.pending)) t.pending++;
     else doneTargets.push({ target: x.id, name, estimate: list.estimate, result: got.some((r) => r.key) ? 'products' : 'no product' });
   }
@@ -444,6 +466,7 @@ async function night({ api, db = null, doFetch = globalThis.fetch, keywords = []
       break;
     }
     const kw = all[(start + i) % n];
+    let searchFailed = false;
     for (const region of regions) {
       try {
         const found = await api.searchAdvertisers(kw, region);
@@ -462,14 +485,20 @@ async function night({ api, db = null, doFetch = globalThis.fetch, keywords = []
           stopWith(e);
           break;
         }
+        searchFailed = true;
         t.failed_calls++;
-        warn(`"${kw}" in ${region}: search skipped (${e.message})`);
+        warn(`"${kw}" in ${region}: search failed (${e.message}): searched again next run`);
       }
     }
     if (stop) break;
     const batch = queue.splice(0).map((x) => ({ ...x, keyword: x.keyword || kw }));
-    await work(batch);
+    await work(batch); // what the searches that answered found
     if (stop) break; // this keyword's advertisers were not all looked at: searched again next run (those looked at are skipped)
+    if (searchFailed) {
+      // A region's search did not answer: the cursor stays at this keyword, and this run's keywords end here.
+      stop = 'search';
+      break;
+    }
     t.keywords++;
     if (!(typed && typed.length)) {
       t.cursor = wrap(start + i + 1, n);
@@ -477,8 +506,13 @@ async function night({ api, db = null, doFetch = globalThis.fetch, keywords = []
     }
   }
 
-  // ---- tidy up: what nobody decided on and was not seen for a long time ----
+  // ---- tidy up: products whose ad is older than 42 days today, or not checked for a month, leave the board (the board
+  // already hides the first kind; this keeps them out of the store signals). What nobody decided on and was not seen for a
+  // long time goes. ----
   if (write) {
+    t.retired = (await db.query('UPDATE google_products SET active = 0 WHERE active = 1 AND (first_shown < ?1 OR last_seen < ?2) RETURNING product_key',
+      [new Date(started - (MAX_AGE_DAYS + 1) * DAY).toISOString(), ago(30)])).length;
+    if (t.retired) await db.setState('google_data', { run: t.id, step: 'retired' }, new Date(now()));
     const old = ago(KEEP_DAYS);
     await db.query('DELETE FROM google_products WHERE active = 0 AND last_seen < ?1 AND ad_id NOT IN (SELECT ad_id FROM stars) AND ad_id NOT IN (SELECT ad_id FROM hidden)', [old]);
     await db.query('DELETE FROM google_ads WHERE seen_at < ?1', [old]);
@@ -488,11 +522,14 @@ async function night({ api, db = null, doFetch = globalThis.fetch, keywords = []
   // ---- health ----
   const c = api.stats();
   t.credits = c;
-  t.stopped = stop === 'cap' ? 'credits' : stop || 'done';
+  // Why it stopped: 'done', 'cap' (GOOGLE_CREDITS reached: the plan), 'time', 'search' (a search failed: that keyword next
+  // run), 'outage' (the vendor failed calls in a row), 'no-credits' (402) or 'key' (401).
+  t.stopped = stop === 'credits' ? 'no-credits' : stop || 'done';
   const problems = [];
   if (stop === 'key') problems.push('de API-sleutel is geweigerd / the API key was refused');
-  if (stop === 'credits') problems.push('geen credits meer / no credits left');
-  if (c.calls > 0 && c.failed === c.calls) problems.push('elke aanvraag mislukte / every request failed');
+  if (stop === 'credits') problems.push('geen credits meer bij Scrape Creators / no credits left at Scrape Creators');
+  if (c.failed > 0 && c.ok === 0) problems.push(`elke aanvraag mislukte / every request failed (${t.error || 'no answer'})`);
+  else if (stop === 'outage') warn(`Scrape Creators stopped answering: ${t.error}`);
   if (problems.length) {
     t.health = 'failed';
     t.alert = `Google-hunt mislukt / Google hunt failed: ${problems.join('; ')}`;

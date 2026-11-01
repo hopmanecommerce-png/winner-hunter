@@ -25,6 +25,9 @@ Source: the vendor's docs and OpenAPI spec ([docs.scrapecreators.com](https://do
   most 3 at once.
 - **Errors:** 400 bad parameters, 401 a wrong key, 402 no credits left, 403 the source blocks it, 404 not found, 500 try
   again. The client stops the run on 401 and 402. It reads a 404 as "nothing found", and asks again twice after a 429 or a 5xx.
+  Three calls in a row that fail (after those tries) mean the vendor is down: the run stops and says so.
+- **Lost answers:** a timeout or a cut connection may come after the vendor did the work and billed it. Such a try counts as
+  spent, so the cap holds against the bill. It is asked again once.
 - **Cache:** an ad's details cost 0 credits when the vendor has a copy younger than `cache_max_age` (the hunt asks for 7 days).
 - **Login-only ads** are not available: the vendor reads the public Transparency Center.
 
@@ -71,13 +74,13 @@ Every rule on a Google card carries a mark:
 | **1. Shopify store** | The ad's shop domain → `meta.json` and Shopify's headers (`lib/world.mjs` `checkStore`) | The ad's `destinationUrl` domain, or the domain the hunt searched → the same `checkStore`. A store that does not answer is unknown (asked again next run), never "not Shopify". Marketplaces and big brands (`NON_STORE`) fail. | **✓ exact** |
 | **2. Advertiser 75+ active ads** | Meta's count of the page's active ads | `number_of_ads_estimate` of `/v1/google/company/ads` with `start_date` / `end_date` set to the last 3 days: Google's estimate of the advertiser's (or domain's) ads shown in that window. If Google gives no estimate, the ads counted on the pages read are a lower bound (75+ counted passes, and fewer than 75 fails once every page was read). No count at all: not saved, asked again. | **≈ approximated** |
 | **3. Ad live 7–42 days** | `ad_delivery_start_time` → days today, and the ad is active | `firstShown` → whole days today (7 to 42). "Still running" means `lastShown` in the last 3 days, and the list only asks for ads shown in those days. An ad shown last 3+ days ago fails ("Stopped"). No `firstShown` anywhere: not saved. | **✓ exact** (Google's own dates). "Running" is approximated by "shown in the last 3 days". |
-| **4. 500+ EU reach a day** | `eu_total_reach` ÷ days live | The EU countries' `regionStats[].impressions` added up; if there are none, `overallImpressions` (the text then says "total, not only EU"). The range ÷ days live: the lower bound at 500+ a day passes, the upper bound below 500 fails, and a range in between is unknown. Impressions are showings, not people, so this is looser than Meta's rule. **No range published: not checked**, and the card says so. | **≈ approximated** when Google publishes a range, **? not checked** otherwise |
+| **4. 500+ EU reach a day** | `eu_total_reach` ÷ days live | The EU countries' `regionStats[].impressions` added up, ÷ days live. The lower bound at 500+ a day passes. The upper bound below 500 fails. A range in between is unknown. Impressions are showings, not people (reach ≤ impressions), so a pass is looser than Meta's rule. Google's total (`overallImpressions`) can only **fail** the rule: under 500 a day in total is under 500 in the EU. It never passes it. **No EU range: not checked**, and the card says so. That includes an ad Google lists only outside the EU ("Shown outside the EU only"). | **≈ approximated** when Google publishes EU ranges, **? not checked** otherwise |
 
 A product is saved when no rule fails and rules 1–3 are known. Rule 4 may be "not checked":
 
 - **winner:** all four rules pass, exactly or approximately. The card shows "4/4 rules".
 - **partial:** the reach rule is not checked. The card shows "3/4 rules · ✓ ≈ ✓ ?". The tab's **All 4 rules** filter
-  hides these.
+  hides these. Expect most Google products here: Google publishes ranges for few ordinary ads (see [Verify](#verify-on-the-first-live-run)).
 
 ### The other checks, as on the other tabs
 
@@ -137,7 +140,19 @@ Gates that save credits:
 - Two advertisers selling the same ad never pay for it twice.
 
 **Hard cap:** `GOOGLE_CREDITS` (300 by default, at most 5,000). The client never sends a call that could pass it, also when
-calls run at the same moment. A run that hits the cap saves what it found and stops cleanly, and the next run goes on.
+calls run at the same moment, and a try whose answer was lost counts as spent. A run that hits the cap saves what it found
+and stops cleanly, and the next run goes on.
+
+**Resuming:** the keyword cursor only moves past a keyword whose searches all answered and whose advertisers were all looked
+at. A failed search ends the run's keywords there, so that keyword is searched again next run. Why a run stopped is in its
+status, shown on the tab:
+- `done`;
+- `cap` (the plan: it goes on next run);
+- `time`;
+- `search` (a search failed);
+- `outage` (the vendor failed 3 calls in a row);
+- `no-credits` (402: buy credits);
+- `key` (401).
 
 **Cost per run** (the $47 pack, $1.88 per 1,000 credits):
 
@@ -159,7 +174,7 @@ about 10–25 keywords in 3 regions, depending on how many big advertisers they 
 3. Merge this PR. A workflow only appears under Actions from the main branch. Deploying the board makes the tables
    (`0057_google_ads.sql`) and puts the Google tab online.
 4. **First a dry run:** Actions → **Google Hunter** → Run workflow, tick **Dry run**, credits **50**. The summary lists the
-   products with their rule marks; nothing is saved.
+   products with their rule marks. A dry run only reads D1: it does not even make the tables, and saves nothing.
 5. Then a real run (no tick). The products show under **Google** on the board.
 6. **Optional schedule:** add the repository *variable* **`GOOGLE_HUNT` = `on`** (Settings → Secrets and variables →
    Actions → Variables). It then runs every day at 04:41 UTC. Without it, or with any other value, the schedule stays off.
@@ -196,8 +211,9 @@ key, no credits, nothing saved, and every line says SAMPLE DATA).
 | state `google_cursor` | The next keyword |
 | state `google_data` | Changes when the board's table changed: the board reads its tables again |
 
-The migration only adds tables (`CREATE TABLE IF NOT EXISTS`) and is safe to run again and again. Rows nobody decided on and
-not seen for 60 days are removed.
+The migration only adds tables (`CREATE TABLE IF NOT EXISTS`) and is safe to run again and again. A product goes off the
+tab (`active` 0) when its ad is older than 42 days today, when it was not checked for 30 days, or when a check fails a rule.
+That also takes it out of the store signals. Your ✓ and notes stay. Rows nobody decided on and not seen for 60 days are removed.
 
 **Links on the board** are made from checked ids (AR… / CR…), never copied from an answer:
 
@@ -212,8 +228,8 @@ The documentation leaves these open. The hunt keeps what it needs to answer them
 1. **Does `number_of_ads_estimate` follow `start_date` / `end_date`?** The rule assumes it counts the ads shown in the last
    3 days. If it turns out to count all ads ever, rule 2 is looser than intended. Then the count of the pages read is the
    better fact (raise `GOOGLE_PAGES`).
-2. **Are impression ranges published for ordinary (non-political) ads shown in the EU?** If they never are, rule 4 is "not
-   checked" on every card, and the proof decides.
+2. **Are impression ranges published for ordinary (non-political) ads shown in the EU?** Only EU ranges can pass rule 4.
+   If Google never publishes them for these ads, rule 4 is "not checked" on every card, and the proof decides.
 3. **Is `destinationUrl` a domain or a full link?** The vendor's example shows a domain. A link to a product page skips the
    store search.
 4. **How large is a page of ads?** Example: 15. More per page means fewer credits per advertiser.

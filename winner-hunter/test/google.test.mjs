@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import { googleClient, googleRules, parseCompanyAds, parseAdDetails, parseAdvertiserSearch, euImpressions, boundsOf, destinationOf, domainOf, timeOf, int,
-  advertiserUrl, creativeUrl, domainUrl, idsOfUrl, byProduct, bestOf, howMany, GoogleApiError, RUNNING_DAYS, COST } from '../lib/google-ads.mjs';
+  advertiserUrl, creativeUrl, domainUrl, idsOfUrl, byProduct, bestOf, howMany, cursorOf, GoogleApiError, RUNNING_DAYS, COST } from '../lib/google-ads.mjs';
 import { hunt, creditsOf, targetsOf, regionsOf, lines, mark, MAX_CREDITS } from '../google.mjs';
 import { googleFetch, sampleData, SAMPLE_KEY, VENDOR } from './helpers/fake-google.mjs';
 import { d1Client, migrate, statements } from '../lib/d1.mjs';
@@ -130,7 +130,7 @@ test('the client: x-api-key header, parameters as documented, credits counted fr
   assert.ok(seen.every((h) => h['x-api-key'] === SAMPLE_KEY), 'the key in the header, never in the URL');
   assert.ok(calls.every((u) => !u.toString().includes(SAMPLE_KEY)));
   const st = api.stats();
-  assert.deepStrictEqual([st.spent, st.calls, st.remaining, st.by.search, st.by.ads, st.by.ad], [4, 4, 996, 1, 2, 1]);
+  assert.deepStrictEqual([st.spent, st.ok, st.failed, st.remaining, st.by.search, st.by.ads, st.by.ad], [4, 4, 0, 996, 1, 2, 1]);
   assert.deepStrictEqual(COST, { search: 1, ads: 1, ad: 1 });
   await assert.rejects(api.companyAds({}), (e) => e instanceof GoogleApiError && e.kind === 'bad');
   assert.throws(() => googleClient({ key: '  ' }), /No API key: add the GitHub secret SCRAPECREATORS_API_KEY/);
@@ -232,13 +232,26 @@ test('rule 3, ad live 7–42 days: exact from Google\'s first-shown date; an ad 
   assert.deepStrictEqual([item(undated, 'age').state, item(undated, 'age').how, undated.verdict], ['unknown', 'none', 'pending']);
 });
 
-test('rule 4, 500+ EU reach a day: approximated with Google\'s EU impression ranges (else its total), never a pass without a figure', () => {
+test('rule 4, 500+ EU reach a day: only Google\'s EU impression ranges can pass it (approximately); its total can only fail it; never a pass without an EU figure', () => {
   const eu = item(rules({}), 'reach');
   assert.deepStrictEqual([eu.state, eu.how], ['ok', 'approx']);
   assert.match(eu.text, /^35K\+ EU impressions a day \(Google's range 700K–800K over 20 days; impressions, not people\)$/);
+  // A big total is no EU figure: not checked, also when the ad ran in the EU (the total is not split by country).
   const total = item(rules({ impressions: { eu: null, all: { lower: 50000, upper: 60000 } } }), 'reach');
-  assert.deepStrictEqual([total.state, total.how], ['ok', 'approx']);
-  assert.match(total.text, /total \(not only EU\) impressions a day/);
+  assert.deepStrictEqual([total.state, total.how], ['unknown', 'none']);
+  assert.match(total.text, /^Google publishes no EU reach or impressions for this ad: not checked \(in total Google's range 50K–60K over 20 days, not split by country\)$/);
+  // Shown in the US only (the vendor's documented ad): no EU reach to check, never a pass.
+  const us = rules({ ad: { ...ad20, regions: ['US'] }, impressions: { eu: null, all: { lower: 500000, upper: 600000 } } });
+  assert.deepStrictEqual([item(us, 'reach').state, item(us, 'reach').how, us.verdict], ['unknown', 'none', 'partial']);
+  assert.match(item(us, 'reach').text, /^Shown outside the EU only \(US\): no EU reach to check/);
+  const vendor = parseAdDetails(VENDOR.ad);
+  const doc = googleRules({ store: shop, ads: many, ad: { firstShown: Date.parse('2026-06-10'), lastShown: Date.parse('2026-06-24'), regions: vendor.regions },
+    impressions: { eu: euImpressions(vendor.regionStats), all: vendor.impressions } }, { now: Date.parse('2026-06-25') });
+  assert.strictEqual(item(doc, 'reach').state, 'unknown', "the vendor's US-only ad with 500K–600K impressions does not pass an EU rule");
+  // The total can fail it soundly: under 500 impressions a day in total is under 500 in the EU, and fewer people still.
+  const tiny = item(rules({ impressions: { eu: null, all: { lower: 100, upper: 2000 } } }), 'reach');
+  assert.deepStrictEqual([tiny.state, tiny.how], ['bad', 'approx']);
+  assert.match(tiny.text, /^At most 100 impressions a day in total, so fewer in the EU \(needs 500\+/);
   const low = item(rules({ impressions: { eu: { lower: 100, upper: 900 }, all: { lower: 900000, upper: 1e6 } } }), 'reach');
   assert.deepStrictEqual([low.state, low.how], ['bad', 'approx'], 'the EU range comes first, also when the total is big');
   assert.match(low.text, /^At most 45 EU impressions a day \(needs 500\+/);
@@ -247,7 +260,7 @@ test('rule 4, 500+ EU reach a day: approximated with Google\'s EU impression ran
   const open = item(rules({ impressions: { eu: { lower: 100, upper: null }, all: null } }), 'reach');
   assert.strictEqual(open.state, 'unknown', 'an open-ended range below 500 a day cannot fail it either');
   const none = rules({ impressions: { eu: null, all: null } });
-  assert.deepStrictEqual(item(none, 'reach'), { key: 'reach', label: '500+ EU reach a day', state: 'unknown', how: 'none', text: 'Google publishes no reach or impressions for this ad: not checked' });
+  assert.deepStrictEqual(item(none, 'reach'), { key: 'reach', label: '500+ EU reach a day', state: 'unknown', how: 'none', text: 'Google publishes no EU reach or impressions for this ad: not checked' });
   assert.strictEqual(none.verdict, 'partial', 'saved, marked as not checked');
 });
 
@@ -304,10 +317,10 @@ test('the hunt on SAMPLE DATA: the board\'s shops first, then the keywords; one 
   assert.deepStrictEqual([t.health, t.stopped, t.dry_run], ['ok', 'done', false]);
   const rows = products(mem);
   assert.deepStrictEqual(rows.map((r) => [r.product_key, r.verdict, r.active]), [
-    ['brightly-sample.example/products/sunset-projection-lamp', 'winner', 1],
+    ['brightly-sample.example/products/sunset-projection-lamp', 'partial', 1],
     ['glowlamp-sample.example/products/sunset-lamp', 'partial', 1],
     ['posturepro-sample.example/products/posture-corrector-pro', 'winner', 1],
-  ], 'the desk lamp (too few EU impressions), the gummies (a supplement), the tiny shop and the shop that is not Shopify are not there');
+  ], 'the desk lamp (too few EU impressions), the gummies (a supplement), the tiny shop and the shop that is not Shopify are not there; the projection lamp ran in the US only: its EU reach is not checked');
   const posture = rows.find((r) => r.product_key.startsWith('posturepro'));
   assert.strictEqual(posture.ad_id, 'gCR10000000000000000101');
   assert.deepStrictEqual([posture.product_title, posture.price, posture.compare_at_price, posture.currency], ['Posture Corrector Pro', 39.95, 79.95, 'EUR']);
@@ -318,7 +331,7 @@ test('the hunt on SAMPLE DATA: the board\'s shops first, then the keywords; one 
   assert.deepStrictEqual(JSON.parse(posture.rules).map((i) => [i.key, i.state, i.how]), [['shopify', 'ok', 'exact'], ['ads', 'ok', 'approx'], ['age', 'ok', 'exact'], ['reach', 'ok', 'approx']]);
   const glow = rows.find((r) => r.product_key.startsWith('glowlamp'));
   assert.deepStrictEqual([glow.via, glow.impr_scope, glow.regions, glow.store_url], ['board', '', '["BE","NL"]', 'https://glowlamp-sample.example/']);
-  assert.deepStrictEqual(JSON.parse(glow.rules).find((i) => i.key === 'reach'), { key: 'reach', label: '500+ EU reach a day', state: 'unknown', how: 'none', text: 'Google publishes no reach or impressions for this ad: not checked' });
+  assert.deepStrictEqual(JSON.parse(glow.rules).find((i) => i.key === 'reach'), { key: 'reach', label: '500+ EU reach a day', state: 'unknown', how: 'none', text: 'Google publishes no EU reach or impressions for this ad: not checked' });
   const lamp = rows.find((r) => r.product_key.startsWith('brightly'));
   assert.strictEqual(lamp.impr_scope, 'all');
   // What it spent: 4 searches, 6 lists of ads (one advertiser had two pages), 6 ads' details. Never the same ad twice.
@@ -358,11 +371,11 @@ test('the next run: advertisers and domains looked at in the last 3 days cost no
 test('the credit cap stops a run cleanly: what it found is saved, the keyword cursor stays, and the next run goes on without paying twice', async () => {
   const { mem, db } = setup();
   const first = await run({ db, cap: 8 });
-  assert.strictEqual(first.stopped, 'credits');
+  assert.strictEqual(first.stopped, 'cap');
   assert.strictEqual(first.health, 'ok', 'the cap is a plan, not a failure');
   assert.ok(first.credits.spent <= 8, `spent ${first.credits.spent}`);
   const state = (k) => JSON.parse(mem.prepare('SELECT value FROM state WHERE key = ?').get(k).value);
-  assert.deepStrictEqual([state('google_run').stopped, state('google_run').credits.cap], ['credits', 8]);
+  assert.deepStrictEqual([state('google_run').stopped, state('google_run').credits.cap], ['cap', 8]);
   assert.strictEqual(mem.prepare("SELECT value FROM state WHERE key = 'google_cursor'").get(), undefined, '"posture" was not finished: no cursor yet');
   assert.ok(products(mem).some((r) => r.product_key.startsWith('glowlamp')), 'the board\'s shop was looked at first and saved');
   const second = await run({ db, now: NOW + 600e3 });
@@ -426,6 +439,93 @@ test('a store that does not answer is unknown, not "not Shopify": no credits spe
   const next = await run({ db, now: NOW + 3600e3, keywords: [], targets: target, boardDomains: 0 });
   assert.strictEqual(next.health, 'ok');
   assert.ok(products(mem).some((r) => r.product_key.startsWith('glowlamp')));
+});
+
+test('the page cursor goes back as the vendor sent it: encoded once, never twice', async () => {
+  const urls = [];
+  const api = googleClient({ key: 'k', fetch: async (u) => { urls.push(String(u)); return json({ success: true, ads: [], cursor: null }); }, cap: 5, sleep: noSleep });
+  await api.companyAds({ advertiserId: 'AR123456', cursor: VENDOR.ads.cursor });
+  assert.match(VENDOR.ads.cursor, /%2F/, 'the vendor sends it percent-encoded');
+  assert.ok(urls[0].includes('cursor=' + VENDOR.ads.cursor), urls[0]);
+  assert.doesNotMatch(urls[0], /%25/, 'not encoded twice');
+  await api.companyAds({ advertiserId: 'AR123456', cursor: 'ab/c+d=' });
+  assert.strictEqual(new URL(urls[1]).searchParams.get('cursor'), 'ab/c+d=', 'a raw cursor arrives as it is');
+  assert.strictEqual(cursorOf('%E0%A4%A'), '%E0%A4%A', 'one that does not decode: as it came');
+});
+
+test('the vendor down: 3 calls in a row fail, the run stops red and says why; the keyword cursor never moves past a failed search', async () => {
+  const down = (u) => (u.hostname === 'api.scrapecreators.com' ? new Response('{"message":"down"}', { status: 500 }) : null);
+  const shops = ['posturepro-sample.example', 'brightly-sample.example', 'glowlamp-sample.example'].map((value) => ({ kind: 'domain', value }));
+  const { mem, db } = setup();
+  const doFetch = googleFetch([], { now: NOW, answer: down });
+  const t = await hunt({ api: googleClient({ key: SAMPLE_KEY, fetch: doFetch, cap: 300, sleep: noSleep }), db, doFetch, now: () => NOW, keywords: ['posture'], targets: shops, boardDomains: 0, log: () => {}, shopOpts: { tries: 1 } });
+  assert.deepStrictEqual([t.health, t.stopped, t.searches, t.credits.ok, t.credits.failed], ['failed', 'outage', 0, 0, 3]);
+  assert.match(t.alert, /every request failed .*3 calls in a row failed/);
+  assert.strictEqual(mem.prepare("SELECT value FROM state WHERE key = 'google_cursor'").get(), undefined);
+  // A search that fails while others answer: what the others found is looked at, the cursor stays at that keyword.
+  const two = setup();
+  const flaky = googleFetch([], { now: NOW, answer: (u) => (u.pathname.endsWith('/advertisers/search') && u.searchParams.get('region') === 'DE' ? new Response('{}', { status: 503 }) : null) });
+  const t2 = await hunt({ api: googleClient({ key: SAMPLE_KEY, fetch: flaky, cap: 300, sleep: noSleep }), db: two.db, doFetch: flaky, now: () => NOW, keywords: ['posture', 'lamp'], regions: ['NL', 'DE'],
+    boardDomains: 0, log: () => {}, shopOpts: { tries: 1 } });
+  assert.deepStrictEqual([t2.health, t2.stopped, t2.keywords], ['warning', 'search', 0]);
+  assert.match(t2.alert, /"posture" in DE: search failed .*searched again next run/);
+  assert.ok(products(two.mem).some((r) => r.product_key.startsWith('posturepro')), 'the NL search found it');
+  assert.strictEqual(two.mem.prepare("SELECT value FROM state WHERE key = 'google_cursor'").get(), undefined, '"posture" is searched again next run, "lamp" is not skipped');
+});
+
+test('an answer lost on the way (a timeout, a cut connection) counts as spent: the cap holds against what the vendor bills', async () => {
+  let sent = 0;
+  const api = googleClient({ key: 'k', fetch: async () => { sent++; throw new Error('socket hang up'); }, cap: 3, sleep: noSleep });
+  for (let i = 0; i < 5; i++) await api.searchAdvertisers('x' + i).catch(() => {});
+  assert.strictEqual(sent, 3, 'never more tries than the cap');
+  assert.deepStrictEqual([api.stats().spent, api.stats().lost, api.stats().ok], [3, 3, 0]);
+});
+
+test('a list of ads with no answer (success false, 404) is not "fewer than 75 ads"; one ad that fails does not cost the others their product', async () => {
+  const { mem, db } = setup();
+  const empty = googleFetch([], { now: NOW, answer: (u) => (u.pathname === '/v1/google/company/ads' ? json({ success: false, credits_charged: 1 }) : null) });
+  const target = [{ kind: 'domain', value: 'posturepro-sample.example' }];
+  const t = await hunt({ api: googleClient({ key: SAMPLE_KEY, fetch: empty, cap: 50, sleep: noSleep }), db, doFetch: empty, now: () => NOW, keywords: [], targets: target, boardDomains: 0, log: () => {}, shopOpts: { tries: 1 } });
+  assert.deepStrictEqual([t.few_ads, t.health], [0, 'ok']);
+  assert.deepStrictEqual(mem.prepare('SELECT target, result FROM google_targets').all().map((r) => [r.target, r.result]), [['domain:posturepro-sample.example', 'no answer']]);
+  // The text ad's details are blocked (403): the image ad's product is saved all the same; the shop is asked again next run.
+  const two = setup();
+  const blocked = googleFetch([], { now: NOW, answer: (u) => (u.pathname === '/v1/google/ad' && /CR10000000000000000102/.test(u.searchParams.get('url')) ? json({ success: false, message: 'blocked' }, 403) : null) });
+  const t2 = await hunt({ api: googleClient({ key: SAMPLE_KEY, fetch: blocked, cap: 50, sleep: noSleep }), db: two.db, doFetch: blocked, now: () => NOW, keywords: [], targets: target, boardDomains: 0, log: () => {}, shopOpts: { tries: 1 } });
+  assert.strictEqual(t2.health, 'warning');
+  assert.deepStrictEqual(products(two.mem).map((r) => [r.product_key, r.copies]), [['posturepro-sample.example/products/posture-corrector-pro', 1]]);
+  assert.strictEqual(two.mem.prepare('SELECT COUNT(*) AS n FROM google_targets').get().n, 0, 'asked again next run');
+});
+
+test('no credits left (402): the run ends red with that reason, not as "cap reached"', async () => {
+  const { mem, db } = setup();
+  const broke = googleFetch([], { now: NOW, answer: (u) => (u.hostname === 'api.scrapecreators.com' ? json({ success: false, message: 'buy credits' }, 402) : null) });
+  const t = await hunt({ api: googleClient({ key: SAMPLE_KEY, fetch: broke, cap: 300, sleep: noSleep }), db, doFetch: broke, now: () => NOW, keywords: ['posture'], boardDomains: 0, log: () => {}, shopOpts: { tries: 1 } });
+  assert.deepStrictEqual([t.health, t.stopped], ['failed', 'no-credits']);
+  assert.match(t.alert, /no credits left at Scrape Creators/);
+  assert.strictEqual(JSON.parse(mem.prepare("SELECT value FROM state WHERE key = 'google_run'").get().value).stopped, 'no-credits');
+});
+
+test('a product whose ad is older than 42 days today, or not checked for a month, goes off (active 0): out of the store signals too; a decided one is kept', async () => {
+  const { mem, db } = setup();
+  const put = mem.prepare("INSERT INTO google_products (product_key, ad_id, active, first_shown, last_seen, run_id) VALUES (?, ?, 1, ?, ?, 'old')");
+  put.run('old.example/products/a', 'gCR1', new Date(NOW - 50 * DAY).toISOString(), new Date(NOW - DAY).toISOString());
+  put.run('stale.example/products/b', 'gCR2', new Date(NOW - 20 * DAY).toISOString(), new Date(NOW - 31 * DAY).toISOString());
+  put.run('fine.example/products/c', 'gCR3', new Date(NOW - 20 * DAY).toISOString(), new Date(NOW - DAY).toISOString());
+  const t = await run({ db, keywords: [], boardDomains: 0 });
+  assert.strictEqual(t.retired, 2);
+  assert.deepStrictEqual(mem.prepare('SELECT product_key, active FROM google_products ORDER BY product_key').all().map((r) => [r.product_key, r.active]),
+    [['fine.example/products/c', 1], ['old.example/products/a', 0], ['stale.example/products/b', 0]]);
+  const wanted = mem.prepare((await import('../bestsellers.mjs')).WANTED_SQL).all(new Date(NOW - 45 * DAY).toISOString());
+  assert.ok(!wanted.some((w) => /old\.example|stale\.example/.test(w.product_url || '')), 'not asked for store signals any more');
+});
+
+test('a dry run reads only: on a database without the Google tables (before the first migration) it runs and creates nothing', async () => {
+  const mem = new DatabaseSync(':memory:');
+  const db = d1Client({ accountId: 'a', databaseId: 'b', token: 't' }, { doFetch: d1Rest(mem).doFetch, retryMs: 0 });
+  const t = await run({ db, dryRun: true });
+  assert.deepStrictEqual([t.health, t.dry_run, t.rows.length], ['ok', true, 2], 'the two products of the keywords (no tables: no shops from the other tabs)');
+  assert.deepStrictEqual(mem.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all(), [], 'not one table made');
 });
 
 test('settings: GOOGLE_CREDITS is a hard cap with a default and a ceiling; regions; typed domains and advertiser ids', () => {

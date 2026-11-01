@@ -49,16 +49,17 @@ test('/api/ads?scope=google: the Google products, their four rules each marked e
   assert.deepStrictEqual([env.run.health, env.run.products], ['ok', 3]);
   const s = await session(env);
   const j = await s.get('/api/ads?scope=google&view=all');
-  assert.deepStrictEqual(byTitle(j), ['Posture Corrector Pro', 'Sunset Projection Lamp', 'Glow Sunset Lamp'], 'all four rules checked first, then the most proof');
+  assert.deepStrictEqual(byTitle(j), ['Posture Corrector Pro', 'Glow Sunset Lamp', 'Sunset Projection Lamp'], 'all four rules checked first, then the most proof');
   assert.strictEqual(j.counts.google, 3);
   assert.strictEqual(j.counts.all, 3, 'the counts of this tab');
-  const [posture, lamp, glow] = j.ads;
+  const [posture, glow, lamp] = j.ads;
   assert.deepStrictEqual(posture.google.rules.map((i) => [i.key, i.state, i.how]), [['shopify', 'ok', 'exact'], ['ads', 'ok', 'approx'], ['age', 'ok', 'exact'], ['reach', 'ok', 'approx']]);
   assert.deepStrictEqual(posture.google.checked, { exact: 2, approx: 2, unknown: 0 });
   assert.match(posture.google.rules[3].text, /EU impressions a day .*impressions, not people/);
-  assert.deepStrictEqual(glow.google.rules[3], { key: 'reach', label: '500+ EU reach a day', state: 'unknown', how: 'none', text: 'Google publishes no reach or impressions for this ad: not checked' });
+  assert.deepStrictEqual(glow.google.rules[3], { key: 'reach', label: '500+ EU reach a day', state: 'unknown', how: 'none', text: 'Google publishes no EU reach or impressions for this ad: not checked' });
   assert.deepStrictEqual([glow.google.verdict, glow.google.checked], ['partial', { exact: 2, approx: 1, unknown: 1 }], 'never shown as passed');
-  assert.match(lamp.google.rules[3].text, /total \(not only EU\)/);
+  assert.deepStrictEqual([lamp.google.verdict, lamp.google.rules[3].state, lamp.google.rules[3].how], ['partial', 'unknown', 'none'], 'shown in the US only: its 50K–60K impressions do not pass an EU rule');
+  assert.match(lamp.google.rules[3].text, /^Shown outside the EU only \(US\): no EU reach to check \(in total Google's range 50K–60K over 12 days\)$/);
   assert.deepStrictEqual([posture.age, posture.ads, posture.scaled, posture.price, posture.cur, posture.google.regions, posture.google.formats], [20, 180, 2, 39.95, 'EUR', ['DE', 'NL'], ['image', 'text']]);
   assert.strictEqual(posture.ad, 'https://adstransparency.google.com/advertiser/AR10000000000000000001/creative/CR10000000000000000101', '▶ and a tap: the ad in the Transparency Center');
   assert.strictEqual(posture.google.advertiser, 'https://adstransparency.google.com/advertiser/AR10000000000000000001');
@@ -111,14 +112,14 @@ test('filters and sorts on the Google tab: all four rules, also / not on Meta, a
   const env = await googleEnv();
   const s = await session(env);
   const q = async (p) => byTitle(await s.get('/api/ads?scope=google&view=all&' + p));
-  assert.deepStrictEqual(await q('full=1'), ['Posture Corrector Pro', 'Sunset Projection Lamp']);
+  assert.deepStrictEqual(await q('full=1'), ['Posture Corrector Pro']);
   assert.deepStrictEqual(await q('meta=1'), ['Glow Sunset Lamp']);
   assert.deepStrictEqual(await q('meta=0'), ['Posture Corrector Pro', 'Sunset Projection Lamp']);
   assert.deepStrictEqual(await q('tiktok=1'), ['Sunset Projection Lamp']);
   assert.deepStrictEqual(await q('cc=DE'), ['Posture Corrector Pro']);
   assert.deepStrictEqual(await q('cc=nl'), ['Posture Corrector Pro', 'Glow Sunset Lamp']);
-  assert.deepStrictEqual(await q('q=lamp'), ['Sunset Projection Lamp', 'Glow Sunset Lamp']);
-  assert.deepStrictEqual(await q('sort=impr'), ['Posture Corrector Pro', 'Sunset Projection Lamp', 'Glow Sunset Lamp'], 'impressions a day; none published last');
+  assert.deepStrictEqual(await q('q=lamp'), ['Glow Sunset Lamp', 'Sunset Projection Lamp']);
+  assert.deepStrictEqual(await q('sort=impr'), ['Posture Corrector Pro', 'Sunset Projection Lamp', 'Glow Sunset Lamp'], 'impressions a day (any country: a plain fact, no rule); none published last');
   assert.deepStrictEqual(await q('sort=days'), ['Posture Corrector Pro', 'Sunset Projection Lamp', 'Glow Sunset Lamp']);
   assert.deepStrictEqual(await q('sort=regions'), ['Posture Corrector Pro', 'Glow Sunset Lamp', 'Sunset Projection Lamp']);
   assert.deepStrictEqual(await q('sort=ads'), ['Posture Corrector Pro', 'Sunset Projection Lamp', 'Glow Sunset Lamp']);
@@ -158,7 +159,7 @@ test('the Google Inbox: all four rules and proof first, × what you taught the b
   const env = await googleEnv();
   const s = await session(env);
   const first = await s.get('/api/ads?scope=google&view=inbox');
-  assert.deepStrictEqual(byTitle(first), ['Posture Corrector Pro', 'Sunset Projection Lamp', 'Glow Sunset Lamp']);
+  assert.deepStrictEqual(byTitle(first), ['Posture Corrector Pro', 'Glow Sunset Lamp', 'Sunset Projection Lamp'], 'all four rules and 1 proof, 3 of 4 and 2 proof (the same score: all four first), 3 of 4 and 1 proof');
   assert.ok(first.ads.every((a) => a.ranked && a.google.proof));
   // Jev's answers, saved by world-check.mjs under 'google|' + the product page: a risk ranks it lower and says why.
   const put = env.db.prepare("INSERT INTO world_checks (product_key, people, animals, gymwear, physical, category, input, checked_at, version, main, sub, answers) VALUES (?, ?, 0.01, 0.01, 0.99, 'Home', 'photo', 'x', 2, 'Home', '', ?)");
@@ -180,7 +181,7 @@ test('age today: a Google product whose ad is older than 42 days today leaves th
   await s.post('/api/hide', { ad_id: 'gCR10000000000000000101', status: 'seen' });
   const later = NOW + 25 * 864e5; // posture 45 days, the projection lamp 37, the glow lamp 35
   const j = await s.get('/api/ads?scope=google&view=all', later);
-  assert.deepStrictEqual(byTitle(j), ['Sunset Projection Lamp', 'Glow Sunset Lamp']);
+  assert.deepStrictEqual(byTitle(j), ['Glow Sunset Lamp', 'Sunset Projection Lamp']);
   const made = await s.get('/api/ads?view=made', later);
   assert.deepStrictEqual(made.ads.map((a) => [a.title, a.pass, a.age]), [['Posture Corrector Pro', false, 45]], 'out of the rules, still in ✓');
   // A product the hunt took off (it failed a rule when checked again) is not on the tab either.
@@ -194,7 +195,7 @@ test('/api/markets?scope=google: the countries its products\' ads were shown in;
   const s = await session(env);
   const m = await s.get('/api/markets?scope=google');
   assert.strictEqual(m.scope, 'google');
-  assert.deepStrictEqual(m.markets.map((x) => [x.cc, x.products, x.shops, x.full]), [['NL', 2, 2, 1], ['BE', 1, 1, 0], ['DE', 1, 1, 1], ['US', 1, 1, 1]]);
+  assert.deepStrictEqual(m.markets.map((x) => [x.cc, x.products, x.shops, x.full]), [['NL', 2, 2, 1], ['BE', 1, 1, 0], ['DE', 1, 1, 1], ['US', 1, 1, 0]]);
   assert.strictEqual(m.products, 3);
   assert.strictEqual(m.jev.total, 3);
 });

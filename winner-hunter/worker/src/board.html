@@ -1936,7 +1936,8 @@ function header(j, madeFresh = true) {
       return;
     }
     box.className = 'status ' + (g.health === 'failed' ? 'bad' : g.health === 'warning' ? 'warn' : 'ok');
-    $('run').innerHTML = `Last Google hunt <b>${esc(ago(g.finished_at || g.updated_at))}</b> · <b>${esc(fmt(g.products ?? 0))}</b> products · ${esc(fmt(c.spent || 0))} of ${esc(fmt(c.cap || 0))} credits${g.stopped === 'credits' ? ' (cap reached: it goes on next run)' : ''}${g.dry_run ? ' · dry run, nothing saved' : ''}`;
+    const why = { cap: ' (cap reached: it goes on next run)', 'no-credits': ' · no credits left at Scrape Creators', key: ' · API key refused', outage: ' · Scrape Creators stopped answering', search: ' · a search failed: that keyword next run', time: ' · out of time: it goes on next run' }[g.stopped] || '';
+    $('run').innerHTML = `Last Google hunt <b>${esc(ago(g.finished_at || g.updated_at))}</b> · <b>${esc(fmt(g.products ?? 0))}</b> products · ${esc(fmt(c.spent || 0))} of ${esc(fmt(c.cap || 0))} credits${esc(why)}${g.dry_run ? ' · dry run, nothing saved' : ''}`;
     return;
   }
   if (st.scope === 'world') {

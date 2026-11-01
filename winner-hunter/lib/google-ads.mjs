@@ -193,19 +193,42 @@ export class GoogleApiError extends Error {
   }
 }
 
+/** The vendor sends its page cursor percent-encoded (…%2F…%3D): decoded once here, so the URL carries it encoded once. */
+export function cursorOf(c) {
+  const s = str(c, 2000);
+  if (!/%[0-9A-Fa-f]{2}/.test(s)) return s;
+  try {
+    return decodeURIComponent(s);
+  } catch (e) {
+    return s;
+  }
+}
+export const OUTAGE_AFTER = 3; // calls that failed in a row (after their own tries): the vendor is down, the run stops
+
 /**
  * The Scrape Creators client for Google's ad library. cap: the most credits this run may spend; a call that could pass it
- * is never sent (GoogleApiError kind 'cap'). Each answer says what it cost (credits_charged): that is counted; an answer
- * that does not say counts its listed price, so the cap holds. 401 (key) and 402 (no credits) stop the run, a 404 is
- * nothing found (null), 429 and 5xx are asked again twice. The key never appears in an error or a log.
+ * is never sent (GoogleApiError kind 'cap'). Each answer says what it cost (credits_charged): that is counted. An answer
+ * that does not say counts its listed price, and so does a try whose answer was lost (a timeout or a cut connection: the
+ * vendor may have done the work), so the cap holds against what the vendor bills. 401 (key) and 402 (no credits) stop the
+ * run, a 404 is nothing found (null), 429 and 5xx are asked again twice, a lost answer once. OUTAGE_AFTER calls in a row
+ * that fail stop the run (kind 'outage'). stats(): ok (calls answered) and failed (calls that ended in an error) count
+ * calls, not tries. The key never appears in an error or a log.
  */
 export function googleClient({ key, fetch: doFetch = globalThis.fetch, cap = 0, base = API, sleep = wait, tries = 3, timeout = 60000 } = {}) {
   const k = String(key || '').trim();
   if (!k) throw new GoogleApiError(`No API key: add the GitHub secret ${SECRET}`, { kind: 'key', stop: true });
   const limit = Math.max(0, Math.floor(Number(cap) || 0));
-  const t = { spent: 0, cap: limit, remaining: null, calls: 0, cached: 0, failed: 0, by: { search: 0, ads: 0, ad: 0 } };
+  const t = { spent: 0, cap: limit, remaining: null, ok: 0, failed: 0, cached: 0, lost: 0, by: { search: 0, ads: 0, ad: 0 } };
   let held = 0; // credits of calls on their way: calls at the same moment can never pass the cap together
+  let inRow = 0;
   const hide = (s) => String(s ?? '').split(k).join('***');
+  // A call that ended in an error. Only the vendor being down counts toward an outage; a 400 or 403 is about one resource.
+  const failed = (e) => {
+    t.failed++;
+    if (!['server', 'network', 'format'].includes(e.kind)) return e;
+    if (++inRow >= OUTAGE_AFTER) Object.assign(e, { message: `${e.message}: ${inRow} calls in a row failed, stopped (the rest next run)`, kind: 'outage', stop: true });
+    return e;
+  };
 
   async function call(kind, params) {
     const cost = COST[kind];
@@ -226,40 +249,41 @@ export function googleClient({ key, fetch: doFetch = globalThis.fetch, cap = 0, 
         }
       } catch (e) {
         held -= cost;
-        if (attempt < tries) {
+        // The answer was lost, not the work: counted as spent, so the cap holds against the bill. Asked again once.
+        t.spent += cost;
+        t.by[kind] += cost;
+        t.lost += cost;
+        if (attempt < Math.min(tries, 2)) {
           await sleep(2000 * attempt);
           continue;
         }
-        t.failed++;
-        throw new GoogleApiError(`Scrape Creators unreachable (${hide(e.message || e.name)})`, { kind: 'network' });
+        throw failed(new GoogleApiError(`Scrape Creators unreachable (${hide(e.message || e.name)})`, { kind: 'network' }));
       }
       held -= cost;
-      t.calls++;
       const said = body && typeof body === 'object' ? int(body.credits_charged) : null;
       const charged = said != null ? said : res.status === 401 || res.status === 402 || res.status === 404 ? 0 : cost;
       t.spent += charged;
       t.by[kind] += charged;
       if (body && int(body.credits_remaining) != null) t.remaining = int(body.credits_remaining);
       const why = hide(body && typeof body === 'object' ? str(body.message ?? body.error, 200) : '');
-      if (res.status === 401) throw new GoogleApiError(`Scrape Creators refused the API key (401): check the GitHub secret ${SECRET}`, { status: 401, kind: 'key', stop: true });
-      if (res.status === 402) throw new GoogleApiError('Scrape Creators: no credits left (402): buy credits at app.scrapecreators.com', { status: 402, kind: 'credits', stop: true });
+      if (res.status === 401) throw failed(new GoogleApiError(`Scrape Creators refused the API key (401): check the GitHub secret ${SECRET}`, { status: 401, kind: 'key', stop: true }));
+      if (res.status === 402) throw failed(new GoogleApiError('Scrape Creators: no credits left (402): buy credits at app.scrapecreators.com', { status: 402, kind: 'credits', stop: true }));
       if (res.status === 429 || res.status >= 500) {
         if (attempt < tries) {
           await sleep(3000 * attempt);
           continue;
         }
-        t.failed++;
-        throw new GoogleApiError(`Scrape Creators HTTP ${res.status}${why ? ': ' + why : ''}`, { status: res.status, kind: 'server' });
+        throw failed(new GoogleApiError(`Scrape Creators HTTP ${res.status}${why ? ': ' + why : ''}`, { status: res.status, kind: 'server' }));
       }
-      if (res.status === 404) return null;
-      if (!res.ok) {
-        t.failed++;
-        throw new GoogleApiError(`Scrape Creators HTTP ${res.status}${why ? ': ' + why : ''}`, { status: res.status, kind: res.status === 403 ? 'blocked' : 'bad' });
+      if (res.status === 404) {
+        t.ok++;
+        inRow = 0;
+        return null;
       }
-      if (!body || typeof body !== 'object' || Array.isArray(body)) {
-        t.failed++;
-        throw new GoogleApiError('Scrape Creators: an answer that is not JSON', { status: res.status, kind: 'format' });
-      }
+      if (!res.ok) throw failed(new GoogleApiError(`Scrape Creators HTTP ${res.status}${why ? ': ' + why : ''}`, { status: res.status, kind: res.status === 403 ? 'blocked' : 'bad' }));
+      if (!body || typeof body !== 'object' || Array.isArray(body)) throw failed(new GoogleApiError('Scrape Creators: an answer that is not JSON', { status: res.status, kind: 'format' }));
+      t.ok++;
+      inRow = 0;
       if (body.success === false) return null; // answered, nothing to read (counted, as the vendor charges these)
       if (body.cached === true) t.cached++;
       return body;
@@ -278,14 +302,15 @@ export function googleClient({ key, fetch: doFetch = globalThis.fetch, cap = 0, 
     /**
      * One page of a company's ads, by domain or advertiser id. startDate / endDate (YYYY-MM-DD): ads shown in those days.
      * region: 2 letters (default anywhere). platform: google_search | google_shopping | youtube | google_maps | google_play.
+     * cursor: the last page's, as the vendor sent it. null: no answer to read (a 404, or success false): not "no ads".
      */
     async companyAds({ domain = '', advertiserId = '', region = '', startDate = '', endDate = '', platform = '', format = '', cursor = '' } = {}) {
       const d = domainOf(domain);
       const a = advertiserIdOf(advertiserId);
       if (!d && !a) throw new GoogleApiError('companyAds needs a domain or an advertiser id', { kind: 'bad' });
       const j = await call('ads', { domain: a ? '' : d, advertiser_id: a, topic: 'all', region: ccOf(region), start_date: startDate, end_date: endDate,
-        platform: /^(google_search|google_shopping|youtube|google_maps|google_play)$/.test(platform) ? platform : '', format: formatOf(format), cursor: str(cursor, 2000) });
-      return j ? parseCompanyAds(j) : { ads: [], cursor: null, estimate: null };
+        platform: /^(google_search|google_shopping|youtube|google_maps|google_play)$/.test(platform) ? platform : '', format: formatOf(format), cursor: cursorOf(cursor) });
+      return j ? parseCompanyAds(j) : null;
     },
     /** One ad's details. cacheMaxAge: the vendor's cached copy when it is this young costs nothing ('1d' … '30d'). */
     async adDetails(url, { cacheMaxAge = '7d' } = {}) {
@@ -311,8 +336,8 @@ const plural = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`;
  *   store  { key: 'store.com', shopify: 1 | 0 | null (no answer), host, myshopify }
  *   ads    { estimate: Google's estimate of the advertiser's ads shown in the last windowDays days | null, windowDays,
  *            listed: ads of the advertiser seen on the pages read, complete: every page was read }
- *   ad     { firstShown, lastShown } (ms)
- *   impressions { eu: { lower, upper, regions } | null, all: { lower, upper } | null }
+ *   ad     { firstShown, lastShown (ms), regions: the countries Google lists for the ad ([] when unknown) }
+ *   impressions { eu: the EU countries' ranges added up { lower, upper, regions } | null, all: Google's total { lower, upper } | null }
  * items: [{ key, label, state: 'ok' | 'bad' | 'unknown' | 'pending', how: 'exact' | 'approx' | 'none', text }].
  * verdict: 'winner' (all four pass, exactly or approximately), 'partial' (none fails, reach unknown: Google published no
  * figure), 'pending' (the shop, the advertiser's count or the dates are not known yet: not saved, asked again) or 'skip'.
@@ -358,19 +383,29 @@ export function googleRules(facts, { now = Date.now(), runningDays = RUNNING_DAY
     else put('age', 'ok', 'exact', `Live ${plural(days, 'day')} (${shown})`);
   }
 
-  // 4. 500+ EU reach a day: Google publishes no reach. Where it publishes impression ranges (per EU country, else in total),
-  // the range per day of ad life is checked: impressions count showings, not people, so this is looser than Meta's rule.
+  // 4. 500+ EU reach a day: Google publishes no reach, only impression ranges, for some ads. Impressions count showings, not
+  // people (reach ≤ impressions), and the EU's are part of the total (EU ≤ total). So only the EU countries' ranges can
+  // pass the rule (approximately: more impressions than people). The total can only fail it: under 500 a day in total is
+  // under 500 in the EU, and fewer people still. An ad Google lists only outside the EU has no EU reach to check.
   const imp = f.impressions || {};
-  const range = imp.eu ? { b: imp.eu, scope: 'EU' } : imp.all ? { b: imp.all, scope: 'total (not only EU)' } : null;
+  const regions = Array.isArray(ad.regions) ? ad.regions.filter((c) => CC.test(c)) : [];
+  const outside = regions.length > 0 && !regions.some((c) => EU_CODES.includes(c));
+  const d = Math.max(days ?? 0, 1);
+  const span = (b) => `Google's range ${fmtCompact(b.lower)}–${b.upper == null ? '?' : fmtCompact(b.upper)} over ${plural(d, 'day')}`;
+  const daily = (b) => ({ lower: b.lower / d, upper: b.upper == null ? null : b.upper / d });
   let perDay = null;
-  if (!range) put('reach', 'unknown', 'none', 'Google publishes no reach or impressions for this ad: not checked');
-  else {
-    const d = Math.max(days ?? 0, 1);
-    perDay = { lower: range.b.lower / d, upper: range.b.upper == null ? null : range.b.upper / d, scope: range.scope };
-    const span = `Google's range ${fmtCompact(range.b.lower)}–${range.b.upper == null ? '?' : fmtCompact(range.b.upper)} over ${plural(d, 'day')}; impressions, not people`;
-    if (perDay.lower >= MIN_REACH_PER_DAY) put('reach', 'ok', 'approx', `${fmtCompact(Math.floor(perDay.lower))}+ ${range.scope} impressions a day (${span})`);
-    else if (perDay.upper != null && perDay.upper < MIN_REACH_PER_DAY) put('reach', 'bad', 'approx', `At most ${fmtCompact(Math.floor(perDay.upper))} ${range.scope} impressions a day (needs ${MIN_REACH_PER_DAY}+; ${span})`);
-    else put('reach', 'unknown', 'approx', `${fmtCompact(Math.floor(perDay.lower))} to ${perDay.upper == null ? '?' : fmtCompact(Math.floor(perDay.upper))} ${range.scope} impressions a day: the range is too wide to tell (${span})`);
+  if (imp.eu) {
+    perDay = { ...daily(imp.eu), scope: 'EU' };
+    const s = `${span(imp.eu)}; impressions, not people`;
+    if (perDay.lower >= MIN_REACH_PER_DAY) put('reach', 'ok', 'approx', `${fmtCompact(Math.floor(perDay.lower))}+ EU impressions a day (${s})`);
+    else if (perDay.upper != null && perDay.upper < MIN_REACH_PER_DAY) put('reach', 'bad', 'approx', `At most ${fmtCompact(Math.floor(perDay.upper))} EU impressions a day (needs ${MIN_REACH_PER_DAY}+; ${s})`);
+    else put('reach', 'unknown', 'approx', `${fmtCompact(Math.floor(perDay.lower))} to ${perDay.upper == null ? '?' : fmtCompact(Math.floor(perDay.upper))} EU impressions a day: the range is too wide to tell (${s})`);
+  } else if (imp.all && imp.all.upper != null && imp.all.upper / d < MIN_REACH_PER_DAY) {
+    put('reach', 'bad', 'approx', `At most ${fmtCompact(Math.floor(imp.all.upper / d))} impressions a day in total, so fewer in the EU (needs ${MIN_REACH_PER_DAY}+; ${span(imp.all)})`);
+  } else if (outside) {
+    put('reach', 'unknown', 'none', `Shown outside the EU only (${regions.slice(0, 5).join(', ')}): no EU reach to check${imp.all ? ` (in total ${span(imp.all)})` : ''}`);
+  } else {
+    put('reach', 'unknown', 'none', `Google publishes no EU reach or impressions for this ad: not checked${imp.all ? ` (in total ${span(imp.all)}, not split by country)` : ''}`);
   }
 
   const bad = items.find((i) => i.state === 'bad');

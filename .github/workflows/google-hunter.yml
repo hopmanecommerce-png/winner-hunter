@@ -75,7 +75,9 @@ jobs:
         with:
           node-version: '22'
 
+      # A dry run changes nothing in D1, not even the tables: the hunt reads what is there and saves nothing.
       - name: Database tables
+        if: ${{ !inputs.dry_run }}
         run: node winner-hunter/migrate.mjs
 
       - name: Hunt on Google

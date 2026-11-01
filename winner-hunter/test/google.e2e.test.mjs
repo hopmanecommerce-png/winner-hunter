@@ -99,7 +99,11 @@ for (const [name, viewport] of [['phone', { width: 390, height: 844 }], ['deskto
       assert.deepStrictEqual(await glow.locator('.grules li[data-rule="reach"]').evaluate((l) => [l.className, l.querySelector('b').textContent]), ['idk', '?']);
       assert.match(await glow.locator('.grules li[data-rule="reach"]').getAttribute('title'), /not checked: Google gives nothing to check it with/);
       assert.match(await glow.locator('.badges').textContent(), /Also on Meta/);
-      assert.match(await page.locator('.card', { hasText: 'Sunset Projection Lamp' }).locator('.badges').textContent(), /Also on TikTok/);
+      // Shown in the US only: its impressions are no EU figure, so the EU reach rule shows "?", never ✓ or ≈.
+      const lamp = page.locator('.card', { hasText: 'Sunset Projection Lamp' });
+      assert.match(await lamp.locator('.badges').textContent(), /Also on TikTok/);
+      assert.match(await lamp.locator('.hero').textContent(), /3\/4\s*rules · ✓ ≈ ✓ \?/);
+      assert.match(await lamp.locator('.grules li[data-rule="reach"]').getAttribute('title'), /Shown outside the EU only \(US\)/);
       assert.match(await page.textContent('#grid'), /<img src=x onerror=alert\(1\)>/, 'text stays text');
       assert.ok(await page.locator('.card').evaluateAll((cs) => cs.every((c) => c.scrollWidth <= c.clientWidth + 1)), 'nothing runs off a card');
       assert.ok(await page.locator('.acts button').evaluateAll((bs) => bs.every((b) => b.scrollWidth <= b.clientWidth + 1)), 'Approved and Reject fit');
@@ -109,8 +113,8 @@ for (const [name, viewport] of [['phone', { width: 390, height: 844 }], ['deskto
       assert.ok(await page.locator('[data-f="r2500"]').isHidden() && await page.locator('[data-f="p4"]').isHidden());
       assert.ok(await page.locator('[data-f="gfull"]').isVisible() && await page.locator('[data-f="gnometa"]').isVisible());
       await page.click('[data-f="gfull"]');
-      await page.waitForFunction(() => document.querySelectorAll('.card').length === 2);
-      assert.match(await page.textContent('#count'), /2 matches · all four rules first/);
+      await page.waitForFunction(() => document.querySelectorAll('.card').length === 1 && /Posture Corrector Pro/.test(document.querySelector('.card').textContent));
+      assert.match(await page.textContent('#count'), /1 match · all four rules first/);
       await page.click('[data-f="gfull"]');
       await page.click('[data-f="gmeta"]');
       await page.waitForFunction(() => document.querySelectorAll('.card').length === 1 && /Glow Sunset Lamp/.test(document.querySelector('.card').textContent));
