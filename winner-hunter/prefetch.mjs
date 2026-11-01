@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /*
  * Opens every ad on the board ahead of time: Meta's render_ad page in Chrome on the GitHub runner, read out with the
- * board's own extractor, stored in D1 (ad_views). "▶ Bekijk ad" then shows it at once instead of after 8–16 seconds
- * in Browser Run. Only ads that pass the rules, are not hidden and have no ad view younger than 16 hours.
+ * board's own extractor, stored in D1 (ad_views) for the /api/ad viewer
+ * (the board no longer uses it: ▶ opens the Ad Library; ad-prefetch.yml only runs by hand). Only ads that pass the rules, are not hidden and have no ad view younger than 16 hours.
  *   META_TOKEN=… CF_API_TOKEN=… CF_ACCOUNT_ID=… [D1_DATABASE_ID=…] node winner-hunter/prefetch.mjs
  */
 import { pathToFileURL } from 'node:url';
