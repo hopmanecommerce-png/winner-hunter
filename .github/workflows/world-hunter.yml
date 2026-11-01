@@ -1,4 +1,4 @@
-# The hunt outside the EU: every day the next keywords in every market of lib/world.mjs (Switzerland, Norway, Australia,
+# The hunt outside the EU: four times a day the next keywords in every market of lib/world.mjs (Switzerland, Norway, Australia,
 # New Zealand, the UAE, the US, Canada and ten more), through the public Ad Library (Meta's API has no shop ads for these markets). No login. Writes only the
 # world_* tables and the store signals; the board shows the result under 🌍 Outside EU.
 # Run it by hand: Actions → World Hunter → Run workflow.
@@ -17,7 +17,12 @@ on:
         required: false
         default: '80'
   schedule:
-    - cron: '37 11 * * *' # every day; the EU hunt runs in the morning and uses Meta's API, this one does not compete with it
+    # Facebook limits one address after a few hundred searches and every run gets a new one, so more runs mean more searches.
+    # Change these together with HUNT_HOURS in worker/src/board.html.
+    - cron: '17 1 * * *'
+    - cron: '17 7 * * *'
+    - cron: '17 13 * * *'
+    - cron: '17 19 * * *'
 
 permissions:
   contents: read

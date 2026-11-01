@@ -1048,11 +1048,13 @@ function cleared(add) {
   store.set('wh-done', JSON.stringify({ d: today(), n: Math.max(0, n + add) }));
   return Math.max(0, n + add);
 }
-// The nightly hunt starts 01:17 UTC (winner-hunter.yml); GitHub can start it a little later.
+// The hunt outside the EU starts at these UTC hours, at :17 (world-hunter.yml); GitHub can start it later. The EU hunt only runs by hand.
+const HUNT_HOURS = [1, 7, 13, 19];
 function nextHunt() {
+  if (st.scope !== 'world') return 'The EU hunt is off';
   const n = new Date();
-  const t = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate(), 1, 17));
-  if (t <= n) t.setUTCDate(t.getUTCDate() + 1);
+  const at = (h) => new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate(), h, 17));
+  const t = HUNT_HOURS.map(at).find((x) => x > n) || new Date(at(HUNT_HOURS[0]).getTime() + 864e5);
   const day = t.toLocaleDateString('sv') === today() ? 'today' : 'tomorrow';
   return `Next hunt: ${day} ~${t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 }
@@ -1319,9 +1321,11 @@ function header(j, madeFresh = true) {
   $('alert').textContent = al ? al.text : '';
   const r = j.last_run;
   const box = $('runbox');
-  HUNTING = !!r && r.status === 'running';
+  const moving = (x) => !!x && x.status === 'running' && Date.now() - Date.parse(x.updated_at || x.started_at) <= 45 * 60000; // same as "stuck?" below
+  HUNTING = moving(r);
   if (st.scope === 'world') {
     const w = j.world_run;
+    HUNTING = moving(w);
     if (!w) { box.className = 'status'; $('run').textContent = 'No scan outside the EU yet'; return; }
     if (w.status === 'running') {
       const still = Date.now() - Date.parse(w.updated_at || w.started_at) > 45 * 60000;
@@ -1347,7 +1351,7 @@ function header(j, madeFresh = true) {
   }
   box.className = 'status ' + (r.health === 'failed' ? 'bad' : r.health === 'warning' ? 'warn' : 'ok');
   const why = { 'meta-block': ' · Meta limit', token: ' · Meta token expired!', time: '', done: '' }[r.status] || '';
-  $('run').innerHTML = `Last run <b>${esc(ago(r.finished_at || r.updated_at))}</b> · ${esc(fmt(r.ads_checked))} ads · <b>${esc(r.new_winners ?? 0)}</b> new winners${esc(why)}`;
+  $('run').innerHTML = `Last run <b>${esc(ago(r.finished_at || r.updated_at))}</b> · ${esc(fmt(r.ads_checked))} ads · <b>${esc(r.new_winners ?? 0)}</b> new winners${esc(why)} · EU hunt off, no new data`;
 }
 
 // An Approved tapped here: the ✓ count goes up and jumps at once. The server's count is older than this one until the

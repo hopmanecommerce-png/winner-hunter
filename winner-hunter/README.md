@@ -1,11 +1,11 @@
 # Winner Hunter v2
 
-Every night it looks in the **Meta Ad Library** for active ads from **Shopify stores**, keeps only the ads
+Four times a day it looks in the public **Meta Ad Library** in the markets outside the EU (`world.mjs`). The EU hunt described below has only run by hand since 1 Nov 2026. It looks in the **Meta Ad Library** for active ads from **Shopify stores**, keeps only the ads
 that pass four hard rules (see below) in **one database** (Cloudflare D1). You see them on **one
 live board** on your phone. Then you make ads for the top products.
 
 ```
-GitHub Actions (every night)  →  Cloudflare D1 (the database)  →  Board (Cloudflare Worker, with PIN)
+GitHub Actions (4x a day, outside the EU)  →  Cloudflare D1 (the database)  →  Board (Cloudflare Worker, with PIN)
 ```
 
 ## What you see on the board
@@ -56,24 +56,26 @@ Add these 4 secrets in GitHub: **Settings → Secrets and variables → Actions 
 Then, in **Actions**:
 
 1. **Deploy board** → Run workflow. At the end it prints the board link (`https://winner-hunter-clean.<your-name>.workers.dev`).
-2. **Winner Hunter** runs by itself every night (~03:00). You can also start it by hand (Run workflow).
+2. **World Hunter** (markets outside the EU) runs by itself four times a day. **Winner Hunter** (the EU) and **Ad prefetch** are off since 1 Nov 2026 and only run when you start them by hand (Run workflow).
 
-The workflows must be on the main branch for "Run workflow" and the nightly run to appear.
+The workflows must be on the main branch for "Run workflow" and the scheduled runs to appear.
 The database tables are made automatically (`worker/migrations/*.sql`).
 
-## How a night works
+## How an EU run works (started by hand)
 
 - It takes the next keywords from `keywords.txt`, 2 at a time, starting where the last run stopped.
 - After every batch the ads that pass the four rules are saved in D1, and the place in the list is saved too.
   So a stop never loses more than one batch.
-- It stops after `minutes` (default 300), or when Meta says "hourly limit" on every token (then the next night goes on).
+- It stops after `minutes` (default 300), or when Meta says "hourly limit" on every token (then the next run goes on).
 - Meta, D1 or a shop not answering is a warning (yellow), not a crash.
 - The run ends **red** (after saving everything it found) when: 0 ads were checked, winners were found but a batch
   could not be saved in D1, a Meta token is invalid/expired or expires within 7 days, or Meta blocked every token
   before the first batch finished. Turn on GitHub notifications for failed workflow runs (GitHub app → Settings →
   Notifications → Actions) to get a push on your phone.
-- The board shows a red banner for a failed run, no run in 36 hours or a Meta token expiring within 7 days,
-  and a yellow one for a run with warnings.
+- The EU tab shows a red banner for a recent failed run, a hanging run or a Meta token expiring within 7 days,
+  and a yellow one for a recent run with warnings.
+- The Outside EU tab shows a red banner for a failed scan, no scan in 24 hours or the same Meta token problem. The
+  World Hunter run also ends red when the token is invalid or expires within 7 days.
 - The summary of each run is on its page in Actions, and on the board ("Last run …").
 
 Change the keywords: edit `keywords.txt` (one per line, `#` = comment).
