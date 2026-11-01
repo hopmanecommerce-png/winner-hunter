@@ -62,6 +62,44 @@ After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, o
   only runs by hand). "Product not identified": no product page, price or rank was found, the title is the ad's own
   words. "Big catalogue, 1 ad": a store of 250+ products with fewer than 5 copies of this ad.
 
+## 🔎 Sourcing (on a launch card)
+
+Under the decision on a 🚀 launch card, **🔎 Sourcing** takes the product to a supplier you trust, at a cost you know
+(`worker/src/sourcing.mjs`, D1 tables `product_sourcing` and `product_suppliers`). It saves as you go.
+
+- **Find it**: search links by name on 1688 (with the Chinese words you set; "translate the name" helps), AliExpress,
+  Alibaba and CJ, and by photo on Google Lens and Yandex (they take the product photo's link). 1688, AliExpress and
+  Alibaba only search a photo in their own app: save the photo, then tap the camera there.
+- **Suppliers**: paste a link, or the text the 1688 or AliExpress app shares (price, MOQ, rating, repeat buyers and
+  factory come along), then fill in the rest: price and currency, shipping to NL, MOQ, rating, factory or trader, repeat
+  buyers (1688: 回头率), packed weight, days to the customer, notes. They are listed by what one order costs at the
+  customer's door: the unit, its shipping and the EU import fees on a parcel from China (€3 duty from 1 Jul 2026 and
+  €2 handling per item line from 1 Nov 2026: €5; none from EU stock), in euros at ¥8.3 and $1.16 for €1 unless you set
+  your own rate. Flags say what to look at: a trader, few repeat buyers, a rating under 4.5, MOQ above 50, slow, no
+  shipping cost yet.
+- **Choose** puts the supplier's cost in euros, its link, shipping, MOQ and lead time in the card's Sourcing step: the
+  margin and break-even ROAS on top follow at once (a COGS you typed in the Margin step still counts first). A new price
+  or rate for the chosen one: the card follows. Choose another, remove it or choose none: the card keeps its numbers.
+- **Vet the supplier** and **Sample order**: two checklists of ten, from the sourcing research (an unedited video with
+  today's date, the CE/RoHS/REACH report, battery papers, packed size, defects, safe payment; samples from the top two,
+  the agent's QC, a competitor's unit, labels, line quotes, the €3 + €2 and your IOSS in writing).
+- **First message**: to an agent (find it on 1688, samples and QC, line quotes, the €3 + €2 and your IOSS) or to a
+  supplier (the questions to ask before you pay), in English or Chinese, with your name and test quantity. **Copy**.
+
+**Shared numbers**, for every part of the board that works out costs: `product_sourcing` holds, by the launch card's
+`product_key`, `supplier_cost` (euros for one unit: the product only, no shipping or EU fees), `supplier_url`,
+`weight_g` (one unit packed, in grams: one you type wins over a supplier's), `ship_cost` (euros, one order to NL),
+`moq` and `lead_days`. `chosenSupplier(env, key)` in `worker/src/sourcing.mjs` reads them.
+
+**CJ Dropshipping (optional)**: with a Worker secret `CJ_API_KEY`, the panel finds CJ products by photo (CJ allows that
+from account Level 3; below it, by name) or by name, and gives one product's cost, packed weight, stock (the EU apart)
+and cheapest freight to NL, DE and FR, from China and from CJ's EU warehouse. **Add as supplier** lists it by the route
+that lands cheapest. Without the secret it is off and calls nothing. Set it once: Cloudflare dashboard → Workers &
+Pages → winner-hunter-clean → Settings → Variables and Secrets → Add (type Secret, name `CJ_API_KEY`, your key from CJ:
+My CJ → Authorization → API), or `cd winner-hunter/worker && npx wrangler secret put CJ_API_KEY`. Off again: delete it.
+The CJ token is kept in D1 (`state` row `cj_token`) sealed with a key made from `CJ_API_KEY`: the hunts can read D1, and
+a token there is no use to them.
+
 ## Set up (once)
 
 Add these 4 secrets in GitHub: **Settings → Secrets and variables → Actions → New repository secret**.
