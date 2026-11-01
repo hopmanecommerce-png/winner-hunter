@@ -247,6 +247,14 @@ test('🔎 Sourcing on an iPhone: links, paste and compare suppliers, choose one
     await page.click('[data-view=all]');
     await page.waitForFunction(() => !document.body.classList.contains('lnv'));
     assert.ok(await page.locator('#sxpanel').isHidden());
+    // A test link (Preview board) has no sourcing tables until the merge: the panel says so, the launch card works on
+    env.db.exec('DROP TABLE product_suppliers; DROP TABLE product_sourcing;');
+    await page.reload();
+    await page.waitForSelector('#grid .card');
+    await page.click('#lnseg');
+    await page.waitForSelector('#sxpanel .sxmuted', { state: 'attached' });
+    assert.strictEqual(await page.textContent('#sxpanel .sxmuted'), 'Could not load the sourcing: its tables are made by the deploy after the merge (a test link makes none)');
+    assert.strictEqual(await page.locator('#lnbox .lncard h3').innerText(), 'Posture Corrector Pro');
     assert.deepStrictEqual(errors, []);
   } finally {
     globalThis.fetch = realFetch;
