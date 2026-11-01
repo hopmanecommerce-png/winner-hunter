@@ -139,7 +139,7 @@ test('the Worker gets no Meta token from the deploy, and no board address goes t
 });
 
 test('the hunts use a D1-only token when there is one, else the old token', () => {
-  for (const f of ['world-hunter.yml', 'winner-hunter.yml', 'world-check.yml', 'ad-prefetch.yml']) {
+  for (const f of ['world-hunter.yml', 'winner-hunter.yml', 'world-check.yml', 'ad-prefetch.yml', 'lasso-stores.yml']) {
     assert.match(wf(f), /^      CF_API_TOKEN: \$\{\{ secrets\.CF_D1_TOKEN \|\| secrets\.CF_API_TOKEN \}\}$/m, f);
   }
   assert.match(wf('deploy-board.yml'), /^      CF_API_TOKEN: \$\{\{ secrets\.CF_API_TOKEN \}\}$/m, 'the deploy changes the Worker: the full token');

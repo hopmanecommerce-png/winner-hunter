@@ -63,12 +63,13 @@ Add these 4 secrets in GitHub: **Settings → Secrets and variables → Actions 
 | `CF_API_TOKEN` | Cloudflare API token. Make it at dash.cloudflare.com → My Profile → API Tokens → Create Token → Custom token, with **Account → D1 → Edit** and **Account → Workers Scripts → Edit**. |
 | `CF_ACCOUNT_ID` | Your Cloudflare account ID (Cloudflare dashboard → Workers & Pages, right side). |
 | `BOARD_PIN` | The PIN for the board. Use 6+ digits. |
-| `CF_D1_TOKEN` | Optional, better: a second Cloudflare token with only **Account → D1 → Edit**. The hunts (World Hunter, Winner Hunter, Jev check, Ad prefetch) then use it instead of `CF_API_TOKEN`, so the jobs that open Facebook and shops hold no token that can change the board. |
+| `CF_D1_TOKEN` | Optional, better: a second Cloudflare token with only **Account → D1 → Edit**. The hunts (World Hunter, Winner Hunter, Jev check, Ad prefetch, Lasso stores) then use it instead of `CF_API_TOKEN`, so the jobs that open Facebook and shops hold no token that can change the board. |
+| `URLSCAN_API_KEY` | Optional, only for **Lasso stores**: the API key of a free urlscan.io account (more searches a day). Without it the search works too. |
 
 Then, in **Actions**:
 
 1. **Deploy board** → Run workflow. It runs the tests first (**Tests**, also on every pull request): a red test stops the deploy. At the end it prints the board link (`https://winner-hunter-clean.<your-name>.workers.dev`; while the repository is public the `<your-name>` part shows as `***`).
-2. **World Hunter** (markets outside the EU) runs by itself four times a day. **Winner Hunter** (the EU) and **Ad prefetch** are off since 1 Nov 2026 and only run when you start them by hand (Run workflow).
+2. **World Hunter** (markets outside the EU) runs by itself four times a day. **Winner Hunter** (the EU) and **Ad prefetch** are off since 1 Nov 2026 and only run when you start them by hand (Run workflow). **Lasso stores** is off too (see below).
 
 The workflows must be on the main branch for "Run workflow" and the scheduled runs to appear.
 The database tables are made automatically (`worker/migrations/*.sql`). A test link from a branch (**Preview board**) changes
@@ -116,6 +117,7 @@ Other countries: add a repository variable `HUNT_COUNTRIES` (default `NL,BE,DE,F
 ## Files
 
 ```
+lasso.mjs        Lasso stores (optional, off): stores with a Lasso checkout and their best sellers (lib/lasso.mjs)
 run.mjs          nightly run (batches, cursor, time budget)
 bestsellers.mjs  store signals for the board's products: best-seller rank + Trustpilot (after the hunt; lib/bestsellers.mjs, lib/trust.mjs)
 migrate.mjs      creates the D1 tables (safe to run every time)
@@ -148,3 +150,21 @@ Facebook refuses more than 80% of the searches, the run ends red and the board's
 (429) more than half of the store requests after waiting, the run ends yellow: those stores and products are asked again
 next run. A run searches for at most 135 minutes (`minutes`), so the job's 180 still hold the board's table, Jev and the
 store signals.
+
+## Lasso stores (optional, off)
+
+`lasso.mjs` (workflow `lasso-stores.yml`, **only by hand**: Actions → Lasso stores → Run workflow) finds Shopify stores
+whose checkout runs on **Lasso** (lassocommerce.com: one checkout with upsells, order bumps and payments through Whop)
+and saves their best sellers. A store that pays for such a checkout spends on ads as a rule, so its best sellers are
+leads. The research behind it, the fingerprints and the first list: `docs/research/lasso-stores.md`.
+
+- Where the stores come from, all free: hosts with a CNAME to Lasso's checkout (AlienVault OTX passive DNS and
+  DuckDuckGo's Tracker Radar) and pages that called Lasso or loaded its script (urlscan.io search, the last 30 days).
+  Every one is checked on the store itself: Lasso's script on its home page, or Lasso's checkout on `checkout.<store>`.
+  Nothing unverified is saved; one Shopify store on several domains is saved once.
+- Per store: its best sellers in Shopify's own sales order (shipping protection and free gifts left out) and its number
+  of products, in D1 table `lasso_stores` (`first_seen` = when it was first found). A store that drops Lasso or closes
+  turns `gone`. The board does not show this table yet.
+- The log and the summary only count stores, never name one: this repository is public, and so are its Actions logs.
+- Weekly is enough: to switch it on, add a `schedule:` (`cron: '17 3 * * 1'`) under `on:` in `lasso-stores.yml`.
+- On your own computer, without D1: `LASSO_CSV=lasso.csv node winner-hunter/lasso.mjs` writes the stores to a file.

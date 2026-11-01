@@ -196,7 +196,7 @@ test('workflows: ranks after every hunt (also a red one); a test link no longer 
 
 test('all capacity goes outside the EU: only the world hunt runs by itself, four times a day, and its products are checked first', () => {
   const flow = (f) => fs.readFileSync(new URL(`../../.github/workflows/${f}.yml`, import.meta.url), 'utf8');
-  for (const f of ['winner-hunter', 'ad-prefetch']) {
+  for (const f of ['winner-hunter', 'ad-prefetch', 'lasso-stores']) {
     assert.doesNotMatch(flow(f), /^\s*(schedule|workflow_run):/m, f);
     assert.match(flow(f), /workflow_dispatch:/, f);
   }
