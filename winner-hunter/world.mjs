@@ -223,7 +223,7 @@ async function night({ db, lib, keywords, doFetch = globalThis.fetch, now = Date
   await pool(unlinked, 3, async ({ store, title }) => {
     if (now() > guessEnd) return;
     const key = await suggestProduct(title, (stores.get(store) || {}).host || store, doFetch, store).catch(() => null);
-    if (key != null) await db.query("UPDATE world_ads SET product_key = ?1, guessed = 1 WHERE store = ?2 AND title = ?3 AND product_key = ''", [key, store, title]);
+    if (key != null) await db.query("UPDATE world_ads INDEXED BY world_ads_store_title SET product_key = ?1, guessed = 1 WHERE store = ?2 AND title = ?3 AND product_key = ''", [key, store, title]);
   });
   t.items += await fetchItems();
   await progress();

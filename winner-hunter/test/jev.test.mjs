@@ -197,7 +197,8 @@ test('the queries stay cheap: D1 counts every row read, and a scan per product t
   const { mem } = await db();
   const plan = (sql) => mem.prepare('EXPLAIN QUERY PLAN ' + sql).all().map((r) => r.detail).join(' | ');
   assert.doesNotMatch(plan(TODO_SQL), /CORRELATED/, 'no subquery per product');
-  assert.match(plan("UPDATE world_ads SET product_key = 'x', guessed = 1 WHERE store = 'a' AND title = 'b' AND product_key = ''"), /USING INDEX world_ads_store_title/);
+  assert.match(plan("UPDATE world_ads INDEXED BY world_ads_store_title SET product_key = 'x', guessed = 1 WHERE store = 'a' AND title = 'b' AND product_key = ''"), /USING INDEX world_ads_store_title/);
+  assert.match(fs.readFileSync(new URL('../world.mjs', import.meta.url), 'utf8'), /UPDATE world_ads INDEXED BY world_ads_store_title SET/, 'the hunt names the index: with an empty key the planner can pick the other one');
   // Measured, not assumed: with 2,000 ads and 500 products the query reads each table about once.
   const addAd = mem.prepare("INSERT INTO world_ads (ad_id, cc, title, body, product_key) VALUES (?, 'AU', 't', ?, ?)");
   for (let i = 0; i < 500; i++) addProduct(mem, 's.test/products/p' + i);
