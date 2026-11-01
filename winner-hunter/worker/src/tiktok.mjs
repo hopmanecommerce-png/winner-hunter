@@ -4,7 +4,8 @@
  *   POST /api/tiktok {id, decision}                   approved, rejected or '' to take it back
  */
 export const LIST_SQL = `SELECT id, title, shop, url, image_url AS img, price_min AS p, price_max AS pm, rating, reviews, sold_us AS sold, creators, plays,
-  category AS cat, blockers, meta_status AS ms, meta_url AS mu, meta_unsure AS mn, meta_us AS us, meta_au AS au, meta_nz AS nz, updated_at AS at, decision AS d
+  category AS cat, blockers, meta_status AS ms, meta_url AS mu, meta_unsure AS mn, meta_us AS us, meta_au AS au, meta_nz AS nz, updated_at AS at, decision AS d,
+  video_url AS vid, sold_mixed AS mix, price_suspect AS ps, ads_mention_n AS an, ads_mention_of AS ao, ads_domain AS ad, meta_label AS ml
   FROM tiktok_products ORDER BY sold_us DESC LIMIT 5000`;
 
 export async function tiktokList(env) {
