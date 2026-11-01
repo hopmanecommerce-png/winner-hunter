@@ -435,20 +435,22 @@ export function rowBlocked(r, checks) {
 }
 
 /**
- * With ?risk=hide, every product the radar blocks leaves the Inbox and Browse of both tabs (list.v, list.w: their counts
- * too). ✓ Approved and ★ (list.k) keep them, with their badge. On ✓ (view=made) it also counts its levels. list.risk: for riskOut.
+ * With ?risk=hide, every product the radar blocks leaves the Inbox and Browse of the EU tab, outside the EU and the Google tab
+ * (list.v, list.w, list.gl: their counts too). ✓ Approved and ★ (list.k) keep them, with their badge. On ✓ (view=made) it also
+ * counts its levels. list.risk: for riskOut.
  */
 export function riskHide(list, params, checks = new Map(), toAd = null) {
   const hide = params.get('risk') === 'hide';
-  const world = params.get('scope') === 'world';
+  const scope = params.get('scope');
+  const on = scope === 'world' ? 'w' : scope === 'google' ? 'gl' : 'v'; // the tab you look at: its hidden products are counted
   const out = { hide, hidden: 0 };
   if (hide) {
-    for (const k of ['v', 'w']) {
+    for (const k of ['v', 'w', 'gl']) { // the EU tab, outside the EU, the Google tab
       if (!Array.isArray(list[k])) continue;
       const keep = [];
       for (const r of list[k]) {
         if (!rowBlocked(r, checks)) keep.push(r);
-        else if ((k === 'w') === world && r.hid === 0) out.hidden++;
+        else if (k === on && r.hid === 0) out.hidden++;
       }
       list[k] = keep;
     }

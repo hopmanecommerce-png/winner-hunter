@@ -1489,6 +1489,7 @@ function googleCard(a, inbox) {
     <div class="bd">
       ${inbox && tags ? `<div class="tags">${tags}</div>` : ''}
       <h2 class="t">${esc(nice(a))}</h2>
+      ${crLine(a, inbox)}
       ${price}
       ${flags}
       ${gRules(a, inbox)}

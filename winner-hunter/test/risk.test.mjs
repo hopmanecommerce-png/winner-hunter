@@ -12,6 +12,7 @@ import { riskKit, RISK_JS, verdict, auto, blocks, blockedBy, finish, fromAd, fro
 import { TRAITS } from '../worker/src/jev-questions.mjs';
 import { screenEU, classify } from '../lib/world.mjs';
 import { seededEnv, NOW } from './helpers/seed.mjs';
+import { googleEnv, GLOW } from './helpers/google-seed.mjs';
 import { APPROVED, NOT_APPROVED, cardOf, idOf, loadApproved } from './helpers/risk-seed.mjs';
 
 const ORIGIN = 'https://winner-hunter.example.workers.dev';
@@ -399,6 +400,29 @@ test('?risk=hide: Block products leave the Inbox and Browse of both tabs (counts
   assert.deepStrictEqual(tt.filter((t) => verdict(fromTikTok(t)).level === 'block').map((t) => t.title), ['Lilo & Stitch Plush Toy 30cm'], 'the TikTok tab: its list on the phone, the same rules');
   // Without ?risk the API is as it was
   assert.deepStrictEqual(Object.keys(all.risk), ['hide', 'hidden', 'checks']);
+});
+
+test('the Google tab: ?risk=hide leaves out what the radar blocks there too, counted; its cards carry the verdict the filter used', async () => {
+  const env = await googleEnv();
+  const s = await session(env);
+  const google = (q = '') => s.get('/api/ads?scope=google&view=all&limit=100' + q);
+  const all = await google();
+  assert.strictEqual(all.total, 3, 'the sample Google products');
+  assert.deepStrictEqual((await google('&risk=hide')).total, 3, 'none of them restricted');
+  for (const a of all.ads) assert.ok(a.google && verdict(fromAd(a)).level !== 'block', a.title);
+  const posture = all.ads.find((a) => /posture/i.test(a.title));
+  assert.deepStrictEqual(reasonKeys(verdict(fromAd(posture))), ['claims'], 'a posture corrector: sell it without pain claims');
+  // Your call Block on the glow lamp: it leaves the Google tab and its count. The check is on its product page, which the
+  // EU tab has too (9950, the same lamp on Meta): it leaves there as well.
+  const lamp = all.ads.find((a) => a.product === 'https://' + GLOW);
+  const eu = async () => (await s.get('/api/ads?view=all&limit=100&risk=hide')).ads.map((a) => a.id);
+  assert.ok((await eu()).includes('9950'));
+  assert.strictEqual((await risk(s, { id: lamp.id, level: 'block' })).key, 'page:' + GLOW);
+  const hid = await google('&risk=hide');
+  assert.deepStrictEqual([hid.total, hid.risk.hidden, hid.counts.google], [2, 1, 2]);
+  assert.ok(!hid.ads.some((a) => a.id === lamp.id));
+  assert.strictEqual((await google()).total, 3, 'without ?risk: as it was');
+  assert.ok(!(await eu()).includes('9950'), 'the same product on the EU tab: your call follows it');
 });
 
 test('your check moves a product: your call OK brings a blocked one back, a trademark conflict hides one; /api/ads sends the checks of its page; the CSV follows ?risk=hide', async () => {

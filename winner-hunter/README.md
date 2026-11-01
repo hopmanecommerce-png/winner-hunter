@@ -378,7 +378,7 @@ weapons, CBD and vapes, famous brands...), **Docs** (it sells with papers first:
 claims, blades) or **OK**, with return risks beside it (↩ Sizes, Fragile, Bulky, Over €150). It reads the name in English,
 Dutch and German, the product link and Jev's answers; never the ad's words for a block.
 
-- Block products are hidden in the Inbox, Browse and the TikTok tab. The line above the cards says how many; **Show** brings
+- Block products are hidden in the Inbox and Browse (EU, Outside EU, Google) and on the TikTok tab. The line above the cards says how many; **Show** brings
   them back with their badge (kept on that phone). ✓ Approved keeps them all and says how your approvals score.
 - A tap on a badge (Browse, ✓, TikTok, a launch card): the reasons, Shopify Payments, TMview for the brand and the shop name,
   the documents to ask the supplier for (**Copy request**, English and Chinese), GPSR and customs, and your checks:

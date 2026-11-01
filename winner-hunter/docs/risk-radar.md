@@ -4,7 +4,7 @@ Every product on the board gets one badge from the risk radar (`worker/src/risk.
 
 | Badge | Means | On the board |
 |---|---|---|
-| **Block** | Do not sell it as it is: a law, Shopify Payments or EU customs stops it. | Hidden in the Inbox and Browse (both tabs) and on the TikTok tab, until you tap **Show**. ✓ Approved keeps it, with its badge. |
+| **Block** | Do not sell it as it is: a law, Shopify Payments or EU customs stops it. | Hidden in the Inbox and Browse (EU, Outside EU and Google tabs) and on the TikTok tab, until you tap **Show**. ✓ Approved keeps it, with its badge. |
 | **Docs** | It sells, but with papers or care first: CE, a battery, a toy, food contact, a claim, a blade, a hard-to-ship liquid. | Shown, with what to ask the supplier for. |
 | **OK** | Nothing found in its name, its link or Jev's answers. | Shown. |
 
@@ -82,7 +82,7 @@ On every product, whatever its badge:
 ## How it filters
 
 `/api/ads` and `/export.csv` take `?risk=hide`: the Worker leaves out every product the radar blocks from the Inbox and Browse
-of both tabs, and from their counts. It reads your checks once per request (an index range on `state`), and keeps the radar's
+of the EU, Outside EU and Google tabs, and from their counts. It reads your checks once per request (an index range on `state`), and keeps the radar's
 answer per product in memory (about 20 µs a product the first time, nothing after). Without `?risk`, the API is as it was. The
 board sends `risk=hide` unless you tapped Show. The TikTok tab filters on the phone: all its rows are there already.
 
