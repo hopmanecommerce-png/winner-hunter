@@ -17,6 +17,7 @@ import { MOMENTUM_JS, readMomentum, attachMomentum, momentumFactor, byMomentum, 
 import { MARKET_RULES } from './market-rules.mjs';
 import { LAUNCH_JS, launchList, launchPost } from './launch.mjs';
 import { SOURCING_JS, sourcingGet, sourcingPost } from './sourcing.mjs';
+import { ECON_JS, econContext, econAd, econBoard, econSorts, econGet, econPost, decisionsGet, decisionsPost, decisionLogged, tiktokLogged } from './econ.mjs';
 
 const COOKIE = '__Host-wh';
 const MAX_AGE = 90 * 864e2; // seconds
@@ -564,6 +565,7 @@ const SORTS = {
   best: (a, b) => (bsRank(a) ?? 999) - (bsRank(b) ?? 999) || better(a, b),
   jevp: (a, b) => num(b.jev && b.jev.product_score) - num(a.jev && a.jev.product_score) || better(a, b),
   jeva: (a, b) => num(b.jev && b.jev.ad_score) - num(a.jev && a.jev.ad_score) || better(a, b),
+  ...econSorts(better), // profit, beroas: most margin per order, lowest break-even ROAS (econ.mjs)
 };
 
 // Outside the EU: the most proof first; every other order is one plain fact.
@@ -581,6 +583,7 @@ const WORLD_SORTS = {
   jeva: (a, b) => num(b.jev && b.jev.ad_score) - num(a.jev && a.jev.ad_score) || stronger(a, b),
   eu: (a, b) => num(b.world.eu_rpd ?? b.world.shop_eu_rpd) - num(a.world.eu_rpd ?? a.world.shop_eu_rpd) || stronger(a, b),
   new: (a, b) => cmp(b.first_seen ?? '', a.first_seen ?? '') || stronger(a, b),
+  ...econSorts(stronger), // profit, beroas (econ.mjs)
 };
 
 /** The products outside the EU: filters, one market (?cc=AU), sort and page. The Inbox: most proof first, × what you taught the board × Jev's risks. */
@@ -1091,8 +1094,9 @@ async function login(req, env, now) {
 
 async function ads(url, env, now, viewer) {
   // The products and the run states at the same time: the board waits for one round trip to D1, not five in a row.
-  const [list, states] = await Promise.all([board(env, now), statesJson(env.DB, ['last_run', 'world_run', 'token_expires_at', 'world_check'])]);
-  const q = viewOf(url.searchParams, list);
+  // With the unit economics' settings and inputs (econ.mjs): every card gets its margin and verdict, and Browse can sort by them.
+  const [list, states, ec] = await Promise.all([board(env, now), statesJson(env.DB, ['last_run', 'world_run', 'token_expires_at', 'world_check']), econContext(env.DB, now, { pageKey: productKey })]);
+  const q = viewOf(url.searchParams, econBoard(list, ec, url.searchParams.get('sort')));
   const scope = url.searchParams.get('scope') === 'world' ? 'world' : 'eu';
   const counts = countsOf(list, now, scope);
   const { last_run: run, world_run: worldRun, token_expires_at: token } = states;
@@ -1102,7 +1106,7 @@ async function ads(url, env, now, viewer) {
     : null;
   return json({
     view: q.view,
-    ads: q.rows.map(toAd),
+    ads: q.rows.map((r) => econAd(toAd(r), r, ec)),
     total: q.total,
     offset: q.offset,
     counts,
@@ -1312,6 +1316,23 @@ async function csv(url, env, now) {
 }
 
 /**
+ * What econ.mjs (unit economics, the decision log) needs from the board, so it imports nothing from here: the winners as
+ * read (snapshot), the board with your decisions, products() and the card data, productKey, and /api/hide itself, which
+ * Undo in the decision log calls as the board's own Undo does.
+ */
+function econDeps(env, now, url) {
+  const at = new URL('/api/hide', url.origin);
+  return {
+    rows: () => snapshot(env.DB, now),
+    board: () => board(env, now),
+    products,
+    toAd,
+    pageKey: productKey,
+    hide: (adId, status) => hide(new Request(at, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ad_id: adId, status }) }), at, env, now),
+  };
+}
+
+/**
  * The Worker. `launch(env.BROWSER)` opens a Browser Run browser (index.mjs passes @cloudflare/puppeteer's launch;
  * tests pass a fake). Without it, a META_TOKEN or the BROWSER binding the viewer is off. The board opens the Ad Library either way.
  */
@@ -1342,7 +1363,7 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
         return json({ ...marketsOf(open), jev: jevSummary(open) });
       }
       if (path === '/api/ads' && method === 'GET') return await ads(url, env, now, env.AD_VIEWER === 'on' && !!(launch && env.BROWSER && String(env.META_TOKEN || '').trim()));
-      if (path === '/api/hide' && method === 'POST') return await hide(req, url, env, now);
+      if (path === '/api/hide' && method === 'POST') return await decisionLogged(req, env, now, econDeps(env, now, url), (r) => hide(r, url, env, now)); // + the decision log (econ.mjs)
       if (path === '/api/feedback' && method === 'POST') return await feedback(req, url, env, now);
       if (path === '/api/learned' && method === 'GET') return await learned(env, now);
       if (path === '/api/note' && (method === 'GET' || method === 'POST')) return await note(req, url, env, now);
@@ -1356,6 +1377,7 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       const { j, err } = await readJson(req, url);
       if (err) return err;
       const out = await tiktokDecide(env, j, now);
+      if (out.status === 200) await tiktokLogged(env, out.body, now); // the decision log (econ.mjs); never throws
       return json(out.body, out.status);
     }
     // ---- AI read (ai.mjs): a cheap Claude model's read of each card, collapsed and experimental (ai-check.mjs fills D1
@@ -1397,6 +1419,23 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
         const { j, err } = await readJson(req, url, 8000);
         if (err) return err;
         out = await sourcingPost(env, j, now);
+      } else return json({ error: 'Method not allowed' }, 405);
+      return json(out.body, out.status);
+    }
+    // ---- Unit economics (econ.mjs): landed cost, margin, break-even ROAS and a red / amber / green verdict for every
+    // product, the settings they use, and the decision log with Undo. A block of its own, like the Launch view's.
+    // /econ.js: the numbers code the board runs while you type.
+    if (path === '/api/econ' || path === '/api/decisions' || path === '/econ.js') {
+      if (!ok) return json({ error: 'Log in first' }, 401);
+      if (path === '/econ.js') return method === 'GET' ? text(ECON_JS, 200, { 'Content-Type': 'text/javascript; charset=utf-8' }) : json({ error: 'Method not allowed' }, 405);
+      const deps = econDeps(env, now, url);
+      const econ = path === '/api/econ';
+      let out;
+      if (method === 'GET') out = econ ? await econGet(env, url, now, deps) : await decisionsGet(env, url);
+      else if (method === 'POST') {
+        const { j, err } = await readJson(req, url, 8000);
+        if (err) return err;
+        out = econ ? await econPost(env, j, now, deps) : await decisionsPost(env, j, now, deps);
       } else return json({ error: 'Method not allowed' }, 405);
       return json(out.body, out.status);
     }

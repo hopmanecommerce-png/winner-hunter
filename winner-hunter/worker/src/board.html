@@ -11,6 +11,7 @@
 <link rel="stylesheet" nonce="__NONCE__" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <script nonce="__NONCE__" src="/launch.js" id="lnkit" defer></script>
 <script nonce="__NONCE__" src="/sourcing.js" id="sxkit" defer></script>
+<script nonce="__NONCE__" src="/econ.js" id="eckit" defer></script>
 <style nonce="__NONCE__">
   :root {
     color-scheme: dark;
@@ -684,6 +685,129 @@
     .lnprod { grid-template-columns: 88px minmax(0, 1fr); }
     .lnth.big { width: 88px; height: 88px; }
   }
+  /* € Unit economics (econ.mjs): the Decision card on top of the Inbox, the margin line on the cards, and the € view (every
+     Inbox and ✓ product in a table, the decision log, the settings). In the view the hunt's lists step aside. */
+  body:not(.ecv) #ecbox, .tt #ecbox, .tt #ecdec { display: none !important; }
+  .ecv .wrap > .tools, .ecv #csv, .ecv #grid, .ecv #loadmore { display: none !important; }
+  @media (max-width: 520px) { /* six views: on a phone they scroll in their own row, never the page */
+    .bar2 > .seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+    .bar2 > .seg::-webkit-scrollbar { display: none; }
+  }
+  .ecs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; font-size: 12px; line-height: 1.35; color: var(--muted); }
+  .ecs > i, .ecpill > i, .eclv > i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+  .ecs.green > i, .ecpill.green > i, .eclv.green > i { background: var(--win); }
+  .ecs.amber > i, .ecpill.amber > i, .eclv.amber > i { background: var(--acc); }
+  .ecs.red > i, .ecpill.red > i, .eclv.red > i { background: var(--bad); }
+  .ecs b { color: var(--ink); font: 600 12px var(--num); }
+  .ecs small { color: var(--faint); font-size: 11px; }
+  .ecpill { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 13px; border: 1px solid var(--line2); font-size: 13px; font-weight: 600; white-space: nowrap; font-family: var(--sans); }
+  .ecpill.green { color: var(--win); border-color: rgba(76, 195, 138, .5); background: rgba(76, 195, 138, .1); }
+  .ecpill.amber { color: var(--acc); border-color: rgba(217, 164, 65, .5); background: rgba(217, 164, 65, .1); }
+  .ecpill.red { color: var(--bad); border-color: rgba(229, 72, 77, .5); background: rgba(229, 72, 77, .1); }
+  .ecd { margin-top: 4px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); min-width: 0; }
+  .ecd.green { border-color: rgba(76, 195, 138, .45); }
+  .ecd.amber { border-color: rgba(217, 164, 65, .45); }
+  .ecd.red { border-color: rgba(229, 72, 77, .5); }
+  .ecpanel { display: grid; gap: 10px; min-width: 0; }
+  .ecd-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+  .ecg { padding: 1px 6px; border-radius: 4px; border: 1px dashed var(--line2); font-size: 11px; color: var(--muted); }
+  .ecn4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 8px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .ecn { min-width: 0; padding: 0 8px; }
+  .ecn + .ecn { border-left: 1px solid var(--line); }
+  .ecn b { display: block; font: 600 16px var(--num); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ecn span { display: block; font-size: 11px; line-height: 1.2; color: var(--muted); }
+  .ecn.green b { color: var(--win); }
+  .ecn.amber b { color: var(--acc); }
+  .ecn.red b { color: var(--bad); }
+  .ecr { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; line-height: 1.35; }
+  .ecr li { display: flex; gap: 8px; align-items: baseline; overflow-wrap: anywhere; }
+  .ecr li::before { content: ''; width: 7px; height: 7px; border-radius: 50%; flex: none; transform: translateY(-1px); background: var(--faint); }
+  .ecr li.red::before { background: var(--bad); }
+  .ecr li.amber::before { background: var(--acc); }
+  .ecr li.green::before { background: var(--win); }
+  .ecr li.green, .ecr li.info { font-size: 12px; color: var(--muted); }
+  .eci { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; min-width: 0; }
+  .ecfld { display: grid; gap: 4px; min-width: 0; font-size: 12px; color: var(--muted); }
+  .ecfld input { width: 100%; min-width: 0; height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line2); background: var(--card2); color: var(--ink); font: inherit; font-size: 16px; }
+  .ecfld input:focus { outline: none; border-color: var(--acc); }
+  .ecfld input[aria-invalid="true"] { border-color: var(--bad); }
+  .ech { margin: 0; font-size: 13px; color: var(--muted); }
+  .ech b { color: var(--ink); font-weight: 600; }
+  .ecbd summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+  .ecbd dl { margin: 8px 0 0; display: grid; border-top: 1px solid var(--line); }
+  .ecbd dl div { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .ecbd dt { min-width: 0; color: var(--muted); }
+  .ecbd dd { margin: 0; font: 500 13px var(--num); white-space: nowrap; }
+  .ecbd dl div.sum dt, .ecbd dl div.sum dd { color: var(--ink); font-weight: 600; }
+  .ecd-f { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ecd-f small { flex: 1; min-width: 0; font-size: 12px; color: var(--faint); }
+  .eclink, .ecundo { height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line2); background: var(--card2); color: var(--ink); font: 500 12px var(--sans); cursor: pointer; white-space: nowrap; text-decoration: none; display: inline-flex; align-items: center; }
+  .ecundo:disabled { opacity: .5; cursor: default; }
+  .ecbox { max-width: 1100px; margin: 16px auto 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
+  .echead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+  .echead h2 { margin: 0; font-size: 26px; font-weight: 600; }
+  .echead p { flex: 1 1 100%; margin: 0; font-size: 14px; color: var(--muted); }
+  .echead small { margin-left: auto; min-height: 1em; font-size: 12px; color: var(--faint); }
+  .ectabs { display: inline-flex; justify-self: start; gap: 4px; max-width: 100%; padding: 4px; border-radius: 12px; border: 1px solid var(--line); background: var(--card2); overflow-x: auto; }
+  .ectabs button { height: 34px; padding: 0 14px; border: 0; border-radius: 9px; background: none; color: var(--muted); font: 500 13px var(--sans); cursor: pointer; white-space: nowrap; }
+  .ectabs button[aria-pressed="true"] { background: var(--card); color: var(--ink); }
+  .ecfl { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+  .ecfl .chip { display: inline-flex; align-items: center; gap: 6px; }
+  .eccount { margin: 0; font-size: 12px; color: var(--muted); }
+  .ectw { min-width: 0; overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+  .ect { width: 100%; min-width: 600px; border-collapse: collapse; font-size: 13px; }
+  .ect.log { min-width: 760px; }
+  .ect th { padding: 0; border-bottom: 1px solid var(--line2); text-align: left; font-weight: 500; color: var(--muted); white-space: nowrap; }
+  .ect th button { padding: 10px 8px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; white-space: nowrap; }
+  .ect th[aria-sort] button { color: var(--ink); }
+  .ect th > span { display: block; padding: 10px 8px; }
+  .ect td { padding: 8px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; font-family: var(--num); }
+  .ect tbody tr:last-child td { border-bottom: 0; }
+  .ect th:first-child, .ect td.ecp { position: sticky; left: 0; z-index: 1; background: var(--card); }
+  .ect td.ecp { min-width: 170px; max-width: 260px; white-space: normal; font-family: var(--sans); }
+  .ect.log td.ecp { min-width: 200px; }
+  .ecp button { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 8px; align-items: center; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .ecth { width: 36px; height: 36px; border-radius: 6px; overflow: hidden; display: grid; place-items: center; background: var(--card2); }
+  .ecth img { width: 100%; height: 100%; display: block; object-fit: cover; }
+  .ecth i { font-style: normal; font-weight: 600; color: var(--muted); }
+  .ect1 { min-width: 0; display: grid; gap: 2px; }
+  .ect1 b { font-size: 13px; font-weight: 500; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+  .ect1 small, .ect td small { display: block; font: 400 11px var(--sans); color: var(--muted); }
+  .ect td.neg { color: var(--bad); }
+  .ect td.ok, .ect td.no { font-family: var(--sans); }
+  .ect td.ok { color: var(--win); }
+  .ect td.no { color: var(--bad); }
+  .ect tr.on td, .ect tr.on td.ecp { background: var(--card2); }
+  .ect tr.off td { color: var(--muted); }
+  .ect tr.ecx td { padding: 0; white-space: normal; font-family: var(--sans); background: var(--card2); }
+  .ecstick { position: sticky; left: 0; box-sizing: border-box; width: min(720px, calc(100vw - 34px)); padding: 12px; display: grid; gap: 10px; }
+  .eclinks { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ecmore { display: flex; justify-content: center; }
+  .ecmore button { height: 40px; padding: 0 20px; border-radius: 8px; border: 1px solid var(--line); background: var(--card2); color: var(--ink); font: 600 12px var(--sans); cursor: pointer; }
+  .ecset { display: grid; gap: 12px; min-width: 0; }
+  .ecset fieldset { margin: 0; min-width: 0; padding: 12px 16px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+  .ecset fieldset.ec2 { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .ecset fieldset.ec3 { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+  .ecset legend { padding: 0 4px; font-weight: 500; color: var(--ink); }
+  .ecset label { display: grid; gap: 4px; min-width: 0; font-size: 12px; color: var(--muted); }
+  .ecset input, .ecset select { width: 100%; min-width: 0; height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line2); background: var(--card2); color: var(--ink); font: inherit; font-size: 16px; }
+  .ecset input:focus, .ecset select:focus { outline: none; border-color: var(--acc); }
+  .ecset label.ecchk { display: flex; align-items: center; gap: 10px; grid-column: 1 / -1; font-size: 14px; color: var(--ink); }
+  .ecset label.ecchk input { width: 22px; height: 22px; accent-color: var(--win); }
+  .ecset p { grid-column: 1 / -1; margin: 0; font-size: 12px; color: var(--muted); }
+  .ecsetb { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ecsetb button { height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid var(--line2); background: var(--card2); color: var(--ink); font: 500 14px var(--sans); cursor: pointer; }
+  .ecsetb button.pri { border-color: rgba(76, 195, 138, .4); background: rgba(76, 195, 138, .12); color: var(--win); }
+  .ecbd ul { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+  @media (max-width: 520px) {
+    .eci { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .eci .ecfld:first-child { grid-column: 1 / -1; }
+    .ecn { padding: 0 6px; }
+    .ecn b { font-size: 15px; }
+    .ect td.ecp { min-width: 132px; max-width: 150px; }
+    .ect.log td.ecp { min-width: 140px; }
+  }
+  @media (pointer: coarse) { .eclink, .ecundo { min-height: 40px; } }
 </style>
 <style nonce="__NONCE__">
   /* 🔎 Sourcing (sourcing.mjs): the supplier panel on a launch card, between the decision and the checklist. */
@@ -813,6 +937,7 @@
         <button data-view="made" aria-pressed="false" aria-label="Approved" title="Products you approved"><i class="ok"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></i> <small id="nmade"></small></button>
         <button data-view="learned" aria-pressed="false" aria-label="What the board learned" title="What the board learned"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2z"/><path d="M22 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8z"/></svg></button>
         <button id="lnseg" aria-pressed="false" aria-label="Launch" title="Launch an approved product: checklist and go or no-go"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5c2.9 2.4 4.4 5.8 4.4 10.1L14.6 17H9.4l-1.8-4.4c0-4.3 1.5-7.7 4.4-10.1z"/><circle cx="12" cy="9.5" r="1.7"/><path d="M7.6 12.6 5 15.8l3.2.5M16.4 12.6l2.6 3.2-3.2.5M10.6 19.8 12 22l1.4-2.2"/></svg> <small id="nlaunch"></small></button>
+        <button id="ecseg" aria-pressed="false" aria-label="Unit economics" title="Unit economics: margin, break-even ROAS and a verdict for every product; your decision log"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.6a4.2 4.2 0 1 0 0 6.8M7.6 10.6h6M7.6 13.4h6"/></svg></button>
       </div>
       <label class="search" id="allrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg>
         <input id="q" type="search" placeholder="Search products…" aria-label="Search" maxlength="80" enterkeyhint="search"></label>
@@ -843,6 +968,7 @@
   <section class="ibox" id="ibox" aria-label="Inbox" hidden>
     <div class="ihead"><b id="ileft" aria-live="polite"></b><span id="inew"></span></div>
     <div class="ibar"><i id="iprog"></i></div>
+    <div class="ecd" id="ecdec" aria-label="Decision card" hidden></div>
   </section>
   <main class="grid" id="grid" aria-busy="true"></main>
   <section class="pnote" id="pnote" aria-label="Your note on this product" hidden>
@@ -894,6 +1020,7 @@
     <div class="loadmore" id="ttload"><button id="ttmore" hidden>Show more</button></div>
   </section>
   <section class="lnbox" id="lnbox" aria-label="Launch" hidden></section>
+  <section class="ecbox" id="ecbox" aria-label="Unit economics" hidden></section>
 </div>
 <div class="toast" id="toast" role="status" hidden><span id="toastMsg"></span><button id="undo">Undo</button></div>
 
@@ -1182,6 +1309,7 @@ function worldCard(a, inbox) {
       ${inbox ? `<div class="iproof" title="${esc(list)}">${esc(proof.n)}/${esc(proof.of)} proof ${meter}</div>` : ''}
       <h2 class="t">${esc(nice(a))}</h2>
       ${price}
+      ${econLine(a, inbox)}
       ${flags}
       ${window.MOMENTUM ? MOMENTUM.row(a, inbox) : ''}
       <div class="meta w6">
@@ -1265,6 +1393,7 @@ function card(a, inbox) {
       ${inbox && tags ? `<div class="tags">${tags}</div>` : ''}
       <h2 class="t">${esc(nice(a))}</h2>
       ${price}
+      ${econLine(a, inbox)}
       ${flags}
       ${window.MOMENTUM ? MOMENTUM.row(a, inbox) : ''}
       <div class="meta${inbox ? ' m4' : ''}">
@@ -1551,6 +1680,7 @@ $('pn').addEventListener('blur', () => { document.body.classList.remove('noting'
 $('pn').addEventListener('keydown', (e) => { if (e.key === 'Escape' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); $('pn').blur(); } });
 function renderInbox() {
   const a = ADS[0];
+  econInbox(a); // the Decision card on top (€ block below)
   const done = cleared();
   $('pnote').hidden = !a;
   $('nin').textContent = total || '';
@@ -1831,6 +1961,7 @@ async function load(append) {
   if (st.scope === 'tiktok') return;
   if (st.view === 'learned') { seq++; loadLearned(); return; }
   if (st.view === 'launch') { seq++; lnView(); return; }
+  if (st.view === 'econ') { seq++; ecView(); return; }
   const my = ++seq;
   const madeSeq = MADE_SEQ;
   if (!append) {
@@ -2507,6 +2638,501 @@ addEventListener('load', () => { if (!LN.list) lnLoad().catch(() => {}); }); // 
 
 // Momentum (momentum.js): its script or the TikTok summaries can arrive after the cards: draw them again with their rows.
 addEventListener('momentum', () => { if (st.scope === 'tiktok') { if (TT) ttRender(); } else if (ADS.length && ['all', 'made', 'starred', 'inbox'].includes(st.view)) render(); });
+
+// ---- € Unit economics (econ.mjs): what one order costs landed in the EU and what it leaves you, and a red / amber / green
+// verdict with every reason. The Decision card on top of the Inbox, a line on every card, Margin and Break-even ROAS in the
+// sort menu, and the € view: every Inbox and ✓ product in a table that sorts by any column, the decision log with Undo,
+// and the settings. The numbers come from the server (a.econ); while you type a supplier price, a weight or your price,
+// the same code works them out here (/econ.js: window.ECON), and the save follows 0.7 s after the last key.
+const EC = { s: null, defaults: null, day: '', ready: true, sGet: null, items: new Map(), typed: new Map(), timers: new Map(), chain: Promise.resolve(), saving: 0, bd: false,
+  tab: 'products', f: { src: '', status: '', level: '', real: false }, sort: 'level', dir: '', rows: [], total: 0, counts: null, shown: null, open: '', loaded: false, seq: 0,
+  log: [], logTotal: 0, logCounts: null, logReady: true, logLoaded: false, logF: { d: '', undone: false }, logOpen: 0 };
+const ecKit = new Promise((ok, no) => {
+  if (window.ECON) { ok(); return; }
+  $('eckit').addEventListener('load', () => (window.ECON ? ok() : no(new Error('the numbers code did not run'))), { once: true });
+  $('eckit').addEventListener('error', () => no(new Error('the numbers code did not load')), { once: true });
+});
+ecKit.catch(() => {}); // without it the numbers still come from the server, only not while you type
+const EC_LEVEL = { green: 'Green', amber: 'Amber', red: 'Red' };
+const EC_SRC = { eu: 'EU', world: 'Outside EU', tiktok: 'TikTok' };
+const ecEur = (v) => (v == null ? '–' : (v < 0 ? '−€' : '€') + Math.abs(v).toFixed(2));
+const ecX = (m) => (!m ? '–' : m.be_roas == null ? 'loss' : m.be_roas + '×');
+const ecPill = (lv) => `<span class="ecpill ${esc(lv)}"><i aria-hidden="true"></i>${esc(EC_LEVEL[lv] || '–')}</span>`;
+const ecTip = (e) => `${EC_LEVEL[e.level] || ''}: ${e.reasons.filter((r) => r.level !== 'info').map((r) => r.text).join(' · ')}`;
+const ecImg = (x) => (safe(x.img) ? `<img src="${safe(x.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<i>${esc(String(x.title || '?').slice(0, 1))}</i>`);
+const ecRaw = (i) => ({ cost: (i && i.cost_text) || '', weight: i && i.weight != null ? String(i.weight) : '', price: i && i.price != null ? String(i.price) : '' });
+const ecSaved = (t) => { for (const el of document.querySelectorAll('[data-ecsaved]')) el.textContent = t; };
+
+// A card in Browse and ✓: the verdict's colour, the margin per order and the break-even ROAS under the price ("est.": the
+// supplier price is still a guess), every reason in its tooltip. The Inbox shows the Decision card instead.
+function econLine(a, inbox) {
+  const e = a.econ;
+  if (inbox || !e) return '';
+  const m = e.m;
+  const body = m ? `<span><b>${esc(ecEur(m.contribution))}</b> / order</span><span><b>${esc(ecX(m))}</b> break-even ROAS</span>${e.guess.cost ? '<small>est.</small>' : ''}` : '<span>No price</span>';
+  return `<div class="ecs ${esc(e.level)}" title="${esc(ecTip(e))}"><i aria-hidden="true"></i>${body}</div>`;
+}
+
+// The Decision card: the Inbox product's verdict, its four numbers (margin per order, break-even ROAS, how long its ads
+// run, how big its store is), every reason, and what you can type. Reject or Approved: the buttons below, as always.
+function econInbox(a) {
+  const box = $('ecdec');
+  const e = a && a.econ;
+  if (!e) { box.hidden = true; box.innerHTML = ''; return; }
+  box.hidden = false;
+  const p = box.querySelector('.ecpanel');
+  if (p && p.dataset.eckey === e.key && p.contains(document.activeElement)) return; // you are typing in it
+  EC.items.set(e.key, e);
+  box.className = 'ecd ' + e.level;
+  box.innerHTML = ecPanelHtml(e, true);
+  ecSettings();
+}
+// One product's numbers and what you can type for it: on the Decision card and under a row of the € table.
+function ecPanelHtml(e, inbox) {
+  const raw = EC.typed.get(e.key) || ecRaw(e.inputs);
+  const m = e.m;
+  const cur = (EC.s && EC.s.cost_cur) || 'CNY';
+  const sym = { CNY: '¥', USD: '$', EUR: '€', GBP: '£' }[cur] || cur;
+  const field = (k, label, ph, max) => `<label class="ecfld"><span>${esc(label)}</span><input data-ecin="${k}" value="${esc(raw[k])}" placeholder="${esc(ph)}" inputmode="decimal" maxlength="${max}" autocomplete="off" enterkeyhint="done"></label>`;
+  return `<div class="ecpanel" data-eckey="${esc(e.key)}">
+    <div data-ecout="top">${ecTop(e, inbox)}</div>
+    <div class="eci">
+      ${field('cost', `Supplier price (${sym})`, m && m.cost_from === 'sourcing' ? `Sourcing: ${ecEur(m.cost)}` : m && e.guess.cost ? `guess ${ecEur(m.cost)}` : '23.50', 80)}
+      ${field('weight', 'Weight (g)', m && m.weight_from === 'sourcing' ? `Sourcing: ${m.weight}` : m && e.guess.weight ? `${m.weight} (guess)` : '300', 12)}
+      ${field('price', 'Sell at (€)', m && m.price_from === 'theirs' ? `${m.price.toFixed(2)} (theirs)` : '39.95', 12)}
+    </div>
+    <div data-ecout="bottom">${ecBottom(e)}</div>
+    ${inbox ? '<div class="ecd-f"><small data-ecsaved aria-live="polite"></small><button class="eclink" data-ecgo="products">All products</button><button class="eclink" data-ecgo="log">Decision log</button></div>' : ''}
+  </div>`;
+}
+function ecTop(e, inbox) {
+  const m = e.m;
+  const b = e.basis || {};
+  const has = (k) => e.reasons.find((r) => r.k === k);
+  const lv = (...ks) => { for (const k of ks) { const r = has(k); if (r) return r.level; } return ''; };
+  const cell = (cls, v, label, tip) => `<div class="ecn${cls ? ' ' + cls : ''}" title="${esc(tip)}"><b>${esc(v)}</b><span>${esc(label)}</span></div>`;
+  const loud = e.reasons.filter((r) => r.level === 'red' || r.level === 'amber');
+  const good = e.reasons.filter((r) => r.level === 'green');
+  const hint = ecHint(e);
+  return `${inbox ? `<div class="ecd-h">${ecPill(e.level)}<span>Decision card</span>${e.guess.cost ? '<span class="ecg" title="The supplier price is a guess until you type it">estimate</span>' : ''}</div>` : ''}
+    <div class="ecn4">
+      ${cell(!m ? '' : m.contribution <= 0 ? 'red' : has('thin') ? 'amber' : 'green', m ? ecEur(m.contribution) : '–', 'margin / order', 'What one order leaves you before ads: price − VAT − payment fees − refunds − landed cost. Also the most an order may cost in ads (break-even CPA).')}
+      ${cell(lv('loss', 'roas'), ecX(m), 'break-even ROAS', 'Price ÷ margin: the ROAS at which the ads cost what an order leaves you')}
+      ${cell(lv('young', 'age'), b.age == null ? '–' : b.age + 'd', b.src === 'world' ? 'oldest ad' : 'ads live', b.src === 'tiktok' ? 'TikTok gives no ad dates' : 'How long its ads run: the longer, the more proof that it sells')}
+      ${cell(lv('bigstore', 'focused'), b.products == null ? '–' : fmt(b.products), 'store size', 'Products in its store: a focused store lives on few products; a big one sells everything')}
+    </div>
+    <ul class="ecr" aria-label="Why">${loud.map((r) => `<li class="${esc(r.level)}">${esc(r.text)}</li>`).join('')}${good.length ? `<li class="green">${esc(good.map((r) => r.text).join(' · '))}</li>` : ''}</ul>
+    ${hint ? `<p class="ech">${hint}</p>` : ''}`;
+}
+// What would make it green, then every line of the order.
+function ecHint(e) {
+  const m = e.m;
+  if (!m) return '';
+  const cny = m.max_cost_cny != null ? ` (¥${m.max_cost_cny.toFixed(2)})` : '';
+  const r = e.reasons.find((x) => x.k === 'roas' || x.k === 'loss');
+  if (r && r.level === 'green') return e.guess.cost && m.max_cost > 0 ? `Stays green up to a supplier price of <b>${esc(ecEur(m.max_cost) + cny)}</b>.` : '';
+  if (m.max_cost > 0) return `Green at a supplier price of at most <b>${esc(ecEur(m.max_cost) + cny)}</b>${!e.guess.cost && m.min_price != null ? `, or at a selling price of <b>${esc(ecEur(m.min_price))}</b>` : ''}.`;
+  if (m.min_price == null) return 'Not green at any price with these costs.';
+  return m.min_price_free ? `Not green at ${esc(ecEur(m.price))}, even with a free product: green from a selling price of <b>${esc(ecEur(m.min_price))}</b>.`
+    : `Green from a selling price of <b>${esc(ecEur(m.min_price))}</b> at this supplier price.`;
+}
+function ecBottom(e) {
+  const m = e.m;
+  const notes = e.reasons.filter((r) => r.level === 'info');
+  const list = notes.length ? `<ul>${notes.map((r) => `<li>${esc(r.text)}</li>`).join('')}</ul>` : '';
+  if (!m) return list ? `<details class="ecbd"${EC.bd ? ' open' : ''}><summary>Notes</summary>${list}</details>` : '';
+  const row = (label, v, cls) => `<div${cls ? ` class="${cls}"` : ''}><dt>${esc(label)}</dt><dd>${esc(v)}</dd></div>`;
+  const theirs = m.theirs && m.theirs.cur !== 'EUR' ? ` (${m.theirs.price.toFixed(2)} ${m.theirs.cur} at €${m.theirs.rate})` : '';
+  const supplier = m.cost_from === 'guess' ? `− Supplier price (a guess: ${m.guess_pct}% of the price)` : m.cost_from === 'sourcing' ? '− Supplier price (the supplier chosen in Sourcing)'
+    : `− Supplier price (${m.cost_amount} ${m.cost_cur}${m.cost_low != null ? `, top of ${m.cost_low}–${m.cost_amount}` : ''})`;
+  return `<details class="ecbd"${EC.bd ? ' open' : ''}><summary>Landed cost and margin, line by line</summary>${list}<dl>
+    ${row(m.price_from === 'yours' ? 'Your price, VAT included' : `Their price, VAT included${theirs}`, ecEur(m.price))}
+    ${row(`− VAT ${m.vat_pct}% (IOSS)`, ecEur(m.vat))}
+    ${row(`− Payment fees ${m.fee_pct}% + ${ecEur(m.fee_fixed)}`, ecEur(m.fees))}
+    ${row(`− Refunds: ${m.refund_pct}% of orders`, ecEur(m.refunds))}
+    ${row(supplier, ecEur(m.cost))}
+    ${row('− Agent / fulfilment', ecEur(m.agent))}
+    ${row(m.ship_from === 'quote' ? `− Shipping (${m.ship_tier})` : `− Shipping ${m.weight} g (${m.ship_tier})`, ecEur(m.ship))}
+    ${row('− EU customs duty on the parcel', ecEur(m.duty))}
+    ${row(`− EU handling fee × ${m.lines} item line${m.lines === 1 ? '' : 's'}`, ecEur(m.handling))}
+    ${row('= Margin before ads', `${ecEur(m.contribution)} (${m.pct}%)`, 'sum')}
+    ${row('Landed cost (supplier to the buyer\'s door)', ecEur(m.landed))}
+    ${row('Break-even ROAS · break-even CPA', `${ecX(m)} · ${ecEur(m.be_cpa)}`)}
+    ${row(`Profit per order at ROAS ${m.target_roas}`, ecEur(m.profit))}
+  </dl></details>`;
+}
+// The settings, once: what the numbers need while you type.
+function ecSettings() {
+  if (EC.s) return Promise.resolve();
+  if (!EC.sGet) {
+    EC.sGet = (async () => {
+      try {
+        const res = await fetch('/api/econ?part=settings', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        const j = await res.json();
+        if (res.ok) Object.assign(EC, { s: j.settings, defaults: j.defaults, day: j.day, ready: j.ready });
+      } catch (e) { /* the numbers still come with every save */ }
+      EC.sGet = null;
+    })();
+  }
+  return EC.sGet;
+}
+// You typed: the numbers follow at once (the kit), the save 0.7 s after the last key (at once when you leave the field).
+// What cannot be read is marked when you leave the field, and not saved.
+function ecEdit(el, changed) {
+  const p = el.closest('.ecpanel');
+  const key = p && p.dataset.eckey;
+  const e = key && EC.items.get(key);
+  if (!e) return;
+  const raw = {};
+  for (const x of p.querySelectorAll('[data-ecin]')) raw[x.dataset.ecin] = x.value;
+  EC.typed.set(key, raw);
+  let errors = {};
+  if (window.ECON && EC.s) {
+    const c = window.ECON.cleanInputs(raw, EC.s);
+    errors = c.errors;
+    ecPaint(p, Object.assign({}, e, { inputs: c.inputs }, window.ECON.evaluate(e.basis, window.ECON.mergeInputs(c.inputs, e.sourced), EC.s, EC.day)));
+  } else ecSettings();
+  for (const x of p.querySelectorAll('[data-ecin]')) {
+    if (!errors[x.dataset.ecin]) x.removeAttribute('aria-invalid');
+    else if (changed) x.setAttribute('aria-invalid', 'true');
+  }
+  if (!Object.keys(errors).length) ecQueue(key, changed ? 0 : 700);
+}
+function ecPaint(p, e) {
+  const inbox = !!p.closest('#ecdec');
+  p.querySelector('[data-ecout="top"]').innerHTML = ecTop(e, inbox);
+  p.querySelector('[data-ecout="bottom"]').innerHTML = ecBottom(e);
+  if (inbox) $('ecdec').className = 'ecd ' + e.level;
+  const x = EC.rows.find((r) => r.key === e.key);
+  const tr = x && [...document.querySelectorAll('#ecbox tr[data-ecrow]')].find((t) => t.dataset.ecrow === e.key);
+  if (tr) tr.outerHTML = ecRowHtml(Object.assign({}, x, { econ: e }));
+}
+function ecQueue(key, wait) {
+  clearTimeout(EC.timers.get(key));
+  EC.timers.set(key, setTimeout(() => { EC.timers.delete(key); ecSave(key); }, wait));
+}
+function ecFlush() {
+  for (const [key, t] of EC.timers) { clearTimeout(t); ecSave(key); }
+  EC.timers.clear();
+}
+// Saves go out one after the other, so an older save never lands after a newer one. What you typed is read when the save
+// goes out; a field that cannot be read (yet) keeps what was saved before, so it is never sent.
+function ecSave(key) {
+  const raw = EC.typed.get(key);
+  if (!raw) return;
+  const send = Object.assign({}, raw);
+  let partial = false;
+  if (window.ECON && EC.s) {
+    const old = ecRaw((EC.items.get(key) || {}).inputs);
+    for (const k of Object.keys(window.ECON.cleanInputs(raw, EC.s).errors)) { send[k] = old[k]; partial = true; }
+  }
+  EC.saving++;
+  ecSaved('Saving…');
+  const run = async () => {
+    const res = await fetch('/api/econ', { method: 'POST', credentials: 'same-origin', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, cost: send.cost, weight: send.weight, price: send.price }) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+    return j;
+  };
+  const p = EC.chain.then(run);
+  EC.chain = p.then(() => {}, () => {});
+  p.then((j) => { EC.saving--; ecSaved(EC.saving ? 'Saving…' : 'Saved ✓'); ecTake(j.econ, partial ? null : raw); },
+    (err) => { EC.saving--; ecSaved(''); toast('Could not save the numbers: ' + err.message, ''); });
+}
+// The server's numbers after a save: on the cards, the Decision card and the table (unless you typed again since, or
+// part of it could not be read: then what you typed stays).
+function ecTake(e, raw) {
+  EC.items.set(e.key, e);
+  const same = !!raw && EC.typed.get(e.key) === raw;
+  if (same) EC.typed.delete(e.key);
+  for (const a of ADS) if (a.econ && a.econ.key === e.key) a.econ = e;
+  for (const x of EC.rows) if (x.key === e.key) x.econ = e;
+  if (same) for (const p of document.querySelectorAll('.ecpanel')) if (p.dataset.eckey === e.key) ecPaint(p, e);
+}
+
+// The € view, as 🚀: the hunt's controls and cards step aside (body.ecv).
+function ecView() {
+  lnLeave(); // from the Launch view
+  for (const b of document.querySelectorAll('[data-view]')) b.setAttribute('aria-pressed', 'false');
+  $('lnseg').setAttribute('aria-pressed', 'false');
+  $('ecseg').setAttribute('aria-pressed', 'true');
+  document.body.classList.remove('inbox');
+  document.body.classList.add('ecv');
+  $('grid').classList.remove('one');
+  $('grid').innerHTML = '';
+  $('grid').setAttribute('aria-busy', 'false');
+  for (const id of ['allrow', 'allrow2', 'count', 'empty', 'moreBtn', 'ibox', 'dock', 'zero', 'pnote', 'learn']) $(id).hidden = true;
+  radar();
+  $('ecbox').hidden = false;
+  ecRender();
+  ecTabLoad();
+}
+function ecLeave() {
+  if (!document.body.classList.contains('ecv')) return;
+  ecFlush();
+  document.body.classList.remove('ecv');
+  $('ecbox').hidden = true;
+  $('ecseg').setAttribute('aria-pressed', 'false');
+}
+function ecTabLoad() {
+  if (EC.tab === 'log') ecLoadLog();
+  else if (EC.tab === 'settings') ecSettings().then(ecPane);
+  else ecLoadRows();
+}
+function ecRender() {
+  const tab = (k, t) => `<button data-ectab="${k}" aria-pressed="${EC.tab === k}">${esc(t)}</button>`;
+  $('ecbox').innerHTML = `<div class="echead"><h2>Unit economics</h2><small data-ecsaved aria-live="polite"></small>
+      <p>What one order costs landed in the EU and what it leaves you, for every product in your Inbox and on ✓, with a verdict and its reasons.</p></div>
+    <div class="ectabs" role="group" aria-label="Unit economics">${tab('products', 'Products')}${tab('log', 'Decision log')}${tab('settings', 'Settings')}</div>
+    <div id="ecpane">${ecPaneHtml()}</div>`;
+}
+function ecPane() {
+  const el = $('ecpane');
+  if (el && st.view === 'econ') el.innerHTML = ecPaneHtml();
+}
+function ecPaneHtml() {
+  const wait = '<div class="sload"><i class="spin"></i>Loading…</div>';
+  if (EC.tab === 'log') return EC.logLoaded ? ecLogHtml() : wait;
+  if (EC.tab === 'settings') return EC.s ? ecSetHtml() : wait;
+  return EC.loaded ? ecRowsHtml() : wait;
+}
+
+// Products: one row per product, a column per number; a tap on a column sorts by it, a tap on a product opens its numbers.
+const EC_COLS = [['title', 'Product'], ['level', 'Verdict'], ['price', 'Price'], ['landed', 'Landed cost'], ['profit', 'Margin / order'], ['roas', 'Break-even ROAS'], ['days', 'Ads run'], ['store', 'Store size']];
+async function ecLoadRows(more) {
+  const my = ++EC.seq;
+  const p = new URLSearchParams({ sort: EC.sort, offset: String(more ? EC.rows.length : 0), limit: '50' });
+  for (const k of ['src', 'status', 'level']) if (EC.f[k]) p.set(k, EC.f[k]);
+  if (EC.f.real) p.set('real', '1');
+  if (EC.dir) p.set('dir', EC.dir);
+  try {
+    const res = await fetch('/api/econ?' + p, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    if (res.status === 401) { location.reload(); return; }
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+    if (my !== EC.seq) return;
+    Object.assign(EC, { s: j.settings, day: j.day, ready: j.ready, total: j.total, counts: j.counts, shown: { sort: j.sort, dir: j.dir }, loaded: true });
+    EC.rows = more ? EC.rows.concat(j.rows) : j.rows;
+    for (const x of j.rows) if (!EC.typed.has(x.key)) EC.items.set(x.key, x.econ);
+    if (EC.tab === 'products') ecPane();
+  } catch (e) {
+    if (my === EC.seq && EC.tab === 'products' && $('ecpane')) $('ecpane').innerHTML = `<p class="lnmuted">Could not load the products: ${esc(e.message)}</p>`;
+  }
+}
+function ecRowsHtml() {
+  const f = EC.f;
+  const c = EC.counts || { all: 0, green: 0, amber: 0, red: 0 };
+  const opt = (v, t, cur) => `<option value="${v}"${cur === v ? ' selected' : ''}>${esc(t)}</option>`;
+  const chips = `<div class="ecfl" role="group" aria-label="Filters">
+    <span class="selw"><select class="chip" data-ecf="src" aria-label="Which products">${opt('', 'EU, outside EU and TikTok', f.src)}${opt('eu', 'EU', f.src)}${opt('world', 'Outside EU', f.src)}${opt('tiktok', 'TikTok ✓', f.src)}</select></span>
+    <span class="selw"><select class="chip" data-ecf="status" aria-label="Inbox or approved">${opt('', 'Inbox and ✓', f.status)}${opt('inbox', 'Inbox', f.status)}${opt('approved', '✓ Approved', f.status)}</select></span>
+    ${['green', 'amber', 'red'].map((lv) => `<button class="chip eclv ${lv}" data-eclv="${lv}" aria-pressed="${f.level === lv}"><i aria-hidden="true"></i>${EC_LEVEL[lv]} <small>${esc(c[lv])}</small></button>`).join('')}
+    <button class="chip" data-ecreal aria-pressed="${f.real}" title="Only products whose supplier price you typed">Your prices only</button></div>`;
+  const ready = EC.ready ? '' : '<p class="lnmuted">Your prices and settings are saved once the next deploy adds their tables to the database. Until then the numbers use the defaults.</p>';
+  if (!EC.rows.length) return chips + ready + `<p class="lnmuted">${c.all ? 'No products match.' : 'No products in your Inbox or on ✓ yet.'}</p>`;
+  const sh = EC.shown || {};
+  const head = EC_COLS.map(([k, t]) => {
+    const on = sh.sort === k;
+    return `<th${on ? ` aria-sort="${sh.dir === 'desc' ? 'descending' : 'ascending'}"` : ''}><button data-ecsort="${k}">${esc(t)}${on ? (sh.dir === 'desc' ? ' ↓' : ' ↑') : ''}</button></th>`;
+  }).join('');
+  return chips + ready + `<p class="eccount">${esc(EC.total.toLocaleString('en-US'))} ${EC.total === 1 ? 'product' : 'products'} · tap a column to sort, a product to type its supplier price</p>
+    <div class="ectw"><table class="ect"><thead><tr>${head}</tr></thead><tbody>${EC.rows.map((x) => ecRowHtml(x) + (EC.open === x.key ? ecOpenHtml(x) : '')).join('')}</tbody></table></div>
+    ${EC.rows.length < EC.total ? '<div class="ecmore"><button data-ecmore>Show more</button></div>' : ''}`;
+}
+function ecRowHtml(x) {
+  const e = x.econ;
+  const m = e.m;
+  const sub = [EC_SRC[x.src], x.status === 'approved' ? '✓' + (x.at ? ' ' + day(x.at) : '') : 'Inbox', e.guess.cost ? 'est.' : ''].filter(Boolean).join(' · ');
+  const td = (v, cls) => `<td${cls ? ` class="${cls}"` : ''}>${v}</td>`;
+  return `<tr data-ecrow="${esc(x.key)}"${EC.open === x.key ? ' class="on"' : ''}>
+    <td class="ecp"><button data-ecopen="${esc(x.key)}" aria-expanded="${EC.open === x.key}" title="${esc(ecTip(e))}"><span class="ecth">${ecImg(x)}</span><span class="ect1"><b>${esc(x.title)}</b><small>${esc(sub)}</small></span></button></td>
+    ${td(ecPill(e.level))}${td(esc(m ? ecEur(m.price) : '–'))}${td(esc(m ? ecEur(m.landed) : '–'))}${td(esc(m ? ecEur(m.contribution) : '–'), m && m.contribution <= 0 ? 'neg' : '')}${td(esc(ecX(m)))}${td(esc(e.basis.age == null ? '–' : e.basis.age + 'd'))}${td(esc(e.basis.products == null ? '–' : fmt(e.basis.products)))}</tr>`;
+}
+function ecOpenHtml(x) {
+  const links = `<div class="eclinks">${safe(x.ad) ? `<a class="eclink" href="${safe(x.ad)}" target="_blank" rel="noopener noreferrer">${x.src === 'tiktok' ? 'Meta ads' : 'Ad'} ↗</a>` : ''}${safe(x.product) ? `<a class="eclink" href="${safe(x.product)}" target="_blank" rel="noopener noreferrer">${x.src === 'tiktok' ? 'TikTok' : 'Shop'} ↗</a>` : ''}<a class="eclink" href="${esc(src1688(x.title))}" target="_blank" rel="noopener noreferrer">Search 1688 ↗</a></div>`;
+  return `<tr class="ecx"><td colspan="${EC_COLS.length}"><div class="ecstick">${ecPanelHtml(EC.items.get(x.key) || x.econ, false)}${links}</div></td></tr>`;
+}
+
+// The decision log: every Approved and Reject with the numbers the board showed then; Undo on the newest of a product.
+async function ecLoadLog(more) {
+  const my = ++EC.seq;
+  const p = new URLSearchParams({ offset: String(more ? EC.log.length : 0), limit: '50' });
+  if (EC.logF.d) p.set('d', EC.logF.d);
+  if (EC.logF.undone) p.set('undone', '1');
+  try {
+    const res = await fetch('/api/decisions?' + p, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    if (res.status === 401) { location.reload(); return; }
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+    if (my !== EC.seq) return;
+    Object.assign(EC, { logTotal: j.total, logCounts: j.counts, logBoard: j.board || null, logReady: j.ready, logLoaded: true });
+    EC.log = more ? EC.log.concat(j.rows) : j.rows;
+    if (EC.tab === 'log') ecPane();
+  } catch (e) {
+    if (my === EC.seq && EC.tab === 'log' && $('ecpane')) $('ecpane').innerHTML = `<p class="lnmuted">Could not load the decision log: ${esc(e.message)}</p>`;
+  }
+}
+function ecLogHtml() {
+  const c = EC.logCounts || { approved: 0, rejected: 0 };
+  const chip = (d, t) => `<button class="chip" data-ecd="${d}" aria-pressed="${EC.logF.d === d}">${t}</button>`;
+  // Every decision the board holds now, also from before the log: your approval rate.
+  const b = EC.logBoard;
+  const all = b ? b.approved + b.rejected : 0;
+  const rate = b ? `<p class="eccount" data-ecrate>${all ? `On the board now: <b>${esc(b.approved.toLocaleString('en-US'))}</b> approved · <b>${esc(b.rejected.toLocaleString('en-US'))}</b> rejected (<b>${esc(Math.round((b.approved / all) * 100))}%</b> approved), the TikTok tab included.` : 'No decisions on the board yet.'}</p>` : '';
+  const chips = `${rate}<div class="ecfl" role="group" aria-label="Which decisions">${chip('', 'All')}${chip('approved', `✓ Approved <small>${esc(c.approved)}</small>`)}${chip('rejected', `✗ Rejected <small>${esc(c.rejected)}</small>`)}<button class="chip" data-ecundone aria-pressed="${EC.logF.undone}">Taken back too</button></div>`;
+  if (!EC.logReady) return chips + '<p class="lnmuted">The decision log starts once the next deploy adds its table to the database.</p>';
+  if (!EC.log.length) return chips + `<p class="lnmuted">${EC.logF.d || EC.logF.undone ? 'No decisions match.' : 'No decisions yet. Every Approved and Reject on the board lands here, with its numbers at that moment.'}</p>`;
+  const head = ['Product', 'Decision', 'When', 'Verdict then', 'Margin then', 'Break-even ROAS then', 'Ads then', 'Store then', ''].map((t) => `<th><span>${esc(t)}</span></th>`).join('');
+  return chips + `<p class="eccount">${esc(EC.logTotal.toLocaleString('en-US'))} ${EC.logTotal === 1 ? 'decision' : 'decisions'}, the newest first · tap a product for the facts it was decided on</p>
+    <div class="ectw"><table class="ect log"><thead><tr>${head}</tr></thead><tbody>${EC.log.map(ecLogRow).join('')}</tbody></table></div>
+    ${EC.log.length < EC.logTotal ? '<div class="ecmore"><button data-eclogmore>Show more</button></div>' : ''}`;
+}
+function ecLogRow(r) {
+  const f = r.facts || {};
+  const open = EC.logOpen === r.id;
+  const act = r.undone_at ? `<small>${r.undo_via === 'replaced' ? 'replaced' : 'taken back'} ${esc(day(r.undone_at))}</small>`
+    : r.latest ? `<button class="ecundo" data-ecundo="${esc(r.id)}" title="Undecided again: back in your Inbox">Undo</button>` : '';
+  const td = (v, cls) => `<td${cls ? ` class="${cls}"` : ''}>${v}</td>`;
+  const roas = r.be_roas == null ? (r.profit != null && r.profit <= 0 ? 'loss' : '–') : r.be_roas + '×';
+  return `<tr data-eclog="${esc(r.id)}" class="${[r.undone_at ? 'off' : '', open ? 'on' : ''].join(' ').trim()}">
+    <td class="ecp"><button data-eclogopen="${esc(r.id)}" aria-expanded="${open}"><span class="ecth">${ecImg({ img: f.img, title: r.title })}</span><span class="ect1"><b>${esc(r.title || f.title || '')}</b><small>${esc(EC_SRC[r.src] || '')}</small></span></button></td>
+    ${td(r.decision === 'approved' ? '✓ Approved' : '✗ Rejected', r.decision === 'approved' ? 'ok' : 'no')}${td(`${esc(day(r.at))}<small>${esc(ago(r.at))}</small>`)}${td(r.level ? ecPill(r.level) : '–')}
+    ${td(esc(ecEur(r.profit)), r.profit != null && r.profit <= 0 ? 'neg' : '')}${td(esc(roas))}${td(esc(f.age == null ? '–' : f.age + 'd'))}${td(esc(f.products == null ? '–' : fmt(f.products)))}${td(act)}</tr>${open ? `<tr class="ecx"><td colspan="9"><div class="ecstick">${ecLogFacts(r)}</div></td></tr>` : ''}`;
+}
+// What the board showed when you decided: the price, the cost, every reason of the verdict then.
+function ecLogFacts(r) {
+  const f = r.facts || {};
+  const ec = f.econ || {};
+  const m = ec.m;
+  const said = [m ? `price ${ecEur(m.price)}` : 'no price', m ? `landed cost ${ecEur(m.landed)}` : '', m ? `supplier price ${m.cost_from === 'guess' ? 'a guess, ' : m.cost_from === 'sourcing' ? 'from Sourcing, ' : ''}${ecEur(m.cost)}` : '',
+    m ? `${m.weight} g${ec.guess && ec.guess.weight ? ' (a guess)' : ''}` : '', f.rpd != null ? `${fmt(f.rpd)} EU reach a day` : '', f.proof ? `${f.proof.n}/${f.proof.of} proof` : '', f.sold != null ? `${fmt(f.sold)} sold` : ''].filter(Boolean).join(' · ');
+  const links = `${safe(f.ad) ? `<a class="eclink" href="${safe(f.ad)}" target="_blank" rel="noopener noreferrer">Ad ↗</a>` : ''}${safe(f.product || f.store) ? `<a class="eclink" href="${safe(f.product || f.store)}" target="_blank" rel="noopener noreferrer">Shop ↗</a>` : ''}`;
+  return `<p class="ech">On ${esc(day(r.at))} the board showed: ${esc(said)}</p>
+    <ul class="ecr">${(Array.isArray(ec.reasons) ? ec.reasons : []).map((x) => `<li class="${esc(x.level)}">${esc(x.text)}</li>`).join('')}</ul>
+    ${links ? `<div class="eclinks">${links}</div>` : ''}`;
+}
+async function ecUndo(b) {
+  b.disabled = true;
+  try {
+    const res = await fetch('/api/decisions', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ undo: Number(b.dataset.ecundo) }) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+    const r = j.undone;
+    if (r.src === 'tiktok') {
+      const t = TT && TT.find((x) => String(x.id) === r.ad_id);
+      if (t) t.d = null;
+    } else {
+      forget(r.ad_id); // decided in the Inbox on this phone: back there without a reload
+      if (r.decision === 'approved') setMade(Math.max(0, MADE - 1));
+      marketsStale = true;
+    }
+    toast(`Taken back: ${r.title || 'the product'} is undecided again`, '');
+    ecLoadLog();
+  } catch (e) {
+    b.disabled = false;
+    toast('Could not undo: ' + e.message, '');
+  }
+}
+
+// Settings: every assumption behind the numbers, with its default as a placeholder. An empty number is its default.
+const EC_SET = [
+  ['Selling', 'What an order brings in: the price minus VAT, payment fees and refunds.', [['vat_pct', 'VAT %'], ['fee_pct', 'Payment fees %'], ['fee_fixed', 'Payment fee per order (€)'], ['refund_pct', 'Orders refunded %']]],
+  ['Sourcing', 'Until you type a product\'s supplier price and weight, these guesses count.', [['agent_fee', 'Agent / fulfilment per order (€)'], ['cost_guess_pct', 'Supplier price guess (% of the price)'], ['weight_guess_g', 'Weight guess (g)'], ['cost_cur', 'A supplier price without a currency is in', 'cur']]],
+  ['EU customs on parcels from China', 'The 2026 rules: a flat duty per parcel worth up to €150 before VAT, and a handling fee per item line. Over €150 there is no IOSS. Ask each shipping line in writing how it bills these, and that it uses your IOSS. Clear a date to switch that charge off.', [['direct', 'Ship from China to the buyer, one parcel per order', 'bool'], ['duty_eur', 'Duty per parcel (€)'], ['duty_from', 'Duty from (YYYY-MM-DD)', 'day'], ['duty_max', 'Duty and IOSS up to (€ before VAT)'], ['handling_eur', 'Handling fee per item line (€)'], ['handling_from', 'Handling fee from (YYYY-MM-DD)', 'day'], ['lines', 'Item lines per parcel']]],
+  ['Verdict', 'Money first, then how long its ads run, its store and its risks: one red reason makes it red.', [['green_roas', 'Green up to a break-even ROAS of'], ['red_roas', 'Red from a break-even ROAS of'], ['min_profit', 'Amber under a margin per order of (€)'], ['target_roas', 'Profit per order worked out at ROAS'], ['young_days', 'Amber when its ads run fewer days than'], ['big_store', 'Amber for a store with more products than'], ['focused_store', 'Green for a store with at most this many products']]],
+];
+function ecSetHtml() {
+  const s = EC.s;
+  const d = EC.defaults || {};
+  const field = ([k, label, t]) => {
+    if (t === 'bool') return `<label class="ecchk"><input type="checkbox" name="${k}"${s[k] ? ' checked' : ''}><span>${esc(label)}</span></label>`;
+    if (t === 'cur') return `<label><span>${esc(label)}</span><select name="${k}">${['EUR', ...Object.keys(s.fx)].map((c) => `<option${c === s[k] ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label>`;
+    return `<label><span>${esc(label)}</span><input name="${k}" value="${esc(s[k])}" placeholder="${esc(d[k] ?? '')}" inputmode="${t === 'day' ? 'text' : 'decimal'}" autocomplete="off"></label>`;
+  };
+  const tiers = s.ship.concat([['', '']]).map(([g, e], i) => `<label><span>Up to (g)</span><input data-ectier="${i}" data-ecpart="g" value="${esc(g)}" inputmode="numeric" autocomplete="off"></label><label><span>Shipping (€)</span><input data-ectier="${i}" data-ecpart="e" value="${esc(e)}" inputmode="decimal" autocomplete="off"></label>`).join('');
+  const fx = Object.entries(s.fx).map(([c, r]) => `<label><span>€ per ${esc(c)}</span><input data-ecfx="${esc(c)}" value="${esc(r)}" inputmode="decimal" autocomplete="off"></label>`).join('');
+  return `<form class="ecset" id="ecset">
+    ${EC_SET.map(([title, note, list]) => `<fieldset><legend>${esc(title)}</legend><p>${esc(note)}</p>${list.map(field).join('')}</fieldset>`).join('')}
+    <fieldset class="ec2"><legend>Shipping from China to the buyer</legend><p>A parcel pays the first tier its weight fits in; past the last one, that tier plus the rate per started kilo. Estimates for a tracked parcel: put in your agent's rates. An empty row is dropped.</p>${tiers}
+      <label><span>Per kilo past the last tier (€)</span><input name="ship_extra_kg" value="${esc(s.ship_extra_kg)}" placeholder="${esc(d.ship_extra_kg ?? '')}" inputmode="decimal" autocomplete="off"></label></fieldset>
+    <fieldset class="ec3"><legend>Exchange rates</legend><p>Euros for one unit: store prices and supplier prices in another currency count with these. Approximate: change them when they move.</p>${fx}</fieldset>
+    <div class="ecsetb"><button class="pri" type="submit">Save settings</button><button type="button" data-ecreset>Back to the defaults</button></div>
+  </form>`;
+}
+async function ecPostSettings(settings) {
+  const res = await fetch('/api/econ', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ settings }) });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+  Object.assign(EC, { s: j.settings, loaded: false, rows: [] }); // every number changes: the table loads again
+  EC.items.clear();
+  ecPane();
+}
+async function ecSaveSettings() {
+  const form = $('ecset');
+  if (!form) return;
+  const out = { fx: {}, ship: [], ship_extra_kg: form.elements.ship_extra_kg.value.trim() };
+  for (const [, , list] of EC_SET) for (const [k, , t] of list) out[k] = t === 'bool' ? form.elements[k].checked : form.elements[k].value.trim();
+  const tiers = new Map();
+  for (const el of form.querySelectorAll('[data-ectier]')) tiers.set(el.dataset.ectier, Object.assign(tiers.get(el.dataset.ectier) || {}, { [el.dataset.ecpart]: el.value.trim() }));
+  for (const t of tiers.values()) if (t.g && t.e) out.ship.push([t.g, t.e]);
+  for (const el of form.querySelectorAll('[data-ecfx]')) if (el.value.trim()) out.fx[el.dataset.ecfx] = el.value.trim();
+  try { await ecPostSettings(out); toast('Settings saved: every number follows them', ''); } catch (e) { toast('Could not save the settings: ' + e.message, ''); }
+}
+async function ecResetSettings(b) {
+  if (!b.dataset.sure) { // a second tap, so a slip never wipes your settings
+    b.dataset.sure = '1';
+    b.textContent = 'Tap again: back to the defaults';
+    setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = 'Back to the defaults'; } }, 3000);
+    return;
+  }
+  try { await ecPostSettings(null); toast('Settings back to the defaults', ''); } catch (e) { toast('Could not reset the settings: ' + e.message, ''); }
+}
+
+$('ecbox').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b || b.disabled) return;
+  const d = b.dataset;
+  if (d.ectab) { ecFlush(); EC.tab = d.ectab; ecRender(); ecTabLoad(); }
+  else if (d.ecsort) { EC.dir = EC.shown && EC.shown.sort === d.ecsort ? (EC.shown.dir === 'desc' ? 'asc' : 'desc') : ''; EC.sort = d.ecsort; ecLoadRows(); }
+  else if (d.eclv) { EC.f.level = EC.f.level === d.eclv ? '' : d.eclv; ecLoadRows(); }
+  else if (d.ecreal != null) { EC.f.real = !EC.f.real; ecLoadRows(); }
+  else if (d.ecopen) { ecFlush(); EC.open = EC.open === d.ecopen ? '' : d.ecopen; ecPane(); ecSettings(); }
+  else if (d.ecmore != null) ecLoadRows(true);
+  else if (d.eclogopen) { EC.logOpen = EC.logOpen === Number(d.eclogopen) ? 0 : Number(d.eclogopen); ecPane(); }
+  else if (d.ecd != null) { EC.logF.d = d.ecd; ecLoadLog(); }
+  else if (d.ecundone != null) { EC.logF.undone = !EC.logF.undone; ecLoadLog(); }
+  else if (d.eclogmore != null) ecLoadLog(true);
+  else if (d.ecundo) ecUndo(b);
+  else if (d.ecreset != null) ecResetSettings(b);
+});
+$('ecbox').addEventListener('change', (e) => {
+  const s = e.target.closest('select[data-ecf]');
+  if (s) { EC.f[s.dataset.ecf] = s.value; ecLoadRows(); }
+});
+$('ecbox').addEventListener('submit', (e) => { e.preventDefault(); ecSaveSettings(); });
+$('ecdec').addEventListener('click', (e) => { const b = e.target.closest('[data-ecgo]'); if (b) { EC.tab = b.dataset.ecgo; goView('econ'); } });
+// While you type on the Decision card, the Inbox buttons below do not cover the field (as for the note).
+$('ecdec').addEventListener('focusin', (e) => { if (e.target.matches('[data-ecin]')) document.body.classList.add('noting'); });
+$('ecdec').addEventListener('focusout', (e) => { if (e.target.matches('[data-ecin]')) document.body.classList.remove('noting'); });
+for (const box of [$('ecdec'), $('ecbox')]) {
+  box.addEventListener('input', (e) => { if (e.target.matches('[data-ecin]')) ecEdit(e.target, false); });
+  box.addEventListener('change', (e) => { if (e.target.matches('[data-ecin]')) ecEdit(e.target, true); });
+  box.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('[data-ecin]')) { e.preventDefault(); e.target.blur(); } });
+  box.addEventListener('toggle', (e) => { if (e.target.classList && e.target.classList.contains('ecbd')) EC.bd = e.target.open; }, true);
+  box.addEventListener('error', (e) => { if (e.target.tagName === 'IMG') { const i = document.createElement('i'); i.textContent = '?'; e.target.replaceWith(i); } }, true);
+}
+// Browse can sort by the money too (the server sorts: SORTS and WORLD_SORTS in app.mjs).
+Object.assign(ESORT_LABEL, { profit: 'Margin / order', beroas: 'Break-even ROAS' });
+Object.assign(WSORT_LABEL, { profit: 'Margin / order', beroas: 'Break-even ROAS' });
+Object.assign(SORTED, { profit: 'by margin per order', beroas: 'by break-even ROAS' });
+Object.assign(WSORTED, { profit: 'by margin per order', beroas: 'by break-even ROAS' });
+sortOptions();
+$('ecseg').addEventListener('click', () => goView('econ'));
+// Another view, tab or the Launch view: the € view steps aside (these run after the views' own handlers, so st.view is the new one).
+for (const b of document.querySelectorAll('[data-view], [data-scope], #lnseg')) b.addEventListener('click', () => { if (st.view !== 'econ') ecLeave(); });
+addEventListener('pagehide', ecFlush);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') ecFlush(); });
+
 // Desktop: cards lean toward the pointer (CSS variables through the CSSOM: the CSP blocks style attributes).
 if (st.scope === 'tiktok') { document.body.classList.add('tt'); ttLoad(); } else { load(); loadMarkets(); }
 </script>
