@@ -480,8 +480,10 @@
   .tag.new { background: rgba(15, 15, 16, .88); color: var(--acc); border: 1px solid rgba(217, 164, 65, .5); }
   .tag.noteu { background: rgba(15, 15, 16, .88); color: var(--win); border-color: rgba(76, 195, 138, .5); }
   .tag.fit, .tag.made { background: rgba(15, 15, 16, .88); color: var(--win); border-color: rgba(76, 195, 138, .5); }
-  .tag.out { background: rgba(15, 15, 16, .88); color: var(--acc); border: 1px solid rgba(217, 164, 65, .5); }
+  .tag.out, .tag.old { background: rgba(15, 15, 16, .88); color: var(--acc); border: 1px solid rgba(217, 164, 65, .5); }
   .tag.jev { background: rgba(15, 15, 16, .88); color: var(--acc); border-color: rgba(217, 164, 65, .5); }
+  .tag.red { background: rgba(15, 15, 16, .88); color: var(--bad); border-color: rgba(229, 72, 77, .55); }
+  .jevl.rk.down { color: var(--acc); }
   .hero b { font-size: 24px; font-weight: 500; }
   .hero span { font: 400 11px var(--sans); color: var(--muted); margin-top: 2px; }
   .meter { display: flex; gap: 2px; margin-top: 4px; }
@@ -810,7 +812,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const safe = (u) => (typeof u === 'string' && /^https:\/\//i.test(u) ? esc(u) : '');
 const fmt = (n) => (n == null ? '–' : n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M' : n >= 1e4 ? Math.round(n / 1e3) + 'K' : n >= 1e3 ? (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K' : String(n));
 const SYM = { EUR: '€', USD: '$', GBP: '£' };
-const money = (v, c) => (v == null ? '' : (SYM[c] || (c ? c + ' ' : '')) + Number(v).toFixed(2).replace(/\.00$/, ''));
+const money = (v, c) => (v == null ? '' : (Object.hasOwn(SYM, c || '') ? SYM[c] : c ? c + ' ' : '') + Number(v).toFixed(2).replace(/\.00$/, ''));
 const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
 // '17 Oct' this year, 'Oct 2025' before: ✓ keeps products for good
 const day = (iso) => {
@@ -836,6 +838,10 @@ const ICON = {
 };
 const SORTED = { rpd: 'by reach per day', new: 'newest first', scaled: 'by ad copies', ads: 'by shop ads', reach: 'by total reach', best: 'by store best-seller rank' , jevp: 'by Jev product score', jeva: 'by Jev ad score' };
 const NEW_MS = 24 * 3600e3; // found in the last day: NEW
+// A product's figures (reach, ads, copies, age) are from the last time the hunt saw it. Longer ago than this: the
+// card says when, and shows the age it had then, not a guess at today's.
+const OLD_MS = 2 * 864e5;
+const measuredOld = (a) => Date.now() - Date.parse(a.last_seen) > OLD_MS;
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } } };
 
 const WSORTED = { eu: 'by EU reach a day', proof: 'most proof first', days: 'by oldest ad', ads: 'by ads for the product', markets: 'by number of markets', shop: 'by shop ads', fresh: 'by new ads in 14 days', best: 'by store best-seller rank', reviews: 'by Trustpilot reviews', new: 'newest first' , jevp: 'by Jev product score', jeva: 'by Jev ad score' };
@@ -946,17 +952,39 @@ function shopLink(a) {
   return url ? `<a class="shop" href="${url}" target="_blank" rel="noopener noreferrer" title="${onProduct ? 'The product in the store' : 'The store'}">${esc(name || 'Store')} ↗</a>` : `<span class="shop">${esc(name)}</span>`;
 }
 
-// What Jev answered. Only data: nothing is hidden or ranked by it. The flags come from jevFlags in app.mjs.
+// What Jev answered. Its risks rank a product lower in the Inbox (riskOf in app.mjs; an EU product people or pets
+// take leaves the Inbox); the flags come from jevFlags. Hard to ship, a medical claim and cosmetics get a red tag.
 const jevPct = (v) => Math.round(v * 100) + '%';
-function jevTags(c) {
+function jevTags(a) {
+  const c = a.jev;
   if (!c) return '';
   const has = (f) => (c.flags || []).includes(f);
   const tag = (f, text, p, why) => (has(f) ? `<span class="tag jev" title="Jev: ${why}">${text} ${jevPct(p)}</span>` : '');
+  const red = (k, text, why) => (a.risk && a.risk.red.includes(k) ? `<span class="tag red" title="Jev: ${why}. It ranks lower in the Inbox.">${text} ${jevPct(c.p[k])}</span>` : '');
   return tag('people', 'People take', c.people, 'how likely a person eats, drinks or swallows this')
     + tag('animals', 'Pets take', c.animals, 'how likely an animal eats or takes this')
     + tag('gymwear', 'Gymwear', c.gymwear, 'how likely this is clothing for working out')
     + tag('digital', 'Not physical', 1 - c.physical, 'how likely this is not a physical product')
-    + tag('face', 'On the face', c.p ? c.p.face : 0, 'how likely this is rubbed or applied on the face');
+    + tag('face', 'On the face', c.p ? c.p.face : 0, 'how likely this is rubbed or applied on the face')
+    + red('restricted', 'Hard to ship', 'how likely this is restricted or hard to ship by post (liquids, powders, aerosols, blades, big batteries)')
+    + red('medical', 'Medical claim', 'how likely the product or its ad claims to treat or relieve a health condition')
+    + red('skin', 'Cosmetics', 'how likely this is applied to skin, hair, nails or teeth');
+}
+// A weaker lead: an ad whose product was never found (its title is the ad's own words), or a store with a big catalogue
+// that hardly copies this ad (its ads may sell the store, not this product).
+function leadTags(a) {
+  const n = a.scaled || 1;
+  return (a.unidentified ? '<span class="tag out" title="No product page, price or best-seller rank was found for this ad: the title is the ad\'s own words">Product not identified</span>' : '')
+    + (a.catalogue ? `<span class="tag out" title="The store sells ${esc(fmt(a.products))} products and runs ${esc(n)} ${n === 1 ? 'copy' : 'copies'} of this ad: its ads may sell the store, not this product">Big catalogue, ${esc(n)} ${n === 1 ? 'ad' : 'ads'}</span>` : '');
+}
+// The Inbox card: how far the product moved in the Inbox and why: what you taught the board, its store's best-seller
+// rank and Jev's risks (the Inbox ranks by reach a day, outside the EU by proof, times these).
+const times = (n) => '× ' + String(Math.round(n * 100) / 100);
+function rankLine(a) {
+  const r = a.ranked;
+  if (!r || !r.why.length) return '';
+  const floor = a.risk && a.risk.why.reduce((f, w) => f * w.x, 1) < a.risk.x ? ` (risks stop at ${times(a.risk.x)})` : '';
+  return `<div class="jevl rk${r.x < 1 ? ' down' : ''}" title="The Inbox ranks by ${a.world ? 'proof' : 'reach a day'} times these">Inbox rank ${esc(times(r.x))}: ${esc(r.why.map((w) => `${w.text} ${times(w.x)}`).join(' · '))}${esc(floor)}</div>`;
 }
 function jevLabels(group, c) {
   const list = JEV && JEV[group] ? JEV[group] : [];
@@ -1029,10 +1057,11 @@ function worldCard(a, inbox) {
   const isNew = Date.now() - Date.parse(a.first_seen) < NEW_MS;
   const tags = (isNew ? '<span class="tag new">New</span>' : '')
     + (w.in_eu === 0 ? '<span class="tag noteu" title="The shop has no active ads in the EU (Meta\'s API)">Not in EU</span>' : w.in_eu === 1 ? '<span class="tag" title="The shop also runs ads in the EU (Meta\'s API)">Also in EU</span>' : '')
-    + jevTags(a.jev)
-    + (a.fit >= 1.5 ? '<span class="tag fit" title="You liked products from this niche">Your niche</span>' : '')
+    + jevTags(a)
+    + (a.niche && a.niche.w >= 1.25 ? `<span class="tag fit" title="You approve ${esc(a.niche.name)} more often than other products">Your niche</span>` : '')
+    + leadTags(a)
     + (a.hidden === 'seen' ? `<span class="tag made" title="You approved it">✓ Approved${a.made_at ? ' ' + esc(day(a.made_at)) : ''}</span>` : a.hidden ? '<span class="tag">Rejected</span>' : '')
-    + (a.pass === false ? '<span class="tag out" title="Its ads were not seen in the last scans">Not seen lately</span>' : '');
+    + (a.pass === false ? `<span class="tag out" title="Its ads were not seen in the last scans: last seen ${esc(day(a.last_seen))}, its figures are from then">Not seen lately</span>` : '');
   const photo = safe(a.img) ? `<img src="${safe(a.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<div class="dom">${esc(host(a.store) || a.adv)}</div>`;
   const price = a.price != null ? `<div class="price"><span>${esc(money(a.price, a.cur))}</span>${a.was > a.price ? `<s>${esc(money(a.was, a.cur))}</s><span class="off">−${esc(a.off)}%</span>` : ''}</div>` : '';
   const acts = a.hidden === 'seen' ? '<button class="un" data-act="none" data-confirm="1">Remove from ✓</button>'
@@ -1077,6 +1106,7 @@ function worldCard(a, inbox) {
       ${w.eu_rpd != null ? `<div class="bs" title="Meta's API: EU reach per day of this product's best ad that also runs in the EU. No reach is published for the other markets.">${esc(fmt(w.eu_rpd))} EU reach / day</div>`
         : w.shop_eu_rpd != null ? `<div class="bs no" title="Meta's API: EU reach per day of this shop's best ad in the EU, not necessarily this product.">Shop's best EU ad: ${esc(fmt(w.shop_eu_rpd))} reach / day</div>` : ''}
       ${jevLine(a.jev, inbox)}
+      ${inbox ? rankLine(a) : ''}
       ${inbox ? `<ul class="proofl">${proof.items.map((i) => `<li class="${proofState(i)}">${PROOF_TEXT[proofState(i)]} ${esc(i.text)}</li>`).join('')}</ul>` : ''}
       ${inbox ? `<div class="more">
         <div class="facts">
@@ -1086,6 +1116,7 @@ function worldCard(a, inbox) {
           ${a.adv ? `<span>${esc(a.adv)}</span>` : ''}
           <span>search “${esc(a.kw)}”</span>
           <span>found ${esc(String(a.first_seen || '').slice(0, 10))}</span>
+          <span>seen ${esc(ago(a.last_seen))}</span>
         </div>
       </div>` : ''}
     </div>
@@ -1103,11 +1134,15 @@ function worldCard(a, inbox) {
 function card(a, inbox) {
   if (a.world) return worldCard(a, inbox);
   const isNew = Date.now() - Date.parse(a.first_seen) < NEW_MS;
+  const old = measuredOld(a);
+  const liveTip = `Days the ad had run when last measured, ${day(a.last_seen)} (7–42 days)${a.age != null ? `; ${a.age} days today if it still runs` : ''}`;
   const tags = (isNew ? '<span class="tag new">New</span>' : '')
-    + jevTags(a.jev)
-    + (a.fit >= 1.5 ? '<span class="tag fit" title="You liked products from this niche">Your niche</span>' : '')
+    + jevTags(a)
+    + (a.niche && a.niche.w >= 1.25 ? `<span class="tag fit" title="You approve ${esc(a.niche.name)} more often than other products">Your niche</span>` : '')
+    + leadTags(a)
     + (a.hidden === 'seen' ? `<span class="tag made" title="You approved it">✓ Approved${a.made_at ? ' ' + esc(day(a.made_at)) : ''}</span>` : a.hidden ? '<span class="tag">Rejected</span>' : '')
     + (a.pass === false ? '<span class="tag out" title="No longer passes the rules (age, active ads or reach)">Out of rules</span>' : '')
+    + (old ? `<span class="tag old" title="Reach, shop ads, copies and age were last measured ${esc(day(a.last_seen))} (${esc(ago(a.last_seen))}): the EU hunt only runs by hand">Measured ${esc(day(a.last_seen))}</span>` : '')
     + (!inbox && a.store_photo && safe(a.img) ? `<span class="tag sp" title="Photo from the store page, may show another product" aria-label="Store photo">${ICON.cam}</span>` : '');
   const photo = safe(a.img)
     ? `<img src="${safe(a.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
@@ -1140,7 +1175,7 @@ function card(a, inbox) {
       <div class="meta${inbox ? ' m4' : ''}">
         ${inbox ? `<div class="m" title="${reachTip}">${reach}</div>` : ''}
         <div class="m" title="Active ads of this advertiser (75+ needed)"><b>${esc(fmt(a.ads))}</b><span>shop ads</span></div>
-        <div class="m" title="Days the ad has run (7–42 days)"><b>${a.age == null ? '–' : esc(a.age) + 'd'}</b><span>live</span></div>
+        <div class="m" title="${esc(liveTip)}"><b>${a.age_seen == null ? '–' : esc(a.age_seen) + 'd'}</b><span>${old ? 'live on ' + esc(day(a.last_seen)) : 'live'}</span></div>
         <div class="m" title="Ads running for this product"><b>${esc(fmt(a.scaled || 1))}</b><span>copies</span></div>
         ${trustRow(a)}
       </div>
@@ -1151,6 +1186,7 @@ function card(a, inbox) {
       </div>`}
       ${bestLine(a)}
       ${jevLine(a.jev, inbox)}
+      ${inbox ? rankLine(a) : ''}
       ${inbox ? `<div class="more">
         <div class="facts">
           <span><b>${esc(fmt(a.reach))}</b> EU reach</span>
@@ -1158,6 +1194,7 @@ function card(a, inbox) {
           ${a.myshopify ? `<span>${esc(a.myshopify)}</span>` : ''}
           <span>search “${esc(a.kw)}”</span>
           <span>found ${esc(String(a.first_seen || '').slice(0, 10))}</span>
+          <span>measured ${esc(ago(a.last_seen))}</span>
         </div>
       </div>` : ''}
     </div>
@@ -1594,13 +1631,14 @@ function renderLearned(j) {
   const up = j.niches.filter((x) => x.weight > 1);
   const dn = j.niches.filter((x) => x.weight < 1).reverse();
   const b = j.by_action;
+  const prices = j.max_prices.map((x) => `<b>${esc(money(x.price, x.currency))}</b>`).join(', ');
   $('learn').innerHTML = `<h2>What the board learned</h2>
     <p>${j.decisions ? `From <b>${esc(j.decisions)}</b> decisions: ✗ ${esc(b.rejected)} rejected · ✓ ${esc(b.seen)} approved.` : 'Nothing yet. Decide on products in the Inbox and tap a reason: the board learns from every tap.'}</p>
     <section class="lsec"><h3>Why you say no</h3>${bars(j.reasons.bad, 'bad')}</section>
     <section class="lsec"><h3>Why you say yes</h3>${bars(j.reasons.good, 'good')}</section>
-    <section class="lsec"><h3>Niches</h3><p>Niches you like go up in your Inbox. Niches you reject go down.</p>
-      ${up.length || dn.length ? `<div class="lchips">${up.map((x) => `<span class="up">↑ ${esc(x.kw)}</span>`).join('')}${dn.map((x) => `<span class="dn">↓ ${esc(x.kw)}</span>`).join('')}</div>` : '<p>Nothing yet.</p>'}</section>
-    ${j.max_price != null ? `<section class="lsec"><h3>Price</h3><p>Products from <b>${esc(money(j.max_price, 'EUR'))}</b> up go down in your Inbox: you found them too expensive.</p></section>` : ''}
+    <section class="lsec"><h3>Niches</h3><p>A niche is Jev's category of a product. One you approve more often than usual goes up in both Inboxes; one you mark Not my niche goes down. A no for another reason (price, store, quality) says nothing about the niche.</p>
+      ${up.length || dn.length ? `<div class="lchips">${up.map((x) => `<span class="up">↑ ${esc(x.niche)} ${esc(times(x.weight))}</span>`).join('')}${dn.map((x) => `<span class="dn">↓ ${esc(x.niche)} ${esc(times(x.weight))}</span>`).join('')}</div>` : '<p>Nothing yet.</p>'}</section>
+    ${prices ? `<section class="lsec"><h3>Price</h3><p>Products from ${prices} up go down in your Inbox (${esc(times(0.5))}): you found them too expensive. Each currency has its own limit. A product without a price ranks at ${esc(times(j.no_price))} while there is a limit for it.</p></section>` : ''}
     ${j.blocked.length ? `<section class="lsec"><h3>Stores out of your Inbox</h3><p>You marked these as a bad store.</p>${j.blocked.map((x) => `<div class="lblk"><span>${esc(x.store)}</span><button data-unblock="${esc(x.store)}">Bring back</button></div>`).join('')}</section>` : ''}
     <section class="lsec"><h3>Your notes</h3>${j.notes.length ? `<div class="lnotes">${j.notes.map((n) => `<div>${esc(n.note)}<small>${esc(n.title ? (VERB[n.action] || '') + ' · ' + n.title : 'About the board')} · ${esc(ago(n.at))}</small></div>`).join('')}</div>` : '<p>No notes yet.</p>'}</section>
     <section class="lsec"><h3>Tell the board something</h3><form class="lnote" id="lnote"><textarea id="lgen" maxlength="1000" placeholder="An idea, a wish, something that bugs you…" aria-label="Feedback"></textarea><button>Save</button></form></section>
@@ -1626,6 +1664,8 @@ $('learn').addEventListener('submit', async (e) => {
   try { await sendFeedback({ general: t }); toast('Saved', ''); loadLearned(); } catch (err) { toast('Could not save: ' + err.message, ''); }
 });
 
+// The banner: each problem comes as "Dutch / English", several joined by " · ". The English of every one of them.
+const english = (t) => String(t).split(' · ').map((p) => (p.includes(' / ') ? p.slice(p.indexOf(' / ') + 3) : p)).join(' · ');
 function header(j, madeFresh = true) {
   $('nin').textContent = j.counts.inbox || '';
   $('nall').textContent = j.counts.all;
@@ -1636,7 +1676,7 @@ function header(j, madeFresh = true) {
   const al = j.alert;
   $('alert').hidden = !al;
   $('alert').className = 'alert' + (al && al.level === 'yellow' ? ' yellow' : '');
-  $('alert').textContent = al ? al.text.split(' / ').pop() : '';
+  $('alert').textContent = al ? english(al.text) : '';
   const r = j.last_run;
   const box = $('runbox');
   const moving = (x) => !!x && x.status === 'running' && Date.now() - Date.parse(x.updated_at || x.started_at) <= 45 * 60000; // same as "stuck?" below

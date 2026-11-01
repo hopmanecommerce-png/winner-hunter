@@ -5,7 +5,7 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import http from 'node:http';
 import { createRequire } from 'node:module';
-import { handle, makeToken } from '../worker/src/app.mjs';
+import { handle, tokenFor } from '../worker/src/app.mjs';
 import { LIST_SQL } from '../worker/src/tiktok.mjs';
 import { COLS, PRUNE_SQL, UPSERT_SQL, validateRows } from '../lib/tiktok.mjs';
 import { seededEnv, NOW } from './helpers/seed.mjs';
@@ -29,7 +29,7 @@ const SAMPLE = [
   row(6, { title: 'Placeholder Serum', price_min: 9878.7, price_suspect: 1 }),
 ];
 const load = (env, rows) => env.DB.prepare(UPSERT_SQL).bind(JSON.stringify(rows)).run();
-const cookieOf = async (env) => `__Host-wh=${await makeToken(env.BOARD_PIN, NOW)}`;
+const cookieOf = async (env) => `__Host-wh=${await tokenFor(env, NOW)}`;
 const api = (env, cookie, init = {}) => handle(new Request(ORIGIN + '/api/tiktok', { ...init, headers: { ...(cookie ? { cookie } : {}), ...init.headers } }), env, { html: HTML, now: NOW });
 const post = (env, cookie, body, headers = { 'content-type': 'application/json' }) => api(env, cookie, { method: 'POST', headers, body: JSON.stringify(body) });
 
@@ -132,7 +132,7 @@ for (const [name, viewport] of [['phone', { width: 390, height: 844 }], ['deskto
     const server = await serve(env);
     const base = `http://127.0.0.1:${server.address().port}/`;
     const ctx = await browser.newContext({ viewport, isMobile: name === 'phone', hasTouch: name === 'phone' });
-    await ctx.addCookies([{ name: '__Host-wh', value: await makeToken(env.BOARD_PIN, NOW), url: base }]).catch(() => {});
+    await ctx.addCookies([{ name: '__Host-wh', value: await tokenFor(env, NOW), url: base }]).catch(() => {});
     const page = await ctx.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
