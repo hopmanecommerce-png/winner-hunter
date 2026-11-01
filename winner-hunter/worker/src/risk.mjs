@@ -29,15 +29,16 @@ export function riskKit() {
   const NOTS = (s) => new RegExp(s);
   const letter = /[a-z0-9]/;
 
-  // ---- The reasons. block: do not sell it (as is). docs: it sells, with papers or care first. Returns are flags beside it.
+  // ---- The reasons. block: do not sell it (as is). docs: it sells, with papers or care first. info: a note that changes
+  // nothing (not physical is never a block, Connor 2026-11-01). Returns are flags beside it.
   const LEVEL = { weapon: 'block', regulated: 'block', adult: 'block', eat: 'block', pet_med: 'block', cosmetics: 'block', device: 'block', medical: 'block',
-    pseudo: 'block', biocide: 'block', bamboo: 'block', brand: 'block', digital: 'block', tm: 'block',
-    pet_eat: 'docs', claims: 'docs', ce: 'docs', battery: 'docs', radio: 'docs', kids: 'docs', food: 'docs', blade: 'docs', ship: 'docs' };
+    pseudo: 'block', biocide: 'block', bamboo: 'block', brand: 'block', tm: 'block',
+    pet_eat: 'docs', claims: 'docs', ce: 'docs', battery: 'docs', radio: 'docs', kids: 'docs', food: 'docs', blade: 'docs', ship: 'docs', digital: 'info' };
   const RETURNS = ['sizing', 'fragile', 'bulky', 'ioss'];
   const HEALTH = ['eat', 'pet_med', 'cosmetics', 'device', 'medical', 'pseudo'];
   const ORDER = Object.keys(LEVEL).concat(RETURNS);
   const SHORT = { weapon: 'Weapon', regulated: 'Tobacco, CBD or fireworks', adult: 'Adult', eat: 'Food or supplement', pet_med: 'Pet medicine', cosmetics: 'Cosmetic',
-    device: 'Medical device', medical: 'Medical claim', pseudo: 'Health promise', biocide: 'Biocide or pesticide', bamboo: 'Bamboo tableware', brand: 'Brand risk', digital: 'Not physical',
+    device: 'Medical device', medical: 'Medical claim', pseudo: 'Health promise', biocide: 'Biocide or pesticide', bamboo: 'Bamboo tableware', brand: 'Brand risk', digital: 'Digital',
     tm: 'Trademark conflict', pet_eat: 'Pet food', claims: 'Claims', ce: 'CE', battery: 'Battery', radio: 'Radio', kids: 'Kids', food: 'Food contact', blade: 'Blade',
     ship: 'Hard to ship', sizing: 'Sizes', fragile: 'Fragile', bulky: 'Bulky', ioss: 'Over €150' };
   const TEXT = {
@@ -53,7 +54,7 @@ export function riskKit() {
     biocide: 'Biocide or pesticide (insect repellent, disinfectant, hand sanitiser, weed or pest killer): it needs an EU or Dutch authorisation (EU 528/2012, EU 1107/2009)',
     bamboo: 'Bamboo-fibre tableware: bamboo in plastic is not allowed for food contact in the EU',
     brand: 'Famous brand or character: counterfeit risk. EU customs seize it, and Shopify Payments prohibits counterfeit products',
-    digital: 'Not a physical product (gift card, download, course, shipping protection)',
+    digital: 'Not a physical product (gift card, download, course, shipping protection): a note, not a block',
     tm: 'Trademark conflict (your check)',
     pet_eat: 'Pets eat it (pet food or treats): EU feed rules; only from an EU or approved supplier, since animal products from China are stopped at the border',
     claims: 'Health claim in its name, category or ad: sell it without treat, cure or relieve claims, or it counts as a medical device (MDR) and Meta rejects the ad',

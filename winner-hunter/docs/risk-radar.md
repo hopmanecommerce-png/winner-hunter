@@ -9,6 +9,8 @@ Every product on the board gets one badge from the risk radar (`worker/src/risk.
 | **OK** | Nothing found in its name, its link or Jev's answers. | Shown. |
 
 Beside the badge, return risks: **↩ Sizes**, **Fragile**, **Bulky**, **Over €150**. They do not change the badge.
+Nor does the note **Digital** (not a physical product: a gift card, a download, a course, a service): it is never blocked
+or hidden for that.
 
 The radar is a checklist, not legal advice. It reads the product's name (and the words of its product link), Jev's answers
 (world-check.mjs) and its category. It never blocks on the ad's words: those only add a claims caution (Docs). Words miss some
@@ -57,7 +59,6 @@ them all: `SELECT key, value, updated_at FROM state WHERE key >= 'risk:' AND key
 | Adult | Block | *sex toy, vibrator* | Shopify Payments: adult products |
 | Brand risk | Block | Jev "a famous brand or a copy"; *Disney, Pokémon, Stitch, LEGO, Nike, Stanley cup, Labubu, dupe, replica, 1:1*. Not for "case for AirPods" or "compatible with" | Counterfeit: EU customs seize it; Shopify Payments: counterfeit products. A clear trademark check lifts it |
 | Bamboo tableware | Block | *bamboo fibre cups, plates, lunch boxes, bamboevezel, Bambusfaser* | Bamboo in plastic is not allowed for food contact in the EU |
-| Not physical | Block | Jev "not a physical product"; *gift card, e-book, shipping protection, cadeaubon, Geschenkgutschein* | The board's own rule |
 | Pet food | Docs | Jev "pets take it"; *dog food, cat treats, hondenvoer, Hundefutter* | EU feed rules; animal products from China are stopped at the border. Docs, not Block: Connor keeps pet food on the board (2026-10-31) |
 | CE | Docs | Jev "battery or electric"; *electric, USB, LED, lamp, heated, massager, projector, elektrisch, verwarmd, Akku, beheizt* | CE declaration and test reports (EMC, RoHS; LVD with mains power); WEEE registration (NL: Stichting OPEN) |
 | Battery | Docs | *rechargeable, cordless, lithium, mAh, power bank, oplaadbaar, accu, wiederaufladbar, kabellos* | UN38.3 test summary, MSDS and the capacity in Wh; battery labels and registration (EU 2023/1542); a shipping line that takes batteries |
@@ -67,6 +68,7 @@ them all: `SELECT key, value, updated_at FROM state WHERE key >= 'risk:' AND key
 | Claims | Docs | Jev "a medical claim" (it may be the ad's); *posture corrector, relieves, clinically proven*, also in the ad's words | Sell it without treat, cure or relieve claims (MDR, Meta) |
 | Blade | Docs | *knife, chef knife, axe, sword, koksmes, Küchenmesser*. Not for "knife sharpener" or "knife block" | Shipping lines, Meta's weapon ads, 18+ checks |
 | Hard to ship | Docs | Jev "hard to ship"; *spray, liquid, glue, paint, resin, butane, spuitbus, lijm, Kleber* | MSDS and a line that takes it |
+| Digital | note | Jev "not a physical product"; *gift card, e-book, online course, digital download, shipping protection, cadeaubon, Geschenkgutschein*; Other › Services and digital | None: never a block (Connor, 2026-11-01). The badge stays OK unless another reason applies |
 | ↩ Sizes, Fragile, Bulky | flag | Jev's answers; *dress, shoes, bra (wireless too), ring, jurk, overhemd, winterjas, Sommerkleid, Winterjacke, Steppweste, Laufschuhe; glass, ceramic, furniture, 7kg* | Returns and damage |
 | ↩ Over €150 | flag | The price, about in euro, before 21% VAT | No IOSS above €150: the buyer pays import VAT and duty at the door |
 
@@ -100,8 +102,10 @@ The browser runs the same code: `/risk.js` is `riskKit` as a script (`window.RIS
   test checks them. Its `notApproved` products (outside the EU, TikTok) test those tabs' filters.
 - Of the 9, the board on main already kept 3 out of the Inbox (P17, P28, P29: Jev says people or animals take them, #28);
   the radar takes out all 9, in Browse too.
-- The same test file: every title the hunt's EU screen (`lib/world.mjs`) takes off is Block here, its tools and look-alikes
-  are not; the Worker's filter and the card always agree; the ad's words never block; `/risk.js` answers as the module; the API.
+- The same test file: every title the hunt's EU screen (`lib/world.mjs`) takes off is Block here (but what is not physical:
+  a note), its tools and look-alikes are not; Jev's "not physical" stays on every tab with `?risk=hide`; the Worker's filter
+  and the card always agree; the ad's words never block; `/risk.js` answers as the module; the API.
 - `test/risk.e2e.test.mjs`: the board in Chromium at iPhone size.
 
-Two differences with the hunt's EU screen, on purpose: IPL hair removal is Block (MDR Annex XVI), pet food is Docs.
+Three differences with the hunt's EU screen, on purpose: IPL hair removal is Block (MDR Annex XVI), pet food is Docs, and what
+is not physical is a Digital note, never Block (the hunts still leave gift cards and shipping protection out: not a product).
