@@ -43,8 +43,8 @@ export function searchesOf(row, markets = MARKETS) {
   return out;
 }
 
-// exact: the words as one phrase. A shop's domain needs it: "aussie-flair.com" in any order finds every ad with "flair"
-// (tested 2026-11-01), as a phrase only the shop's own ads.
+// exact: the words as one phrase. For a shop's domain: "aussie-flair.com" as words finds every ad with "flair" (tested
+// 2026-11-01), as a phrase the ads that show the domain. As words it also matches an ad's link, so lasso.mjs tries both.
 export const libraryUrl = ({ cc, q, pageId, exact = false }) => {
   const p = new URLSearchParams({ active_status: 'active', ad_type: 'all', country: cc, media_type: 'all' });
   if (pageId) {

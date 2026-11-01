@@ -149,8 +149,9 @@ those stores are a place to find products. The research, the fingerprints and th
   table `lasso_stores` (the stores saved before are checked again every run; a store that left gets confidence ''). This
   repository is public: any signed-in GitHub user can download an artifact, so the run's summary only has counts.
 - **Into the Inbox:** run it with **ads** = `on` (or a repository variable `LASSO_ADS` = `on`): for every store selling
-  outside the EU it searches the public Ad Library for the store's domain (as one phrase) in its market and saves the
-  store's own active ads in `world_ads` with the keyword `lasso: <store>`. The next World Hunter run turns them into
+  outside the EU it searches the public Ad Library for the store's domain in its market (as words, then as one exact
+  phrase when the words found none of its ads) and saves the store's own active ads in `world_ads` with the keyword
+  `lasso: <store>`. The next World Hunter run turns them into
   products in the 🌍 Inbox under its usual rules (Shopify, an ad 7+ days old, no supplements, …). EU and UK stores have
   no market there: start Winner Hunter by hand with their domains as keywords.
 - **Optional secret `URLSCAN_API_KEY`:** a free urlscan.io account's key (1,000 searches a day). Without it urlscan only

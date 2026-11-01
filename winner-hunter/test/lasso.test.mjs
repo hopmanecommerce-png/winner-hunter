@@ -371,13 +371,17 @@ test('a run with LASSO_ADS: the stores\' own ads outside the EU go into world_ad
     async search(what) {
       searched.push(what);
       if (what.q === 'us-lamps.test') return { ads: [rawAd('101', 'https://us-lamps.test/products/lamp?utm=1'), rawAd('102', 'https://other-shop.test/products/x')], count: 2, blocked: false };
+      // As words the domain only finds another shop's ad; as one phrase, the store's own.
+      if (!what.exact) return { ads: [rawAd('299', 'https://gummy-bears.test/')], count: 900, blocked: false };
       return { ads: [rawAd('201', 'https://nz-gummy.test/pages/advertorial')], count: 1, blocked: false };
     },
   };
   const t = await discover({ doFetch: world({ stores, scans }).doFetch, db, lib, now: () => NOW, sleep: noSleep, log: () => {} });
   assert.strictEqual(t.health, 'ok', t.alert);
-  assert.deepStrictEqual(searched, [{ cc: 'NZ', q: 'nz-gummy.test', exact: true }, { cc: 'US', q: 'us-lamps.test', exact: true }], 'no search for the EU store; the domain as one phrase');
-  assert.strictEqual(t.ads, 2, 'an ad for another shop is left out');
+  assert.deepStrictEqual(searched, [{ cc: 'NZ', q: 'nz-gummy.test' }, { cc: 'NZ', q: 'nz-gummy.test', exact: true }, { cc: 'US', q: 'us-lamps.test' }],
+    'no search for the EU store; the exact phrase only when the words found none of the store\'s own ads');
+  assert.strictEqual(t.ad_searches, 3);
+  assert.strictEqual(t.ads, 2, 'ads for other shops are left out');
   const ads = rest.db.prepare('SELECT ad_id, cc, store, product_key, keyword FROM world_ads ORDER BY ad_id').all().map((r) => ({ ...r }));
   assert.deepStrictEqual(ads, [
     { ad_id: '101', cc: 'US', store: 'us-lamps.test', product_key: 'us-lamps.test/products/lamp', keyword: 'lasso: us-lamps.test' },

@@ -121,21 +121,26 @@ export async function discover({ doFetch = globalThis.fetch, db = null, lib = nu
     ads: for (const r of t.stores.filter((s) => s.live && s.confidence !== 'low')) {
       for (const cc of marketsOf(r)) {
         if (t.ad_searches >= maxAdSearches) break ads;
-        const got = await lib.search({ cc, q: r.store, exact: true });
+        // Only the store's own ads: a search for its domain also finds ads that just share a word with it.
+        const own = (got) => got.ads.map((raw) => toRow(raw, cc, `lasso: ${r.store}`)).filter((row) => row && row.store === r.store);
+        // The domain as words first (it also matches the ad's link); when that finds none of its own ads among other
+        // shops' (aussie-flair.com → "Flair Dancewear"), the domain as one exact phrase.
+        let got = await lib.search({ cc, q: r.store });
         t.ad_searches++;
+        let mine = got.blocked ? [] : own(got);
+        if (!got.blocked && !mine.length && t.ad_searches < maxAdSearches) {
+          await sleep(pauseMs);
+          got = await lib.search({ cc, q: r.store, exact: true });
+          t.ad_searches++;
+          mine = got.blocked ? [] : own(got);
+        }
         if (got.blocked) {
           if (++inRow >= BLOCKS_THEN_STOP) {
             log(`Ad Library refused ${inRow} searches in a row: the other stores next run`);
             break ads;
           }
-        } else {
-          inRow = 0;
-          // Only the store's own ads: a search for its domain can also find an ad that just names it.
-          for (const raw of got.ads) {
-            const row = toRow(raw, cc, `lasso: ${r.store}`);
-            if (row && row.store === r.store) ads.push(row);
-          }
-        }
+        } else inRow = 0;
+        ads.push(...mine);
         await sleep(pauseMs);
       }
     }
