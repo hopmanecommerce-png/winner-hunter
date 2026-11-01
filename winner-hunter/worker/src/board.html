@@ -3771,6 +3771,7 @@ function crFrom(r) {
   if (r.hit) bits.push(`name: “${r.hit}”`);
   if (r.adhit) bits.push(`ad: “${r.adhit}”`);
   if (r.p != null) bits.push(`Jev ${r.p}%`);
+  else if ((r.from || []).includes('jev')) bits.push('Jev: yes'); // the TikTok tab and a launch card keep Jev's yes, not its percentage
   if (r.cat) bits.push(`category ${r.cat}`);
   if (r.eur != null) bits.push(`about €${r.eur}`);
   if ((r.from || []).includes('you')) bits.push('your check');

@@ -8,7 +8,7 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import http from 'node:http';
 import { createRequire } from 'node:module';
-import { handle, makeToken } from '../worker/src/app.mjs';
+import { handle, tokenFor } from '../worker/src/app.mjs';
 import { seededEnv, NOW } from './helpers/seed.mjs';
 import { loadApproved } from './helpers/risk-seed.mjs';
 
@@ -48,7 +48,9 @@ test('🛡 risk radar on an iPhone: Block hidden by default, the reasons and you
   const browser = await launch();
   if (!browser) return t.skip('Chromium not available');
   const env = await seededEnv();
-  await loadApproved(env, NOW, { approve: 'board' }); // the 31 EU and outside-EU products approved (✓); the 5 TikTok ones not yet
+  // P1-P36 of the review: the 34 from the EU and outside the EU approved (✓, 33 cards: P16 and P35 are one jacket), the 2 from
+  // TikTok not yet; and the hunts' products never approved (outside the EU, and Lilo & Stitch on TikTok)
+  await loadApproved(env, NOW, { approve: 'board', others: true });
   const server = await serve(env);
   const base = `http://127.0.0.1:${server.address().port}`;
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
@@ -58,7 +60,7 @@ test('🛡 risk radar on an iPhone: Block hidden by default, the reasons and you
   page.on('console', (m) => { if (m.type() === 'error' && !/ERR_|Failed to load/.test(m.text())) errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('dialog', (d) => (errors.push('dialog: ' + d.message()), d.dismiss()));
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, NOW)}`;
+  const cookie = `__Host-wh=${await tokenFor(env, NOW)}`;
   await page.clock.setFixedTime(new Date(NOW));
   await page.setExtraHTTPHeaders({ cookie });
   await page.route(/^https:\/\//, (r) => (/\.(jpe?g|png)(\?|$)/.test(r.request().url()) ? r.fulfill({ contentType: 'image/png', body: PIXEL }) : r.fulfill({ status: 204, body: '' })));
@@ -148,10 +150,11 @@ test('🛡 risk radar on an iPhone: Block hidden by default, the reasons and you
 
     // ✓ Approved: every approved product, blocked ones too, scored
     await page.click('[data-view=made]');
-    await page.waitForFunction(() => document.querySelectorAll('#grid .card').length === 31);
-    assert.match(await page.innerText('#crbar'), /^Risk radar on the 31 you approved: 8 Block · 11 Docs · 12 OK$/);
-    assert.strictEqual(await page.locator('#grid .card .crl.block').count(), 8);
-    const tens = page.locator('#grid .card', { hasText: 'TENS Pain Relief' });
+    await page.waitForFunction(() => document.querySelectorAll('#grid .card').length === 33);
+    assert.match(await page.innerText('#crbar'), /^Risk radar on the 33 you approved: 9 Block · 8 Docs · 16 OK$/);
+    assert.strictEqual(await page.locator('#grid .card .crl.block').count(), 9, "the review's 9 restricted approvals");
+    assert.strictEqual(await page.locator('#grid .card .crl .crret', { hasText: 'Sizes' }).count(), 11, 'its 12 with sizes (P16 and P35: one card)');
+    const tens = page.locator('#grid .card', { hasText: 'TENS Pijnverlichting' });
     assert.match(await tens.locator('.crb').innerText(), /^Block\s+Medical claim · CE$/, 'the claims caution goes with the medical block');
     await noSideScroll('✓ Approved');
     await page.evaluate(() => scrollTo(0, 0));
@@ -160,12 +163,13 @@ test('🛡 risk radar on an iPhone: Block hidden by default, the reasons and you
     // 🚀 A launch card for a blocked product says so
     await page.click('#lnseg');
     await page.waitForSelector('#lnbox .lnpick [data-start]');
-    await page.locator('#lnbox .lnpick .lnrow', { hasText: 'TENS Pain Relief' }).locator('[data-start]').click();
+    await page.locator('#lnbox .lnpick .lnrow', { hasText: 'TENS Pijnverlichting' }).locator('[data-start]').click();
     await page.waitForSelector('#lnbox .lncard .crl');
     assert.match(await page.locator('#lnbox .lncard .crb').innerText(), /^Block\s+Medical claim/);
     await page.click('#lnbox .lncard .crb');
     await page.locator('#lnbox .lncard .crp').waitFor();
-    assert.match(await page.locator('#lnbox .lncard .crr').innerText(), /Medical promise in its name/);
+    assert.match(await page.locator('#lnbox .lncard .crr').innerText(), /Medical promise in its name[\s\S]*name: “pijnverlichting”[\s\S]*Electric or electronic[\s\S]*Jev: yes/);
+    assert.doesNotMatch(await page.locator('#lnbox .lncard .crr').innerText(), /Jev \d+%/, "a launch card keeps Jev's yes, not its percentage");
     await noSideScroll('a launch card with its radar open');
     await shot('5-launch');
 
@@ -173,7 +177,7 @@ test('🛡 risk radar on an iPhone: Block hidden by default, the reasons and you
     await page.click('[data-scope="tiktok"]');
     await page.waitForSelector('#ttgrid .card');
     await page.click('[data-tf="clean"]'); // all of Jev's blockers, not only "no blocker"
-    await page.waitForFunction(() => /^4 of 5/.test(document.getElementById('ttcount').textContent));
+    await page.waitForFunction(() => /^2 of 3/.test(document.getElementById('ttcount').textContent));
     assert.strictEqual(await page.getAttribute('[data-tf="riskAll"]', 'aria-pressed'), 'false', 'hidden, as you left it on the board');
     await ctx.close();
 
@@ -187,11 +191,11 @@ test('🛡 risk radar on an iPhone: Block hidden by default, the reasons and you
     await p2.goto(base + '/');
     await p2.waitForSelector('#ttgrid .card .crl');
     await p2.click('[data-tf="clean"]');
-    await p2.waitForFunction(() => /^4 of 5/.test(document.getElementById('ttcount').textContent) && document.getElementById('crttn').textContent === '1');
+    await p2.waitForFunction(() => /^2 of 3/.test(document.getElementById('ttcount').textContent) && document.getElementById('crttn').textContent === '1');
     assert.strictEqual(await p2.locator('#ttgrid .card', { hasText: 'Lilo' }).count(), 0);
     assert.strictEqual(await p2.getAttribute('[data-tf="riskAll"]', 'aria-pressed'), 'false');
     await p2.click('[data-tf="riskAll"]');
-    await p2.waitForFunction(() => /^5 of 5/.test(document.getElementById('ttcount').textContent));
+    await p2.waitForFunction(() => /^3 of 3/.test(document.getElementById('ttcount').textContent));
     const lilo = p2.locator('#ttgrid .card', { hasText: 'Lilo' });
     assert.match(await lilo.locator('.crb').innerText(), /^Block\s+Brand risk · Kids$/);
     await lilo.locator('.crb').click();
@@ -199,7 +203,7 @@ test('🛡 risk radar on an iPhone: Block hidden by default, the reasons and you
     assert.match(await lilo.locator('.crp').innerText(), /Shopify Payments prohibits it: Counterfeit products/);
     await lilo.locator('[data-crset=tm][data-crval=conflict]').click();
     await p2.waitForFunction(() => document.getElementById('toastMsg').textContent === 'Saved');
-    assert.deepStrictEqual(check('tiktok:1729000000000000007'), { tm: 'conflict', title: 'Lilo & Stitch Plush Toy 30cm' });
+    assert.deepStrictEqual(check('tiktok:1729000000000000039'), { tm: 'conflict', title: 'Lilo & Stitch Plush Toy 30cm' });
     const overflow = await p2.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     assert.ok(overflow <= 0, `TikTok: no sideways scroll (${overflow}px)`);
     if (SHOTS) await p2.screenshot({ path: `${SHOTS}/risk-6-tiktok.png` });

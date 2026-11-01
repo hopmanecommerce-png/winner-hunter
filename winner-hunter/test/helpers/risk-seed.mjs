@@ -1,10 +1,13 @@
-// The 36 approved products of test/fixtures/approved-36.json in a D1 from seededEnv(), stored as the hunts store them:
-// EU products as winners that pass the board's rules (Jev's answers under 'eu|<page>|<title>'), the ones outside the EU in
-// world_products (Jev's answers under their product key), the TikTok ones in tiktok_products.
+// The 36 approved products of test/fixtures/approved-36.json (P1-P36 of docs/learnings/approved-products-review.md) in a D1
+// from seededEnv(), stored as the hunts store them: EU products as winners that pass the board's rules (Jev's answers under
+// 'eu|<page>|<title>'), the ones outside the EU in world_products (Jev's answers under their product key), the TikTok ones in
+// tiktok_products. NOT_APPROVED: the fixture's products the hunts found outside the EU and on TikTok, never approved.
 import fs from 'node:fs';
 import { UPSERT_SQL as TIKTOK_UPSERT } from '../../lib/tiktok.mjs';
 
-export const APPROVED = JSON.parse(fs.readFileSync(new URL('../fixtures/approved-36.json', import.meta.url), 'utf8')).products;
+const FIXTURE = JSON.parse(fs.readFileSync(new URL('../fixtures/approved-36.json', import.meta.url), 'utf8'));
+export const APPROVED = FIXTURE.products;
+export const NOT_APPROVED = FIXTURE.notApproved;
 const iso = (ms) => new Date(ms).toISOString();
 const keyOfUrl = (u) => u.replace(/^https:\/\//, '');
 
@@ -12,14 +15,15 @@ const keyOfUrl = (u) => u.replace(/^https:\/\//, '');
 export const cardOf = (p) => (p.source === 'tiktok'
   ? { id: p.id, title: p.title, url: 'https://www.tiktok.com/shop/pdp/' + p.id, blockers: p.blockers, cat: p.cat, p: p.price, shop: 'Shop ' + p.n }
   : { id: idOf(p), title: p.title, product: p.product, store: p.store, copy: p.copy || '', jev: p.jev ? { ...p.jev } : null, price: p.price, cur: p.cur, world: p.source === 'world' ? {} : null });
-/** The ad id a fixture product gets on the board. */
+/** The ad id a fixture product gets on the board: P10 from the EU tab is 8010, P2 from outside the EU 7002. */
 export const idOf = (p) => (p.source === 'tiktok' ? p.id : String((p.source === 'eu' ? 8000 : 7000) + p.n));
 
 /**
- * Loads them. approve: which ones are approved (✓, or Approved on the TikTok tab): 'all', 'board' (EU and outside the EU,
- * not TikTok) or 'none'. Call it before the first request: the board keeps what it read.
+ * Loads them. approve: which of the 36 are approved (✓, or Approved on the TikTok tab): 'all', 'board' (EU and outside the
+ * EU, not TikTok) or 'none'. others: also the products never approved. Call it before the first request: the board keeps
+ * what it read.
  */
-export async function loadApproved(env, now, { approve = 'all' } = {}) {
+export async function loadApproved(env, now, { approve = 'all', others = false } = {}) {
   const db = env.db;
   const putEu = db.prepare(`INSERT INTO winners (ad_id, product_title, price, currency, advertiser, advertiser_page_id, active_ads, ad_age_days, ad_start_date, reach_eu,
     scaled_count, keyword, store_url, product_url, ad_library_url, image_url, first_seen, last_seen, data) VALUES (?, ?, ?, ?, ?, ?, 120, 20, '2026-09-27', 400000, 4, 'risk', ?, ?, ?, ?, ?, ?, ?)`);
@@ -30,11 +34,12 @@ export async function loadApproved(env, now, { approve = 'all' } = {}) {
   const jevWorld = db.prepare(`INSERT INTO world_checks (product_key, model, input, people, animals, gymwear, physical, category, checked_at, version, main, sub, answers)
     VALUES (?, 'jev-1.14.0', 'photo', ?, ?, ?, ?, ?, 'x', 2, ?, ?, ?)`);
   const tiktok = [];
-  for (const p of APPROVED) {
+  for (const p of others ? APPROVED.concat(NOT_APPROVED) : APPROVED) {
     const id = idOf(p);
     const jevArgs = p.jev ? [p.jev.p.people, p.jev.p.animals, p.jev.p.gymwear, p.jev.p.physical, p.jev.main, p.jev.main, p.jev.sub, JSON.stringify({ p: p.jev.p, choices: {} })] : null;
     if (p.source === 'eu') {
-      putEu.run(id, p.title, p.price, p.cur, 'Advertiser ' + p.n, String(800 + p.n), p.store, p.product, 'https://www.facebook.com/ads/library/?id=' + id,
+      const page = p.same || p.n; // P35 is P16's jacket: the same shop, its ad in German
+      putEu.run(id, p.title, p.price, p.cur, 'Advertiser ' + page, String(800 + page), p.store, p.product, 'https://www.facebook.com/ads/library/?id=' + id,
         `https://cdn.shopify.com/s/files/1/r${p.n}.jpg`, iso(now - 3 * 864e5), iso(now - 3600e3), JSON.stringify({ ad_copy: p.copy || '', top_countries: 'NL 60%, DE 40%' }));
       if (jevArgs) jevEu.run(...jevArgs, id);
     } else if (p.source === 'world') {

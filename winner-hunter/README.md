@@ -384,3 +384,5 @@ Dutch and German, the product link and Jev's answers; never the ad's words for a
   the documents to ask the supplier for (**Copy request**, English and Chinese), GPSR and customs, and your checks:
   trademark **Clear / Conflict**, **I have these documents**, **Your call** (OK, Docs or Block, wins over the radar's). They
   are kept in D1 (`state` rows `risk:…`, no migration).
+- Tested on the 36 approvals of [the review](../docs/learnings/approved-products-review.md) (P1-P36): exactly its 9 restricted
+  ones are Block; its 12 that need a size get ↩ Sizes, no block.

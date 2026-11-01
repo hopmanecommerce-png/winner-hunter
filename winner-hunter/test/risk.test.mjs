@@ -1,17 +1,18 @@
 // The compliance and risk radar (worker/src/risk.mjs): Block, Docs or OK on the 36 approved products of
-// test/fixtures/approved-36.json (the 9 restricted ones are blocked), the word lists in English, Dutch and German against
+// test/fixtures/approved-36.json (P1-P36 of docs/learnings/approved-products-review.md: its 9 restricted ones are blocked, its
+// 12 that need a size are flagged), the word lists in English, Dutch and German against
 // the EU screen of the hunt, Jev's answers, your checks, /risk.js (the same code in the board), /api/risk and ?risk=hide on
 // /api/ads and /export.csv, on an in-memory D1 (node:sqlite) with every migration applied.
 import test from 'node:test';
 import assert from 'node:assert';
 import vm from 'node:vm';
-import { handle, makeToken, toAd, products } from '../worker/src/app.mjs';
+import { handle, tokenFor, toAd, products } from '../worker/src/app.mjs';
 import { riskKit, RISK_JS, verdict, auto, blocks, blockedBy, finish, fromAd, fromTikTok, fromFacts, keyOf, cleanCheck, supplierRequest, rowInput, rowBlocked,
   CHECKS_SQL, TEXT, SHORT, LEVEL, BLOCKERS, TRAITS as RISK_TRAITS } from '../worker/src/risk.mjs';
 import { TRAITS } from '../worker/src/jev-questions.mjs';
 import { screenEU, classify } from '../lib/world.mjs';
 import { seededEnv, NOW } from './helpers/seed.mjs';
-import { APPROVED, cardOf, idOf, loadApproved } from './helpers/risk-seed.mjs';
+import { APPROVED, NOT_APPROVED, cardOf, idOf, loadApproved } from './helpers/risk-seed.mjs';
 
 const ORIGIN = 'https://winner-hunter.example.workers.dev';
 const xOf = (p) => (p.source === 'tiktok' ? fromTikTok(cardOf(p)) : fromAd(cardOf(p)));
@@ -19,7 +20,7 @@ const name = (title, extra = {}) => ({ source: 'eu', id: '1', title, product: ''
 const reasonKeys = (v) => v.reasons.filter((r) => r.level === 'block' || r.level === 'docs').map((r) => r.k);
 
 async function session(env) {
-  const cookie = `__Host-wh=${await makeToken(env.BOARD_PIN, NOW)}`;
+  const cookie = `__Host-wh=${await tokenFor(env, NOW)}`;
   const call = (path, init = {}) => handle(new Request(ORIGIN + path, { ...init, headers: { cookie, ...init.headers } }), env, { now: NOW });
   return {
     get: async (path) => (await call(path)).json(),
@@ -36,28 +37,42 @@ const risk = async (s, body, headers) => {
 // The 36 approved products
 // ---------------------------------------------------------------------------
 
-test('the 36 approved products: exactly the 9 restricted ones are Block, each for its reason; the other 27 sell (Docs or OK)', () => {
-  assert.strictEqual(APPROVED.length, 36);
+test('the 36 approved products (P1-P36 of the review): exactly its 9 restricted ones are Block, each for its reason; the other 27 sell; its 12 with sizes are flagged, not blocked', () => {
+  assert.deepStrictEqual(APPROVED.map((p) => p.n), Array.from({ length: 36 }, (_, i) => i + 1), 'P1-P36, the review\'s numbers');
   const restricted = APPROVED.filter((p) => p.restricted);
-  assert.strictEqual(restricted.length, 9);
+  assert.deepStrictEqual(restricted.map((p) => p.n), [10, 13, 17, 20, 24, 26, 28, 29, 33], "the review's restricted approvals");
+  assert.ok(restricted.every((p) => p.source === 'eu'), 'all of them from the EU tab');
   const blocked = [];
-  for (const p of APPROVED) {
+  for (const p of APPROVED.concat(NOT_APPROVED)) {
     const v = verdict(xOf(p));
-    assert.strictEqual(v.level, p.expect, `#${p.n} ${p.title}: ${v.level} (${reasonKeys(v).join(', ')})`);
-    for (const k of p.why) assert.ok(reasonKeys(v).includes(k), `#${p.n} ${p.title}: ${k} among ${reasonKeys(v).join(', ')}`);
-    if (p.pay) assert.strictEqual(v.pay, p.pay, `#${p.n}: Shopify Payments`);
+    assert.strictEqual(v.level, p.expect, `P${p.n} ${p.title}: ${v.level} (${reasonKeys(v).join(', ')})`);
+    for (const k of p.why) assert.ok(reasonKeys(v).includes(k), `P${p.n} ${p.title}: ${k} among ${reasonKeys(v).join(', ')}`);
+    assert.deepStrictEqual(v.returns.map((r) => r.k), p.returns, `P${p.n} ${p.title}: its return flags`);
+    if (p.pay) assert.strictEqual(v.pay, p.pay, `P${p.n}: Shopify Payments`);
     if (v.level === 'block') blocked.push(p.n);
-    else assert.ok(!v.reasons.some((r) => r.level === 'block'), `#${p.n} ${p.title} sells: no block reason`);
+    else assert.ok(!v.reasons.some((r) => r.level === 'block'), `P${p.n} ${p.title} sells: no block reason`);
   }
-  assert.deepStrictEqual(blocked, restricted.map((p) => p.n), 'blocked: the restricted ones and no other');
+  assert.deepStrictEqual(blocked.filter((n) => n <= 36), restricted.map((p) => p.n), 'blocked: the restricted ones and no other');
   const level = (k) => APPROVED.filter((p) => verdict(xOf(p)).level === k).length;
-  assert.deepStrictEqual([level('block'), level('docs'), level('ok')], [9, 13, 14]);
-  // each restricted one for another reason: supplement, cosmetic (twice), medical device and claim, pet medicine, weapon, brand, health promise
-  assert.deepStrictEqual(restricted.map((p) => p.why[0]), ['eat', 'cosmetics', 'cosmetics', 'medical', 'pet_med', 'weapon', 'brand', 'device', 'pseudo']);
-  // the look-alikes sell: a sharpener, brushes, an ice roller, a dog's chew toy, a shoe deodorizer, a case for AirPods
-  for (const t of ['Knife Sharpener 3-Stage', 'Makeup Brush Set 14 pcs', 'Facial Ice Roller', 'Indestructible Dog Chew Toy', 'Bamboo Charcoal Shoe Deodorizer', 'Silicone Case for AirPods Pro 2']) {
-    assert.strictEqual(verdict(xOf(APPROVED.find((p) => p.title === t))).level, 'ok', t);
-  }
+  assert.deepStrictEqual([level('block'), level('docs'), level('ok')], [9, 9, 18]);
+  // Each for its category in the review: perfume, essential oils, pet health, a skin cosmetic, a health-claim device, a skin
+  // cosmetic, a supplement, food (coffee), hair care
+  assert.deepStrictEqual(restricted.map((p) => p.why[0]), ['cosmetics', 'cosmetics', 'pet_med', 'cosmetics', 'medical', 'cosmetics', 'eat', 'eat', 'cosmetics']);
+  // The 12 that need a size: a return flag beside an OK, never a block (the review: the two lists do not overlap)
+  assert.deepStrictEqual(APPROVED.filter((p) => verdict(xOf(p)).returns.some((r) => r.k === 'sizing')).map((p) => p.n), [3, 7, 8, 9, 12, 14, 16, 19, 21, 27, 30, 35]);
+  assert.ok(APPROVED.filter((p) => p.returns.includes('sizing')).every((p) => verdict(xOf(p)).level === 'ok'));
+  // P16 and P35, the same jacket (a Dutch and a German ad): one product page, so one key and one check for both
+  const p = (n) => APPROVED.find((x) => x.n === n);
+  assert.strictEqual(keyOf(xOf(p(16))), 'page:valkental.myshopify.com/products/outdoor-jacket-men');
+  assert.strictEqual(keyOf(xOf(p(35))), keyOf(xOf(p(16))));
+  // Where Jev's answers alone would not block, the words do: P17 (Jev "animals" is pet food: Docs), P13 and P33 (skin under a yes)
+  const jevOnly = (n) => verdict(name('Product', { p: p(n).jev.p, main: p(n).jev.main, sub: p(n).jev.sub })).level;
+  assert.deepStrictEqual([17, 13, 33].map(jevOnly), ['docs', 'docs', 'ok']);
+  assert.deepStrictEqual([17, 28, 29].map((n) => verdict(xOf(p(n))).reasons.filter((r) => (r.from || []).includes('jev')).map((r) => r.k)), [['pet_eat'], ['eat'], ['eat']],
+    'Jev flagged P17 (animals), P28 and P29 (people), as the review says');
+  // The look-alikes sell: a case for AirPods, a wireless bra (no radio), a cat brush whose ad is about something else
+  for (const n of [5, 27, 23]) assert.strictEqual(verdict(xOf(p(n))).level, 'ok', p(n).title);
+  assert.deepStrictEqual(reasonKeys(verdict(xOf(p(23)))), [], "P23's ad copy is another product's: the radar reads the product it was matched to");
 });
 
 test('/risk.js is the kit on its own: in a bare context it gives the module\'s verdicts on all 36, with and without your checks', () => {
@@ -67,7 +82,7 @@ test('/risk.js is the kit on its own: in a bare context it gives the module\'s v
   assert.match(RISK_JS, /^'use strict';\nwindow\.RISK = \(function riskKit\(\) \{/);
   const same = (a, b, what) => assert.strictEqual(JSON.stringify(a), JSON.stringify(b), what);
   const checks = [null, { tm: 'clear' }, { tm: 'conflict' }, { docs: true }, { level: 'ok' }, { level: 'block', note: 'no' }];
-  for (const p of APPROVED) {
+  for (const p of APPROVED.concat(NOT_APPROVED)) {
     const card = cardOf(p);
     const x = p.source === 'tiktok' ? K.fromTikTok(card) : K.fromAd(card);
     same(x, xOf(p), `#${p.n} input`);
@@ -75,14 +90,15 @@ test('/risk.js is the kit on its own: in a bare context it gives the module\'s v
     same(K.blocks(x), blocks(xOf(p)), `#${p.n} blocks`);
     for (const c of checks) same(K.verdict(x, c), verdict(xOf(p), c), `#${p.n} with ${JSON.stringify(c)}`);
   }
-  same(K.supplierRequest(K.verdict(K.fromAd(cardOf(APPROVED[10]))), 'Blender'), supplierRequest(verdict(xOf(APPROVED[10])), 'Blender'));
+  const blender = APPROVED.find((p) => p.title.startsWith('Portable Blender'));
+  same(K.supplierRequest(K.verdict(K.fromAd(cardOf(blender))), 'Blender'), supplierRequest(verdict(xOf(blender)), 'Blender'));
   assert.ok(!/^\s*import\s|\bimport\(|\brequire\(/m.test(RISK_JS), 'nothing from outside');
   assert.ok(!/\(\?<[=!]/.test(RISK_JS), 'no lookbehind: older phones read the rules too');
 });
 
 test('the Worker\'s filter answers as the card: blocks() and blockedBy() equal the full verdict, with and without checks; the ad\'s words never block', () => {
   const checks = [null, { tm: 'clear' }, { tm: 'conflict' }, { docs: true }, { level: 'ok' }, { level: 'docs' }, { level: 'block' }, { tm: 'clear', level: 'docs' }];
-  const xs = APPROVED.map(xOf).concat(['Disney Stitch Hoodie', 'Stanley Cup Dupe 40oz', 'Vitamin C Serum', 'LED Face Mask', 'Pepper Spray', 'Flea Comb'].map((t) => name(t)));
+  const xs = APPROVED.concat(NOT_APPROVED).map(xOf).concat(['Disney Stitch Hoodie', 'Stanley Cup Dupe 40oz', 'Vitamin C Serum', 'LED Face Mask', 'Pepper Spray', 'Flea Comb'].map((t) => name(t)));
   for (const x of xs) {
     for (const c of checks) assert.strictEqual(blockedBy(blocks(x), c), verdict(x, c).level === 'block', `${x.title} with ${JSON.stringify(c)}`);
     const words = [x.copy, 'Cures back pain, heals eczema, clinically proven. Pfefferspray, CBD, Disney, vape, supplement.', ''];
@@ -115,6 +131,11 @@ test('restricted words in English, Dutch and German block by the name alone; com
     ['Mosquito Repellent Spray', 'biocide'], ['Muggenspray DEET', 'biocide'], ['Hand Sanitizer 500ml', 'biocide'], ['Weed Killer Spray', 'biocide'],
     ['Disney Princess Dress', 'brand'], ['Pokémon Pikachu Lamp', 'brand'], ['Stanley Quencher Dupe', 'brand'], ['Labubu Keychain', 'brand'], ['1:1 Replica Watch', 'brand'],
     ['Bamboo Fiber Kids Plate Set', 'bamboo'], ['Bambusfaser Becher', 'bamboo'], ['Gift Card €50', 'digital'], ['Cadeaubon 25 euro', 'digital'], ['Sex Toy for Couples', 'adult'],
+    // brought in by the 36 approvals: essential oils, hair growth, pet supplements and magnesium in Dutch and German
+    ['Ätherische Öle Set 6 x 10 ml', 'cosmetics'], ['Ätherisches Öl Lavendel', 'cosmetics'], ['Etherische oliën set', 'cosmetics'], ['Essentiële olie eucalyptus', 'cosmetics'],
+    ['Rozemarijn Haargroei Olie', 'cosmetics'], ['Haarwuchsmittel für Männer', 'cosmetics'], ['Oud Parfum voor Heren', 'cosmetics'],
+    ['Gelenktabletten für Hunde', 'pet_med'], ['Vitaminen voor honden', 'pet_med'], ['Nahrungsergänzung für Katzen', 'pet_med'], ['Hip and Joint Supplement for Dogs', 'pet_med'],
+    ['Magnesium Glycinaat 120 stuks', 'eat'], ['Magnesiumcitrat Kapseln', 'eat'], ['TENS Pijnverlichting Apparaat', 'medical'],
   ];
   for (const [t, k, want = true] of cases) {
     const v = verdict(name(t));
@@ -125,10 +146,29 @@ test('restricted words in English, Dutch and German block by the name alone; com
   }
   // Docs in three languages
   for (const [t, k] of [['Oplaadbare nekverwarmer', 'battery'], ['Akku Staubsauger kabellos', 'battery'], ['Draadloze oordopjes Bluetooth', 'radio'], ['Kinderspielzeug Holz', 'kids'],
-    ['Speelgoed auto', 'kids'], ['Drinkfles RVS', 'food'], ['Trinkflasche Edelstahl', 'food'], ['Koksmes Damast', 'blade'], ['Küchenmesser Set', 'blade'], ['Lijm voor hout', 'ship']]) {
+    ['Speelgoed auto', 'kids'], ['Drinkfles RVS', 'food'], ['Trinkflasche Edelstahl', 'food'], ['Koksmes Damast', 'blade'], ['Küchenmesser Set', 'blade'], ['Lijm voor hout', 'ship'],
+    ['Elektrische eierkoker', 'food'], ['Eierkocher für 6 Eier', 'food'], ['Anti-kreuk spray', 'ship']]) {
     const v = verdict(name(t));
     assert.strictEqual(v.level, 'docs', `${t}: ${reasonKeys(v).join(', ')}`);
     assert.ok(reasonKeys(v).includes(k), `${t}: ${k}`);
+  }
+  // One reason, not two: a vitamin C serum is no food, a pet supplement is not food for people, pain relief is no lighting
+  for (const [t, keys] of [['Vitamine C Serum voor het gezicht', ['cosmetics']], ['Vitamin C Serum Drops', ['cosmetics']], ['Gelenktabletten für Hunde', ['pet_med']],
+    ['Vitaminen voor honden', ['pet_med']], ['Hip and Joint Supplement for Dogs', ['pet_med']], ['TENS Pijnverlichting Apparaat', ['medical']], ['Vitamine D3 1000 IE', ['eat']]]) {
+    assert.deepStrictEqual(reasonKeys(verdict(name(t))), keys, t);
+  }
+});
+
+test('sizes in English, Dutch and German, glued words too; a wireless bra needs a size and has no radio', () => {
+  const sized = ['Steppweste für Herren', 'Sommerkleid mit Blumenmuster', 'Wasserdichte Winterjacke', 'Linnen overhemd heren', 'Satijnen pyjama set', 'Waterdichte outdoor jas heren',
+    'Zomerjurk bloemen', 'Joggingbroek dames', 'Wandelschoenen heren', 'Laufschuhe Damen', 'Jogginghose Herren', 'Kanten bh-set', 'Naadloze lingerie set', 'Wireless Bra',
+    'Wireless Push-Up Bra', 'Draadloze push-up bh', 'Slip-on sneakers dames'];
+  for (const t of sized) {
+    const v = verdict(name(t));
+    assert.deepStrictEqual([v.level, v.returns.map((r) => r.k)], ['ok', ['sizing']], `${t}: ${reasonKeys(v).join(', ')}`);
+  }
+  for (const t of ['Kleiderbügel Samt 50 Stück', 'Schoenenrek 5 lagen', 'Garden Hose 30m', 'Ninja Turtles Figures', 'Western Saddle Pad']) {
+    assert.ok(!verdict(name(t)).returns.some((r) => r.k === 'sizing'), t);
   }
 });
 
@@ -196,6 +236,7 @@ test('Jev\'s answers: its traits are reasons; "not physical" blocks; a category 
   // TikTok: its blockers and its category
   const tt = (blockers, cat = '') => fromTikTok({ id: '1', title: 'Thing', url: 'https://www.tiktok.com/shop/pdp/1', blockers, cat });
   assert.deepStrictEqual(verdict(tt('electric skin')).reasons.map((r) => r.k), ['cosmetics', 'ce']);
+  assert.deepStrictEqual(verdict(tt('electric skin')).reasons.map((r) => [r.from, r.p]), [[['jev'], undefined], [['jev'], undefined]], "the tab keeps Jev's yes, not a percentage")
   assert.deepStrictEqual(verdict(tt('', 'Beauty and personal care')).level, 'ok', 'read by Jev, nothing flagged');
   assert.deepStrictEqual(verdict(tt(null, 'Food and supplements')).level, 'block', 'never read by Jev: its category tells');
   assert.strictEqual(keyOf(tt('')), 'tiktok:1');
@@ -233,7 +274,7 @@ test('every verdict: GPSR and customs, the documents to ask for (in English and 
   assert.match(v.gpsr, /^GPSR \(since 13 Dec 2024\): an EU responsible person/);
   assert.match(v.customs, /about €5 an order \(€3 duty a parcel under €150 from 1 Jul 2026, €2 handling an item line from 1 Nov 2026\)/);
   assert.deepStrictEqual(v.ask.map((x) => x[0]), ['CE declaration of conformity (EMC, RoHS)', 'Test reports (EMC; LVD if it plugs in)', 'UN38.3 test summary', 'MSDS for the battery',
-    'Food-contact declaration of compliance (EU 1935/2004, EU 10/2011)', 'LFGB migration test report', "Label: the maker's name and address, model or batch number"]);
+    'Battery capacity in Wh', 'Food-contact declaration of compliance (EU 1935/2004, EU 10/2011)', 'LFGB migration test report', "Label: the maker's name and address, model or batch number"]);
   const text = supplierRequest(v, 'Portable Blender');
   assert.match(text, /^Hello, before I order "Portable Blender": could you send these documents\?\n1\. CE declaration of conformity/);
   assert.match(text, /您好，下单前请提供此产品的以下文件：\n1\. CE 符合性声明（EMC、RoHS）[\s\S]*3\. UN38\.3 测试摘要/);
@@ -323,33 +364,37 @@ test('POST /api/risk: a check is a state row by product page; fields merge and c
 
 test('?risk=hide: Block products leave the Inbox and Browse of both tabs (counts too), ✓ keeps them with the levels of all you approved; no risk param: as before', async () => {
   const env = await seededEnv();
-  await loadApproved(env, NOW, { approve: 'none' });
+  await loadApproved(env, NOW, { approve: 'none', others: true });
   const s = await session(env);
-  const restricted = new Set(APPROVED.filter((p) => p.restricted && p.source !== 'tiktok').map(idOf));
   const ids = (j) => j.ads.map((a) => a.id);
-  // EU: 27 seeded products (one of them blocked: Anti-Snoring Mouthpiece, 9011) and 16 from the fixture (4 restricted)
+  // EU: 27 seeded products (one of them blocked: Anti-Snoring Mouthpiece, 9011) and 29 of the 36 (P16 and P35 are one product),
+  // the 9 restricted ones among them
   const all = await s.get('/api/ads?view=all&limit=100');
   const hid = await s.get('/api/ads?view=all&limit=100&risk=hide');
-  assert.deepStrictEqual([all.total, hid.total], [43, 38]);
-  assert.deepStrictEqual(ids(all).filter((id) => !ids(hid).includes(id)).sort(), ['8003', '8004', '8006', '8009', '9011'], 'the restricted fixture products and the anti-snoring mouthpiece');
-  assert.deepStrictEqual([hid.risk.hide, hid.risk.hidden, all.risk.hide, all.risk.hidden], [true, 5, false, 0]);
-  assert.deepStrictEqual([hid.counts.all, hid.counts.inbox, all.counts.all, all.counts.inbox], [38, 38, 43, 43], 'the counts follow');
+  assert.deepStrictEqual([all.total, hid.total], [56, 46]);
+  assert.deepStrictEqual(ids(all).filter((id) => !ids(hid).includes(id)).sort(), ['8010', '8013', '8017', '8020', '8024', '8026', '8028', '8029', '8033', '9011'],
+    'P10, P13, P17, P20, P24, P26, P28, P29, P33 and the anti-snoring mouthpiece');
+  assert.deepStrictEqual([hid.risk.hide, hid.risk.hidden, all.risk.hide, all.risk.hidden], [true, 10, false, 0]);
+  assert.deepStrictEqual([hid.counts.all, hid.counts.inbox, all.counts.all, all.counts.inbox], [46, 46, 56, 53], 'the counts follow');
+  // Without the radar the Inbox leaves out the 3 that Jev says people or animals take (P17, P28, P29); the radar all 9
+  const inbox0 = await s.get('/api/ads?view=inbox&limit=100');
+  assert.deepStrictEqual(ids(all).filter((id) => !ids(inbox0).includes(id)).sort(), ['8017', '8028', '8029']);
   const inbox = await s.get('/api/ads?view=inbox&limit=100&risk=hide');
-  assert.ok(inbox.ads.every((a) => !restricted.has(a.id) && a.id !== '9011') && inbox.total === 38);
-  // Outside the EU: 15 products from the fixture, 4 restricted
+  assert.ok(inbox.ads.every((a) => !ids(all).filter((id) => !ids(hid).includes(id)).includes(a.id)) && inbox.total === 46);
+  // Outside the EU: 4 of the 36 and 2 the hunt found there (never approved), both restricted
   const wAll = await s.get('/api/ads?scope=world&view=all&limit=100');
   const wHid = await s.get('/api/ads?scope=world&view=all&limit=100&risk=hide');
-  assert.deepStrictEqual([wAll.total, wHid.total, wHid.risk.hidden, wHid.counts.world, wHid.counts.eu], [15, 11, 4, 11, 38]);
-  assert.deepStrictEqual(ids(wAll).filter((id) => !ids(wHid).includes(id)).sort(), ['7001', '7002', '7005', '7008']);
+  assert.deepStrictEqual([wAll.total, wHid.total, wHid.risk.hidden, wHid.counts.world, wHid.counts.eu], [6, 4, 2, 4, 46]);
+  assert.deepStrictEqual(ids(wAll).filter((id) => !ids(wHid).includes(id)).sort(), ['7037', '7038']);
   // The board's cards carry the same verdict the filter used
   for (const a of all.ads.concat(wAll.ads)) assert.strictEqual(verdict(fromAd(a)).level === 'block', !ids(hid).concat(ids(wHid)).includes(a.id), a.title);
-  // ✓: approve everything from the fixture on the board: all 31 stay in ✓, with their levels
+  // ✓: approve the 34 of the 36 on the board: they all stay in ✓ (33 cards: P16 and P35 are one), with their levels
   for (const p of APPROVED.filter((x) => x.source !== 'tiktok')) assert.strictEqual((await s.post('/api/hide', { ad_id: idOf(p), status: 'seen' })).status, 200);
   const made = await s.get('/api/ads?view=made&risk=hide');
-  assert.strictEqual(made.total, 31, 'nothing hidden in ✓');
-  assert.deepStrictEqual(made.risk.levels, { block: 8, docs: 11, ok: 12 }, 'with the one restricted TikTok product: 9 of 36');
-  assert.strictEqual(made.ads.filter((a) => verdict(fromAd(a)).level === 'block').length, 8);
-  assert.strictEqual((await s.get('/api/ads?view=made')).risk.levels.block, 8, 'the levels with or without hiding');
+  assert.strictEqual(made.total, 33, 'nothing hidden in ✓');
+  assert.deepStrictEqual(made.risk.levels, { block: 9, docs: 8, ok: 16 }, 'with the 2 from TikTok (Docs, OK) and P35: 9 Block, 9 Docs and 18 OK of 36');
+  assert.strictEqual(made.ads.filter((a) => verdict(fromAd(a)).level === 'block').length, 9);
+  assert.strictEqual((await s.get('/api/ads?view=made')).risk.levels.block, 9, 'the levels with or without hiding');
   const tt = (await s.get('/api/tiktok')).products;
   assert.deepStrictEqual(tt.filter((t) => verdict(fromTikTok(t)).level === 'block').map((t) => t.title), ['Lilo & Stitch Plush Toy 30cm'], 'the TikTok tab: its list on the phone, the same rules');
   // Without ?risk the API is as it was
@@ -392,12 +437,12 @@ test('D1 reads: your checks are one read of the risk rows (an index range on sta
 
 test('rowInput: the Worker reads a board row as its card does (toAd), for every seeded and fixture product', async () => {
   const env = await seededEnv();
-  await loadApproved(env, NOW, { approve: 'none' });
+  await loadApproved(env, NOW, { approve: 'none', others: true });
   const s = await session(env);
   await s.get('/api/ads'); // the board reads its tables
   const { snapshot } = await import('../worker/src/app.mjs');
   const list = products(await snapshot(env.DB, NOW), [], [], NOW);
-  assert.ok(list.k.length >= 49);
+  assert.ok(list.k.length >= 27 + 29 + 6, 'the seeded products and the fixture\'s');
   for (const r of list.k) {
     const card = fromAd(toAd(r));
     assert.strictEqual(keyOf(rowInput(r)), keyOf(card), r.product_title);
@@ -419,7 +464,7 @@ test('the reasons read plainly: every reason has a short label and a sentence; t
   assert.ok(!Object.values(TEXT).some((t) => /reach/i.test(t)), 'no "reach" (the Outside EU cards never say it)');
   const kit = riskKit();
   assert.deepStrictEqual(Object.keys(kit.LEVEL), Object.keys(LEVEL));
-  const all = APPROVED.map((p) => verdict(xOf(p)));
+  const all = APPROVED.concat(NOT_APPROVED).map((p) => verdict(xOf(p)));
   assert.ok(all.every((v) => v.reasons.every((r) => r.text && r.short) && v.returns.every((r) => r.text && r.short)));
   assert.strictEqual(auto(name('Vitamin C Serum')).level, 'block');
   assert.strictEqual(finish(auto(name('Vitamin C Serum')), null).level, 'block');

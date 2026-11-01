@@ -21,8 +21,8 @@ products and Jev can be wrong, so every badge says why, and your own call (below
 - **Browse, ✓ Approved, the TikTok tab, a launch card (🚀)**: the same line is a button. A tap opens the reasons (with the words
   it matched, Jev's answer or the category), Shopify Payments, the trademark search, the documents to ask the supplier for,
   your checks, GPSR and customs.
-- **Above the cards**: how many Block products are hidden, and **Show** (or **Hide them**). On ✓: *Risk radar on the 31 you
-  approved: 8 Block · 11 Docs · 12 OK*. The setting is kept on that phone (`localStorage` `wh-risk`).
+- **Above the cards**: how many Block products are hidden, and **Show** (or **Hide them**). On ✓: *Risk radar on the 33 you
+  approved: 9 Block · 8 Docs · 16 OK*. The setting is kept on that phone (`localStorage` `wh-risk`).
 - **TikTok tab**: the chip **Show blocked** with the number it hides.
 - **CSV**: what you see. With Block hidden, no Block products in it either.
 
@@ -46,11 +46,11 @@ them all: `SELECT key, value, updated_at FROM state WHERE key >= 'risk:' AND key
 | Reason | Badge | Found by (examples; English, Dutch, German) | The rule behind it |
 |---|---|---|---|
 | Food or supplement | Block | Jev "people take it"; *supplement, capsules, gummies, collagen powder, ashwagandha, voedingssupplement, Nahrungsergänzungsmittel, Kapseln*; category Food and supplements | EU food law, health-claim rules (EU 1924/2006), food business registration. Supplements: Shopify Payments, pseudo pharmaceuticals |
-| Cosmetic | Block | Jev "on the skin / on the face"; *serum, face cream, toothpaste, teeth whitening, perfume, sunscreen, nail polish, gezichtscrème, tandenbleekset, zonnebrand, Nachtcreme, Zahnaufhellung, Duschgel*; Skincare, Makeup, Fragrance | EU responsible person, CPNP notification and a safety report per product (EU 1223/2009) |
+| Cosmetic | Block | Jev "on the skin / on the face"; *serum, face cream, toothpaste, teeth whitening, perfume, essential oils, hair growth oil, sunscreen, nail polish, gezichtscrème, tandenbleekset, parfum, etherische olie, haargroei, zonnebrand, Nachtcreme, ätherische Öle, Haarwuchs, Zahnaufhellung, Duschgel*; Skincare, Makeup, Fragrance. Not for a diffuser | EU responsible person, CPNP notification and a safety report per product (EU 1223/2009); essential oils also CLP hazard labels (EU 1272/2008) |
 | Medical claim | Block | *pain relief, back pain, sciatica, TENS, anti-snoring, eczema, rugpijn, Rückenschmerzen, Schnarchstopper* | Medical device rules (MDR, EU 2017/745); Meta rejects the ads |
 | Medical device | Block | *blood pressure monitor, oximeter, hearing aid, fever thermometer, IPL, laser hair removal, contact lenses, bloeddrukmeter, Blutdruckmessgerät* | MDR, Annex XVI for IPL and coloured lenses |
 | Health promise | Block | *detox pads, weight loss, slimming, lymphatic drainage, afslank, abnehmen, Lymphdrainage* | Shopify Payments: pseudo pharmaceuticals; Meta |
-| Pet medicine | Block | *flea, tick collar, dewormer, calming chews, vlooienband, Flohhalsband, Wurmkur* | EU veterinary medicine and biocide rules |
+| Pet medicine | Block | *flea, tick collar, dewormer, calming chews, joint supplement for dogs, vlooienband, vitaminen voor honden, Flohhalsband, Wurmkur, Gelenktabletten für Hunde* | EU veterinary medicine and biocide rules |
 | Biocide or pesticide | Block | *insect repellent, mosquito spray, hand sanitiser, disinfectant, weed killer, muggenspray* | EU 528/2012 (biocides), EU 1107/2009 (plant protection) |
 | Weapon | Block | *pepper spray, stun gun, brass knuckles, butterfly knife, switchblade, airsoft, pepperspray, vlindermes, Pfefferspray, Schlagring* | Dutch Wet wapens en munitie, German Waffengesetz. Shopify Payments: regulated or illegal products |
 | Tobacco, CBD or fireworks | Block | *vape, e-cigarette, nicotine, CBD, THC, kratom, laughing gas, fireworks, lachgas, vuurwerk, Feuerwerk* | Age, drug and fireworks rules; Shopify Payments: regulated or illegal products |
@@ -60,14 +60,14 @@ them all: `SELECT key, value, updated_at FROM state WHERE key >= 'risk:' AND key
 | Not physical | Block | Jev "not a physical product"; *gift card, e-book, shipping protection, cadeaubon, Geschenkgutschein* | The board's own rule |
 | Pet food | Docs | Jev "pets take it"; *dog food, cat treats, hondenvoer, Hundefutter* | EU feed rules; animal products from China are stopped at the border. Docs, not Block: Connor keeps pet food on the board (2026-10-31) |
 | CE | Docs | Jev "battery or electric"; *electric, USB, LED, lamp, heated, massager, projector, elektrisch, verwarmd, Akku, beheizt* | CE declaration and test reports (EMC, RoHS; LVD with mains power); WEEE registration (NL: Stichting OPEN) |
-| Battery | Docs | *rechargeable, cordless, lithium, mAh, power bank, oplaadbaar, accu, wiederaufladbar, kabellos* | UN38.3 test summary and MSDS; battery labels and registration (EU 2023/1542); a shipping line that takes batteries |
+| Battery | Docs | *rechargeable, cordless, lithium, mAh, power bank, oplaadbaar, accu, wiederaufladbar, kabellos* | UN38.3 test summary, MSDS and the capacity in Wh; battery labels and registration (EU 2023/1542); a shipping line that takes batteries |
 | Radio | Docs | *wireless, Bluetooth, Wi-Fi, GPS, remote control, draadloos, drahtlos, Funk* | RED test report (EU 2014/53) |
 | Kids | Docs | Jev "for children"; *kids, baby, toy, plush, Montessori, kinder, speelgoed, Spielzeug*; Baby and kids. Not for "dog toy" | CE and EN 71 for toys (2009/48/EC), age warnings; childcare products need their own EN test |
-| Food contact | Docs | Jev "touches food"; *water bottle, lunch box, cutting board, pan, drinkfles, Trinkflasche, Pfanne*; Kitchen | Food-contact declaration (EU 1935/2004; plastics EU 10/2011), LFGB migration test |
+| Food contact | Docs | Jev "touches food"; *water bottle, lunch box, cutting board, pan, egg cooker, drinkfles, eierkoker, Trinkflasche, Pfanne*; Kitchen | Food-contact declaration (EU 1935/2004; plastics EU 10/2011), LFGB migration test |
 | Claims | Docs | Jev "a medical claim" (it may be the ad's); *posture corrector, relieves, clinically proven*, also in the ad's words | Sell it without treat, cure or relieve claims (MDR, Meta) |
 | Blade | Docs | *knife, chef knife, axe, sword, koksmes, Küchenmesser*. Not for "knife sharpener" or "knife block" | Shipping lines, Meta's weapon ads, 18+ checks |
 | Hard to ship | Docs | Jev "hard to ship"; *spray, liquid, glue, paint, resin, butane, spuitbus, lijm, Kleber* | MSDS and a line that takes it |
-| ↩ Sizes, Fragile, Bulky | flag | Jev's answers; *dress, shoes, ring, glass, ceramic, furniture, 7kg* | Returns and damage |
+| ↩ Sizes, Fragile, Bulky | flag | Jev's answers; *dress, shoes, bra (wireless too), ring, jurk, overhemd, winterjas, Sommerkleid, Winterjacke, Steppweste, Laufschuhe; glass, ceramic, furniture, 7kg* | Returns and damage |
 | ↩ Over €150 | flag | The price, about in euro, before 21% VAT | No IOSS above €150: the buyer pays import VAT and duty at the door |
 
 On every product, whatever its badge:
@@ -90,9 +90,16 @@ The browser runs the same code: `/risk.js` is `riskKit` as a script (`window.RIS
 
 ## Tests
 
-- `test/fixtures/approved-36.json`: 36 approved products (EU, outside the EU, TikTok; titles in English, Dutch and German), 9
-  restricted. `test/risk.test.mjs` proves exactly those 9 are Block, each for its own reason, and that the other 27 sell. The
-  list of the real approvals was not in the repository: put them in this file (same fields) and the test checks them.
+- `test/fixtures/approved-36.json`: the 36 approvals of the review ([approved-products-review.md](../../docs/learnings/approved-products-review.md)),
+  P1-P36 with its numbers. `test/risk.test.mjs` proves that exactly its 9 restricted ones (P10, P13, P17, P20, P24, P26, P28,
+  P29, P33) are Block, each for its own reason (perfume, essential oils, pet health, skin twice, a health-claim device, a
+  supplement, coffee, hair care), that the other 27 sell (9 Docs, 18 OK), that its 12 needing a size (P3, P7, P8, P9, P12, P14,
+  P16, P19, P21, P27, P30, P35) carry ↩ Sizes and no block, and that P16 and P35 (the same jacket) share one key. The review
+  kept the numbers, categories and findings, not the export's rows: titles (English, Dutch, German), stores and prices are
+  reconstructions, and so is where the 6 approvals not from the EU tab came from. Put the real rows in (same fields) and the
+  test checks them. Its `notApproved` products (outside the EU, TikTok) test those tabs' filters.
+- Of the 9, the board on main already kept 3 out of the Inbox (P17, P28, P29: Jev says people or animals take them, #28);
+  the radar takes out all 9, in Browse too.
 - The same test file: every title the hunt's EU screen (`lib/world.mjs`) takes off is Block here, its tools and look-alikes
   are not; the Worker's filter and the card always agree; the ad's words never block; `/risk.js` answers as the module; the API.
 - `test/risk.e2e.test.mjs`: the board in Chromium at iPhone size.
