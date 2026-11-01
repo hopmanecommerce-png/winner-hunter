@@ -1196,7 +1196,6 @@ function worldCard(a, inbox) {
         ${shopLink(a)}
         ${a.products != null ? `<span>${esc(fmt(a.products))} products</span>` : ''}
         ${shopAds ? `<a href="${esc(shopAds)}" target="_blank" rel="noopener noreferrer" title="This shop's ads in ${esc(land(cc))}">Ads ↗</a>` : ''}
-        <a class="src" href="${esc(src1688(a.zh || a.title))}" target="_blank" rel="noopener noreferrer" title="Search 1688">1688 ↗</a>
       </div>`}
       ${w.eu_rpd != null ? `<div class="bs" title="Meta's API: EU reach per day of this product's best ad that also runs in the EU. No reach is published for the other markets.">${esc(fmt(w.eu_rpd))} EU reach / day</div>`
         : w.shop_eu_rpd != null ? `<div class="bs no" title="Meta's API: EU reach per day of this shop's best ad in the EU, not necessarily this product.">Shop's best EU ad: ${esc(fmt(w.shop_eu_rpd))} reach / day</div>` : ''}
@@ -1278,7 +1277,6 @@ function card(a, inbox) {
       ${inbox ? `<div class="who">${esc(shop || a.adv)}${a.products != null ? ' · ' + esc(fmt(a.products)) + ' products' : ''}</div>` : `<div class="who ln">
         ${shopLink(a)}
         ${a.products != null ? `<span>${esc(fmt(a.products))} products</span>` : ''}
-        <a class="src" href="${esc(src1688(a.zh || a.title))}" target="_blank" rel="noopener noreferrer" title="Search 1688">1688 ↗</a>
       </div>`}
       ${bestLine(a)}
       ${jevLine(a.jev, inbox)}
