@@ -1,0 +1,33 @@
+# Asks Jev about the products outside the EU it has not seen yet (world-check.mjs). World Hunter does this after every hunt;
+# run it by hand to fill the board without a hunt. Not in World Hunter's concurrency group, because a waiting run there would
+# replace a waiting hunt; overlapping at worst asks about a product twice, the answer is simply saved again. Secrets: CF_API_TOKEN, CF_ACCOUNT_ID, TYPESAFE_API_KEY.
+name: Jev check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: world-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID || '8934aca9-51d3-4f87-9c62-e897843149a1' }}
+      TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Database tables
+        run: node winner-hunter/migrate.mjs
+      - name: Jev check
+        run: node winner-hunter/world-check.mjs

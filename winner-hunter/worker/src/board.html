@@ -348,9 +348,9 @@
   .zero .zb { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
   .zero button { height: 42px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--line2); background: var(--card2); font-weight: 650; cursor: pointer; }
   @media (min-width: 1200px) { /* views + search beside the filters only where all of it fits */
-    .rail { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+    .rail { grid-template-columns: minmax(520px, 1fr) minmax(0, auto); align-items: center; }
     .search { flex: 0 1 380px; }
-    .chips { margin: 0; padding: 0; }
+    .chips { margin: 0; padding: 0; flex-wrap: wrap; overflow: visible; }
   }
   @media (min-width: 760px) {
     .radar { padding: 22px 24px; }
@@ -439,6 +439,8 @@
   .rt.fact { color: var(--win); border-color: rgba(61, 255, 176, .4); }
   .rt.estimate { color: var(--cy); border-color: rgba(46, 230, 255, .4); }
   .rt.unverified { color: var(--amb); border-color: rgba(255, 201, 77, .45); }
+  .tag.jev { background: rgba(38, 28, 4, .92); color: #ffc94d; border-color: rgba(255, 201, 77, .6); }
+  .jevl { font: 500 11px/1.35 var(--mono); color: var(--muted); margin-top: 4px; overflow-wrap: anywhere; }
   .tag.noteu { background: rgba(61, 255, 176, .16); color: var(--win); border-color: rgba(61, 255, 176, .4); }
   .meta.w6 { row-gap: 8px; }
   .meta .m.yes b { color: var(--win); }
@@ -504,6 +506,33 @@
           <option value="ads">Most shop ads</option>
           <option value="reach">Total reach</option>
           <option value="best">Store best seller</option>
+        </select></span>
+        <span class="selw" id="jevw" hidden><select id="jev" class="chip" aria-label="Jev's answers">
+          <option value="">Jev: all</option>
+          <option value="clean">Jev: no flags</option>
+          <option value="people">Jev: people eat or take</option>
+          <option value="animals">Jev: animals eat or take</option>
+          <option value="gymwear">Jev: gymwear</option>
+          <option value="digital">Jev: not physical</option>
+          <option value="unsure">Jev: unsure</option>
+          <option value="none">Jev: not checked</option>
+          <optgroup label="Category">
+            <option value="cat:pet">Pet</option>
+            <option value="cat:home">Home</option>
+            <option value="cat:kitchen">Kitchen</option>
+            <option value="cat:beauty">Beauty</option>
+            <option value="cat:health device">Health device</option>
+            <option value="cat:baby or kids">Baby or kids</option>
+            <option value="cat:clothing">Clothing</option>
+            <option value="cat:gymwear">Gymwear</option>
+            <option value="cat:fitness gear">Fitness gear</option>
+            <option value="cat:garden or outdoor">Garden or outdoor</option>
+            <option value="cat:car">Car</option>
+            <option value="cat:tech">Tech</option>
+            <option value="cat:jewelry or accessories">Jewelry or accessories</option>
+            <option value="cat:food or supplement">Food or supplement</option>
+            <option value="cat:other">Other</option>
+          </optgroup>
         </select></span>
         <button class="chip" data-f="r2500" aria-pressed="false">2.5K+/day</button>
         <button class="chip" data-f="r10k" aria-pressed="false">10K+/day</button>
@@ -579,7 +608,7 @@ const WSORTED = { eu: 'by EU reach a day', proof: 'most proof first', days: 'by 
 const WSORT_LABEL = { proof: 'Most proof', days: 'Oldest ad', ads: 'Most ads for product', markets: 'Most markets', shop: 'Most shop ads', fresh: 'New ads 14d', best: 'Store best seller', reviews: 'Trustpilot reviews', eu: 'EU reach / day', new: 'Newest' };
 const ESORT_LABEL = { rpd: 'Reach / day', new: 'Newest', scaled: 'Most ad copies', ads: 'Most shop ads', reach: 'Total reach', best: 'Store best seller' };
 const scope0 = store.get('wh-scope') === 'eu' ? 'eu' : 'world'; // the markets outside the EU come first
-const st = { scope: scope0, view: scope0 === 'world' ? 'all' : 'inbox', q: '', sort: 'rpd', wsort: 'proof', r2500: false, r10k: false, p4: false, noteu: false, fresh: false, hidden: false, cc: '', offset: 0 };
+const st = { scope: scope0, view: scope0 === 'world' ? 'all' : 'inbox', q: '', sort: 'rpd', wsort: 'proof', jev: '', r2500: false, r10k: false, p4: false, noteu: false, fresh: false, hidden: false, cc: '', offset: 0 };
 let ADS = [];
 let total = 0;
 let loading = false;
@@ -601,6 +630,7 @@ function params(extra) {
     if (world) {
       if (st.wsort !== 'proof') p.set('sort', st.wsort);
       for (const f of ['p4', 'noteu', 'fresh']) if (st[f]) p.set(f, '1');
+      if (st.jev) p.set('jev', st.jev);
     } else {
       if (st.sort !== 'rpd') p.set('sort', st.sort);
       if (st.r10k) p.set('rpd', '10000'); else if (st.r2500) p.set('rpd', '2500');
@@ -681,12 +711,31 @@ function shopLink(a) {
   return url ? `<a class="shop" href="${url}" target="_blank" rel="noopener noreferrer" title="${onProduct ? 'The product in the store' : 'The store'}">${esc(name || 'Store')} ↗</a>` : `<span class="shop">${esc(name)}</span>`;
 }
 
+// What Jev answered. Only data: nothing is hidden or ranked by it. The flags come from jevFlags in app.mjs.
+const jevPct = (v) => Math.round(v * 100) + '%';
+function jevTags(c) {
+  if (!c) return '';
+  const has = (f) => (c.flags || []).includes(f);
+  const tag = (f, text, p, why) => (has(f) ? `<span class="tag jev" title="Jev: ${why}">${text} ${jevPct(p)}</span>` : '');
+  return tag('people', 'People take', c.people, 'how likely a person eats, drinks or swallows this')
+    + tag('animals', 'Pets take', c.animals, 'how likely an animal eats or takes this')
+    + tag('gymwear', 'Gymwear', c.gymwear, 'how likely this is clothing for working out')
+    + tag('digital', 'Not physical', 1 - c.physical, 'how likely this is not a physical product');
+}
+function jevLine(c, full) {
+  if (!c) return '';
+  const all = `People eat or take ${jevPct(c.people)} · Animals eat or take ${jevPct(c.animals)} · Gymwear ${jevPct(c.gymwear)} · Physical product ${jevPct(c.physical)}`;
+  const from = c.input === 'title' ? ' (from the title only)' : '';
+  return `<div class="jevl" title="${esc(all + from)}">Jev: ${esc(c.category)}${esc(from)}${full ? `<br>${esc(all)}` : ''}</div>`;
+}
+
 function worldCard(a, inbox) {
   const w = a.world;
   const open = inbox; // elsewhere a tap on the card opens the Ad Library, as on the EU card
   const isNew = Date.now() - Date.parse(a.first_seen) < NEW_MS;
   const tags = (isNew ? '<span class="tag new">New</span>' : '')
     + (w.in_eu === 0 ? '<span class="tag noteu" title="The shop has no active ads in the EU (Meta\'s API)">Not in EU</span>' : w.in_eu === 1 ? '<span class="tag" title="The shop also runs ads in the EU (Meta\'s API)">Also in EU</span>' : '')
+    + jevTags(w.check)
     + (a.fit >= 1.5 ? '<span class="tag fit" title="You liked products from this niche">♥ Your niche</span>' : '')
     + (a.hidden === 'seen' ? `<span class="tag made" title="You approved it">✓ Approved${a.made_at ? ' ' + esc(day(a.made_at)) : ''}</span>` : a.hidden ? '<span class="tag">Rejected</span>' : '')
     + (a.pass === false ? '<span class="tag out" title="Its ads were not seen in the last scans">Not seen lately</span>' : '');
@@ -731,6 +780,7 @@ function worldCard(a, inbox) {
       </div>`}
       ${w.eu_rpd != null ? `<div class="bs" title="Meta's API: EU reach per day of this product's best ad that also runs in the EU. No reach is published for the other markets.">📡 ${esc(fmt(w.eu_rpd))} EU reach / day</div>`
         : w.shop_eu_rpd != null ? `<div class="bs no" title="Meta's API: EU reach per day of this shop's best ad in the EU, not necessarily this product.">Shop's best EU ad: ${esc(fmt(w.shop_eu_rpd))} reach / day</div>` : ''}
+      ${jevLine(w.check, inbox)}
       ${inbox ? `<ul class="proofl">${proof.items.map((i) => `<li class="${proofState(i)}">${PROOF_TEXT[proofState(i)]} ${esc(i.text)}</li>`).join('')}</ul>` : ''}
       ${inbox ? `<div class="more">
         <div class="facts">
@@ -984,10 +1034,11 @@ function render(append, fresh) {
     const f = b.dataset.f;
     b.hidden = (f === 'r2500' || f === 'r10k') ? world : (f === 'p4' || f === 'noteu' || f === 'fresh') ? !world : false;
   }
+  $('jevw').hidden = !world;
   $('ccChip').hidden = !st.cc;
   $('ccChip').innerHTML = st.cc ? `<b>${flag(st.cc)}</b>${esc(land(st.cc))} ✕` : '';
   $('ccChip').setAttribute('aria-label', st.cc ? `Market ${land(st.cc)}: tap to show all markets` : '');
-  const filtered = st.view === 'all' && (st.q || st.hidden || st.cc || (world ? st.p4 || st.noteu || st.fresh : st.r2500 || st.r10k));
+  const filtered = st.view === 'all' && (st.q || st.hidden || st.cc || (world ? st.p4 || st.noteu || st.fresh || st.jev : st.r2500 || st.r10k));
   $('count').hidden = !filtered;
   const sorted = world ? WSORTED[st.wsort] || '' : st.cc && st.sort === 'rpd' ? `by ${st.cc} reach per day` : SORTED[st.sort] || '';
   $('count').textContent = filtered ? `${total.toLocaleString('en-US')} ${total === 1 ? 'match' : 'matches'} · ${sorted}` : '';
@@ -1492,6 +1543,7 @@ for (const b of document.querySelectorAll('[data-f]')) {
 }
 let qTimer = 0;
 $('q').addEventListener('input', (e) => { clearTimeout(qTimer); qTimer = setTimeout(() => { st.q = e.target.value.trim(); load(); }, 300); });
+$('jev').addEventListener('change', (e) => { st.jev = e.target.value; load(); });
 $('sort').addEventListener('change', (e) => { if (st.scope === 'world') st.wsort = e.target.value; else st.sort = e.target.value; load(); });
 function sortOptions() {
   const world = st.scope === 'world';
