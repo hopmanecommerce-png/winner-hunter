@@ -41,7 +41,7 @@ test('prefetch opens every ad on the board (not hidden, not fresh), best first, 
   assert.strictEqual(row.fetched_at, new Date(NOW).toISOString());
   assert.strictEqual(JSON.parse(row.json).body, 'Nu 50% korting.');
   // the board now serves it straight from D1: no browser
-  const res = await handle(new Request('https://wh.test/api/ad/9000', { headers: { cookie: await cookieOf(env) } }), Object.assign(env, { META_TOKEN: 'x', BROWSER: {} }), {
+  const res = await handle(new Request('https://wh.test/api/ad/9000', { headers: { cookie: await cookieOf(env) } }), Object.assign(env, { META_TOKEN: 'x', BROWSER: {}, AD_VIEWER: 'on' }), {
     now: NOW + 3600e3, launch: async () => { throw new Error('launched'); },
   });
   assert.strictEqual(res.status, 200);

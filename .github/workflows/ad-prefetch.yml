@@ -1,7 +1,8 @@
 # Opens every ad on the board ahead of time (Meta's render_ad page in Chrome on the runner) and stores it in D1 for the
-# /api/ad viewer; only ads without a stored view from the last 16 hours. Secrets: META_TOKEN, CF_API_TOKEN, CF_ACCOUNT_ID.
-# Off: ▶ and a tap on a card now open the Facebook Ad Library, the board shows no ads itself. Only by hand, and it spends
-# the Meta limit the hunt outside the EU needs.
+# /api/ad viewer; only ads without a stored view from the last 16 hours. Secrets: META_TOKEN, CF_API_TOKEN, CF_ACCOUNT_ID
+# (CF_D1_TOKEN, a D1-only Cloudflare token, is used instead of CF_API_TOKEN when it is there).
+# Off: ▶ and a tap on a card now open the Facebook Ad Library, the board shows no ads itself, and the Worker's /api/ad
+# answers only with AD_VIEWER = "on" (wrangler.toml). Only by hand, and it spends the Meta limit the hunt outside the EU needs.
 name: Ad prefetch
 
 on:
@@ -20,12 +21,12 @@ jobs:
     timeout-minutes: 40
     env:
       META_TOKEN: ${{ secrets.META_TOKEN }}
-      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CF_API_TOKEN: ${{ secrets.CF_D1_TOKEN || secrets.CF_API_TOKEN }}
       CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
       D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID || '8934aca9-51d3-4f87-9c62-e897843149a1' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
       # Playwright drives the runner's own Google Chrome: no browser download.

@@ -1,7 +1,9 @@
 # Puts the Winner Hunter board (winner-hunter/worker) online as a Cloudflare Worker and sets its PIN.
 # Runs by itself when the board code changes on the main branch, or by hand: Actions → Deploy board → Run workflow.
-# Secrets: CF_API_TOKEN (Account → D1 → Edit and Account → Workers Scripts → Edit), CF_ACCOUNT_ID, BOARD_PIN,
-# META_TOKEN (for /api/ad, which opens ads in Cloudflare Browser Run; the board no longer calls it).
+# The tests run first (tests.yml): a red test stops the deploy before the database or the board changes.
+# Secrets: CF_API_TOKEN (Account → D1 → Edit and Account → Workers Scripts → Edit), CF_ACCOUNT_ID, BOARD_PIN.
+# The Worker no longer gets META_TOKEN: the ad viewer (/api/ad) is off. A token an older deploy put there is never used;
+# remove it with: cd winner-hunter/worker && npx wrangler secret delete META_TOKEN
 name: Deploy board
 
 on:
@@ -20,7 +22,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  test:
+    uses: ./.github/workflows/tests.yml
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -30,7 +36,6 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
       D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID || '8934aca9-51d3-4f87-9c62-e897843149a1' }}
       BOARD_PIN: ${{ secrets.BOARD_PIN }}
-      META_TOKEN: ${{ secrets.META_TOKEN }}
     steps:
       - name: Check secrets
         run: |
@@ -42,11 +47,12 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
 
+      # Saves D1 Time Travel's bookmark in this log first (the "D1 restore point" note), then makes the tables.
       - name: Database tables
         run: node winner-hunter/migrate.mjs
 
@@ -54,13 +60,25 @@ jobs:
         working-directory: winner-hunter/worker
         run: npm ci --no-audit --no-fund
 
+      # Red when wrangler fails or prints no board address: a failed deploy used to end green.
       - name: Deploy
-        id: deploy
         working-directory: winner-hunter/worker
+        env:
+          # A public repository's logs and summaries are public: its workers.dev subdomain (the board's address) stays out.
+          HIDE: ${{ github.event.repository.private != true }}
         run: |
-          npx --yes wrangler@4 deploy 2>&1 | tee "$RUNNER_TEMP/deploy.log"
+          set -o pipefail
+          hide() { if [ "$HIDE" = true ]; then sed -E 's#[A-Za-z0-9-]+\.workers\.dev#***.workers.dev#g'; else cat; fi; }
+          npx --yes wrangler@4 deploy 2>&1 | tee "$RUNNER_TEMP/deploy.log" | hide
           URL=$(grep -oE 'https://[A-Za-z0-9.-]+\.workers\.dev' "$RUNNER_TEMP/deploy.log" | head -1 || true)
-          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          if [ -z "$URL" ]; then
+            echo "::error::The deploy printed no board address (https://…workers.dev): the board may not be live, see the log above"
+            exit 1
+          fi
+          echo "## Board: $URL" | hide | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$HIDE" = true ]; then
+            echo "The address stays out of this public log: Cloudflare → Workers & Pages → winner-hunter-clean." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Board PIN
         working-directory: winner-hunter/worker
@@ -70,19 +88,3 @@ jobs:
             exit 0
           fi
           printf '%s' "$BOARD_PIN" | npx --yes wrangler@4 secret put BOARD_PIN
-
-      - name: Ad viewer token
-        working-directory: winner-hunter/worker
-        run: |
-          if [ -z "$META_TOKEN" ]; then
-            echo "::warning::No META_TOKEN secret: the /api/ad viewer stays off (the board does not use it: ▶ opens the Ad Library)"
-            exit 0
-          fi
-          printf '%s' "$META_TOKEN" | tr -d '[:space:]' | npx --yes wrangler@4 secret put META_TOKEN
-
-      - name: Board link
-        env:
-          URL: ${{ steps.deploy.outputs.url }}
-        run: |
-          echo "Board: ${URL:-see the Deploy step log (Cloudflare → Workers & Pages → winner-hunter)}"
-          echo "## Board: ${URL:-see the Deploy step log}" >> "$GITHUB_STEP_SUMMARY"

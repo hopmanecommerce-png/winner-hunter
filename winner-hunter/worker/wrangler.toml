@@ -25,4 +25,6 @@ migrations_dir = "migrations"
 [browser]
 binding = "BROWSER"
 
-# Secrets (not in this file): BOARD_PIN and META_TOKEN, set by the deploy workflow from the GitHub secrets.
+# Secrets (not in this file): BOARD_PIN, set by the deploy workflow from the GitHub secret.
+# The ad viewer is off (the board no longer uses it): /api/ad/:id answers only with AD_VIEWER = "on" under [vars] here
+# and a META_TOKEN secret (npx wrangler secret put META_TOKEN). The deploy does not set that token, so keep it fresh yourself.
