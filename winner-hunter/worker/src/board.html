@@ -785,6 +785,7 @@
   @media (pointer: coarse) { .sxbtn, .sxseg button { min-height: 44px; } }
   @media (min-width: 760px) { .sxedit { grid-template-columns: repeat(3, minmax(0, 1fr)); } .sxlinks span { flex: 0 0 auto; min-width: 64px; } }
 </style>
+<script nonce="__NONCE__" src="/momentum.js" id="mokit" defer></script>
 </head>
 <body>
 <div class="wrap">
@@ -814,6 +815,7 @@
   </section>
 
   <details class="jevb" id="jevb" hidden><summary><span>Jev breakdown</span> <small id="jevbN"></small></summary><div id="jevbody"></div></details>
+  <details class="jevb mopanel" id="mobox" hidden><summary><span>Momentum</span> <small id="moboxN"></small></summary><div id="mobody"></div></details>
   </div>
 
   <div class="rail">
@@ -892,6 +894,7 @@
             <option value="rating">Rating</option>
             <option value="high">Highest price</option>
             <option value="low">Lowest price</option>
+            <option value="mom">Momentum</option>
           </select></span>
           <span class="selw"><select id="ttcat" class="chip" aria-label="Category"><option value="">All categories</option></select></span>
           <button class="chip" data-tf="clean" aria-pressed="true" title="Jev read it and flagged no blocker. Products it never read stay out.">No blocker</button>
@@ -956,6 +959,8 @@ const ESORT_LABEL = { rpd: 'Reach / day', new: 'Newest', scaled: 'Most ad copies
 // Google (the Google hunt): all four rules checked first, then the most proof; every other order is one plain fact.
 const GSORT_LABEL = { proof: 'All 4 rules, most proof', days: 'Oldest ad', copies: 'Most ads for product', ads: 'Most shop ads', regions: 'Most countries', impr: 'Impressions / day', best: 'Store best seller', reviews: 'Trustpilot reviews', new: 'Newest', jevp: 'Jev product score', jeva: 'Jev ad score' };
 const GSORTED = { proof: 'all four rules first, most proof', days: 'by oldest ad', copies: 'by ads for the product', ads: 'by shop ads', regions: 'by number of countries', impr: 'by impressions a day', best: 'by store best-seller rank', reviews: 'by Trustpilot reviews', new: 'newest first', jevp: 'by Jev product score', jeva: 'by Jev ad score' };
+// Momentum (momentum.js): rising products that are not crowded first.
+for (const [o, v] of [[SORTED, 'by momentum'], [WSORTED, 'by momentum'], [ESORT_LABEL, 'Momentum'], [WSORT_LABEL, 'Momentum']]) o.mom = v;
 const saved = store.get('wh-scope');
 const scope0 = saved === 'eu' || saved === 'tiktok' || saved === 'google' ? saved : 'world'; // the markets outside the EU come first
 const st = { scope: scope0, view: scope0 === 'eu' ? 'inbox' : 'all', q: '', sort: 'rpd', wsort: 'proof', gsort: 'proof', jev: '', r2500: false, r10k: false, p4: false, noteu: false, fresh: false,
@@ -1208,6 +1213,7 @@ function worldCard(a, inbox) {
       <h2 class="t">${esc(nice(a))}</h2>
       ${price}
       ${flags}
+      ${window.MOMENTUM ? MOMENTUM.row(a, inbox) : ''}
       <div class="meta w6">
         ${worldStat(a, 'days', (a.age ?? '–') + 'd', 'oldest ad')}
         ${worldStat(a, 'ads', fmt(a.scaled || 1), 'ads')}
@@ -1220,7 +1226,6 @@ function worldCard(a, inbox) {
         ${shopLink(a)}
         ${a.products != null ? `<span>${esc(fmt(a.products))} products</span>` : ''}
         ${shopAds ? `<a href="${esc(shopAds)}" target="_blank" rel="noopener noreferrer" title="This shop's ads in ${esc(land(cc))}">Ads ↗</a>` : ''}
-        <a class="src" href="${esc(src1688(a.zh || a.title))}" target="_blank" rel="noopener noreferrer" title="Search 1688">1688 ↗</a>
       </div>`}
       ${w.eu_rpd != null ? `<div class="bs" title="Meta's API: EU reach per day of this product's best ad that also runs in the EU. No reach is published for the other markets.">${esc(fmt(w.eu_rpd))} EU reach / day</div>`
         : w.shop_eu_rpd != null ? `<div class="bs no" title="Meta's API: EU reach per day of this shop's best ad in the EU, not necessarily this product.">Shop's best EU ad: ${esc(fmt(w.shop_eu_rpd))} reach / day</div>` : ''}
@@ -1316,7 +1321,6 @@ function googleCard(a, inbox) {
         ${shopLink(a)}
         ${a.products != null ? `<span>${esc(fmt(a.products))} products</span>` : ''}
         ${adv}
-        <a class="src" href="${esc(src1688(a.zh || a.title))}" target="_blank" rel="noopener noreferrer" title="Search 1688">1688 ↗</a>
       </div>`}
       ${bestLine(a)}
       ${jevLine(a.jev, inbox)}
@@ -1388,6 +1392,7 @@ function card(a, inbox) {
       <h2 class="t">${esc(nice(a))}</h2>
       ${price}
       ${flags}
+      ${window.MOMENTUM ? MOMENTUM.row(a, inbox) : ''}
       <div class="meta${inbox ? ' m4' : ''}">
         ${inbox ? `<div class="m" title="${reachTip}">${reach}</div>` : ''}
         <div class="m" title="Active ads of this advertiser (75+ needed)"><b>${esc(fmt(a.ads))}</b><span>shop ads</span></div>
@@ -1398,7 +1403,6 @@ function card(a, inbox) {
       ${inbox ? `<div class="who">${esc(shop || a.adv)}${a.products != null ? ' · ' + esc(fmt(a.products)) + ' products' : ''}</div>` : `<div class="who ln">
         ${shopLink(a)}
         ${a.products != null ? `<span>${esc(fmt(a.products))} products</span>` : ''}
-        <a class="src" href="${esc(src1688(a.zh || a.title))}" target="_blank" rel="noopener noreferrer" title="Search 1688">1688 ↗</a>
       </div>`}
       ${bestLine(a)}
       ${jevLine(a.jev, inbox)}
@@ -2136,6 +2140,7 @@ const TT_SORT = {
   high: ['by highest price', (a, b) => (b.p || 0) - (a.p || 0)],
   low: ['by lowest price', (a, b) => (a.p ?? 1e9) - (b.p ?? 1e9)],
 };
+TT_SORT.mom = ['by momentum', (a, b) => (window.MOMENTUM ? MOMENTUM.ttFactor(b) - MOMENTUM.ttFactor(a) : 0) || b.sold - a.sold]; // momentum.js
 const TT_PAGE = 60;
 const TT_BLOCK = { electric: 'Battery or electric', skin: 'Cosmetics', medical: 'Medical claim', brand: 'Brand or copy risk', sizing: 'Sizing returns', fragile: 'Fragile', bulky: 'Big or heavy', restricted: 'Hard to ship', kids: 'For children', foodcontact: 'Touches food', hardsource: 'Hard to source' };
 const tt = { q: '', cat: '', sort: 'sold', clean: true, p25: false, gap: false, done: false, shown: TT_PAGE };
@@ -2179,6 +2184,7 @@ function ttCard(a) {
     <div class="bd">
       <h2 class="t"><a href="${url}" target="_blank" rel="noopener noreferrer">${esc(ttTitle(a.title))}</a></h2>
       ${price}
+      ${window.MOMENTUM ? MOMENTUM.ttRow(a) : ''}
       <div class="meta">
         <div class="m" title="${esc(fmt(a.reviews))} reviews"><b>${a.rating == null ? '–' : '★' + esc(a.rating)}</b><span>rating</span></div>
         <div class="m" title="Creators with videos on this product, of the videos in the answer"><b>${esc(fmt(a.creators))}</b><span>creators</span></div>
@@ -2671,6 +2677,8 @@ addEventListener('pagehide', lnFlush);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') lnFlush(); });
 addEventListener('load', () => { if (!LN.list) lnLoad().catch(() => {}); }); // the count on 🚀: cards that are not a no-go
 
+// Momentum (momentum.js): its script or the TikTok summaries can arrive after the cards: draw them again with their rows.
+addEventListener('momentum', () => { if (st.scope === 'tiktok') { if (TT) ttRender(); } else if (ADS.length && ['all', 'made', 'starred', 'inbox'].includes(st.view)) render(); });
 // Desktop: cards lean toward the pointer (CSS variables through the CSSOM: the CSP blocks style attributes).
 if (st.scope === 'tiktok') { document.body.classList.add('tt'); ttLoad(); } else { load(); loadMarkets(); }
 </script>
