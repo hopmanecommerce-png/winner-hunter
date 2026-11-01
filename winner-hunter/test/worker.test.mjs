@@ -1,5 +1,6 @@
 // worker/src/app.mjs: PIN flow, /api/ads, /api/hide, CSV, security headers and injection attempts,
 // on an in-memory D1 (node:sqlite) with the real migration and the real upsert.
+import { TRAITS, AD_TRAITS, CHOICES, AD_CHOICES } from '../worker/src/jev-questions.mjs';
 import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
@@ -399,6 +400,7 @@ test('/api/hide refuses bad input, other sites and unknown ads', async () => {
   assert.strictEqual(env.db.prepare('SELECT COUNT(*) AS n FROM hidden').get().n, 0);
 });
 
+const JEV_HEAD = ['jev_main', 'jev_sub', 'jev_product_score', 'jev_ad_score', ...Object.keys({ ...CHOICES, ...AD_CHOICES }).map((k) => 'jev_' + k), ...[...TRAITS, ...AD_TRAITS].map((x) => 'jev_' + x.k), 'jev_used'].join(',');
 test('CSV export: header, quotes, commas, newlines and formulas made harmless', async () => {
   assert.strictEqual(csvCell('a,b'), '"a,b"');
   assert.strictEqual(csvCell('say "hi"'), '"say ""hi"""');
@@ -415,7 +417,7 @@ test('CSV export: header, quotes, commas, newlines and formulas made harmless', 
   assert.match(res.headers.get('content-disposition'), /^attachment; filename="winners-all-2026-10-17\.csv"$/);
   const csv = await res.text();
   const [head] = csv.split('\r\n');
-  assert.strictEqual(head, 'ad_id,product,price,compare_at,currency,discount_pct,reach_eu,reach_per_day,ad_age_days,active_ads,ads_for_product,store_products,advertiser,store_url,product_url,ad_library_url,image_url,keyword,first_seen,last_seen,status,made_at,proof_signals,markets_outside_eu,new_ads_14d,in_eu,eu_reach_per_day_product,eu_reach_per_day_shop_best_ad,jev_category,jev_people_eat_or_take,jev_animals_eat_or_take,jev_gymwear,jev_physical_product,jev_input');
+  assert.strictEqual(head, 'ad_id,product,price,compare_at,currency,discount_pct,reach_eu,reach_per_day,ad_age_days,active_ads,ads_for_product,store_products,advertiser,store_url,product_url,ad_library_url,image_url,keyword,first_seen,last_seen,status,made_at,proof_signals,markets_outside_eu,new_ads_14d,in_eu,eu_reach_per_day_product,eu_reach_per_day_shop_best_ad,' + JEV_HEAD);
   assert.strictEqual(csv.trim().split('\r\n').length, 28, 'header + the 27 that pass the rules');
   for (const out of ['9200', '9300', '9600', '9700', '9800', '9900']) assert.ok(!csv.includes(out + ','), out + ' fails a rule');
   assert.ok(csv.includes(`"'=HYPERLINK(""http://evil.test"",""x"") <img src=x onerror=alert(1)>, ""quoted""\nline2"`));

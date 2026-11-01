@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /*
- * Asks Jev about every product outside the EU that it has not seen yet and stores the answers in D1 table world_checks; the
- * board shows them. Only adds data: nothing is hidden or removed here. Each product is asked once.
+ * Asks Jev about the products outside the EU it has no answers for and stores them in D1 table world_checks; the board
+ * shows them. Only adds data: nothing is hidden or removed here. A product is asked again when the questions change, and
+ * once more when its ad's words become known.
  *   CF_API_TOKEN=… CF_ACCOUNT_ID=… TYPESAFE_API_KEY=… [JEV_MINUTES=15] node winner-hunter/world-check.mjs
  * No key, no balance or a changed API is no failed hunt: the run says so in D1 state 'world_check', and the board shows it.
  */
@@ -10,21 +11,39 @@ import { fileURLToPath } from 'node:url';
 import { d1Client, d1Settings } from './lib/d1.mjs';
 import { pool } from './lib/meta.mjs';
 import { checkProduct, JevError, PRICE_PER_TOKEN } from './lib/jev.mjs';
+import { VERSION } from './worker/src/jev-questions.mjs';
 
-const MAX_PER_RUN = 1000; // about 10 cents at 2,400 tokens a product
+const MAX_PER_RUN = 1000; // about 40 cents at 10,000 tokens a product
 const AT_ONCE = 3; // 8 at once ran into waits of 4 seconds and more (2026-11-01)
 const FAILS_THEN_STOP = 10;
 
-export const TODO_SQL = `SELECT p.product_key, p.product_title AS title, p.image_url, p.store_url, COALESCE(i.product_type, '') AS type
-FROM world_products p LEFT JOIN world_items i ON i.product_key = p.product_key
-WHERE p.active = 1 AND p.product_key NOT IN (SELECT product_key FROM world_checks) ORDER BY p.first_seen LIMIT ${MAX_PER_RUN}`;
-const LEFT_SQL = 'SELECT COUNT(*) AS n FROM world_products WHERE active = 1 AND product_key NOT IN (SELECT product_key FROM world_checks)';
-export const SAVE_SQL = `INSERT INTO world_checks (product_key, model, input, people, animals, gymwear, physical, category, category_conf, tokens, checked_at)
-SELECT json_extract(value, '$.key'), json_extract(value, '$.model'), json_extract(value, '$.input'), json_extract(value, '$.people'), json_extract(value, '$.animals'),
-  json_extract(value, '$.gymwear'), json_extract(value, '$.physical'), json_extract(value, '$.category'), json_extract(value, '$.category_conf'), json_extract(value, '$.tokens'), ?2
-FROM json_each(?1) WHERE true
-ON CONFLICT(product_key) DO UPDATE SET model = excluded.model, input = excluded.input, people = excluded.people, animals = excluded.animals, gymwear = excluded.gymwear,
-  physical = excluded.physical, category = excluded.category, category_conf = excluded.category_conf, tokens = excluded.tokens, checked_at = excluded.checked_at`;
+// New products; those answered by an older question set; and, once more, those answered before their ad's words were known.
+export const TODO_SQL = `SELECT p.product_key, p.product_title AS title, p.image_url, p.store_url, p.price, p.compare_at_price, p.currency, p.store_products, p.advertiser, p.likes, p.keyword,
+  p.markets, p.ads, p.days, p.new14, p.creatives, COALESCE(i.product_type, '') AS type
+FROM world_products p LEFT JOIN world_items i ON i.product_key = p.product_key LEFT JOIN world_checks c ON c.product_key = p.product_key
+WHERE p.active = 1 AND (c.product_key IS NULL OR COALESCE(c.version, 1) < ${VERSION}
+  OR (COALESCE(c.ad_text, 0) = 0 AND EXISTS (SELECT 1 FROM world_ads a WHERE a.product_key = p.product_key AND COALESCE(a.body, '') != '')))
+ORDER BY p.first_seen LIMIT ${MAX_PER_RUN}`;
+const LEFT_SQL = `SELECT COUNT(*) AS n FROM world_products p LEFT JOIN world_checks c ON c.product_key = p.product_key WHERE p.active = 1 AND (c.product_key IS NULL OR COALESCE(c.version, 1) < ${VERSION})`;
+const ADS_OF_SQL = `SELECT a.product_key, a.title, COALESCE(a.body, '') AS body, a.image_url, a.copies, a.last_seen FROM world_ads a WHERE a.product_key IN (SELECT value FROM json_each(?1)) ORDER BY a.copies DESC, a.last_seen DESC`;
+const COLS = ['key', 'model', 'input', 'people', 'animals', 'gymwear', 'physical', 'category', 'category_conf', 'tokens', 'version', 'main', 'sub', 'main_conf', 'sub_conf', 'product_score', 'ad_score', 'answers', 'used', 'ad_text'];
+const DB_COLS = (c) => (c === 'key' ? 'product_key' : c);
+export const SAVE_SQL = `INSERT INTO world_checks (${COLS.map(DB_COLS).join(', ')}, checked_at)
+SELECT ${COLS.map((c) => `json_extract(value, '$.${c}')`).join(', ')}, ?2 FROM json_each(?1) WHERE true
+ON CONFLICT(product_key) DO UPDATE SET ${COLS.filter((c) => c !== 'key').map((c) => `${c} = excluded.${c}`).join(', ')}, checked_at = excluded.checked_at`;
+
+/** The ads of a product, the ones with the most copies first: unique titles and words, and the first picture. */
+export function adsOf(rows, product) {
+  const uniq = (xs, n) => [...new Set(xs.map((x) => String(x || '').trim()).filter(Boolean))].slice(0, n);
+  let countries = [];
+  try {
+    countries = Object.keys(JSON.parse(product.markets || '{}'));
+  } catch (e) {
+    countries = [];
+  }
+  return { titles: uniq(rows.map((r) => r.title), 5), texts: uniq(rows.map((r) => r.body), 3), image: (rows.find((r) => r.image_url) || {}).image_url || '',
+    countries, count: product.ads ?? null, days: product.days ?? null, new14: product.new14 ?? null, creatives: product.creatives ?? null };
+}
 
 export async function checkAll({ db, key, doFetch = globalThis.fetch, now = Date.now, log = console.log, deadline = Infinity, pause, atOnce = AT_ONCE }) {
   const when = () => new Date(now()).toISOString();
@@ -36,6 +55,13 @@ export async function checkAll({ db, key, doFetch = globalThis.fetch, now = Date
     return t;
   }
   const todo = await db.query(TODO_SQL);
+  const adsBy = new Map();
+  if (todo.length) {
+    for (const a of await db.query(ADS_OF_SQL, [JSON.stringify(todo.map((p) => p.product_key))])) {
+      if (!adsBy.has(a.product_key)) adsBy.set(a.product_key, []);
+      adsBy.get(a.product_key).push(a);
+    }
+  }
   const rows = [];
   let fails = 0;
   let lost = null;
@@ -53,7 +79,8 @@ export async function checkAll({ db, key, doFetch = globalThis.fetch, now = Date
     await pool(todo, atOnce, async (p) => {
       if (t.stopped || now() > deadline) return;
       try {
-        const a = await checkProduct({ title: p.title, type: p.type, store: p.store_url, image: p.image_url }, { key, doFetch, ...(pause ? { pause } : {}) });
+        const a = await checkProduct({ key: p.product_key, title: p.title, type: p.type, store: p.store_url, image: p.image_url, price: p.price, was: p.compare_at_price, currency: p.currency,
+          products: p.store_products, advertiser: p.advertiser, likes: p.likes, keyword: p.keyword, ads: adsOf(adsBy.get(p.product_key) || [], p) }, { key, doFetch, ...(pause ? { pause } : {}) });
         rows.push({ key: p.product_key, ...a });
         t.checked++;
         t.tokens += a.tokens;
