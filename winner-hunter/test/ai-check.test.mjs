@@ -1,4 +1,4 @@
-// The AI read (lib/ai-check.mjs, ai-check.mjs, worker/src/ai-schema.mjs, migrations/0016_ai_checks.sql): the schema and its
+// The AI read (lib/ai-check.mjs, ai-check.mjs, worker/src/ai-schema.mjs, migrations/0017_ai_checks.sql): the schema and its
 // validator, the untrusted product data and the injection checks, one request per product, the cost and the spend caps,
 // and whole runs against a fake Anthropic API (test/helpers/fake-anthropic.mjs, through Anthropic's real SDK) on an
 // in-memory D1 with every migration applied. The SDK tests skip without the SDK; the CI installs it (tests.yml).
@@ -24,7 +24,7 @@ try {
   // skipped below
 }
 const NO_SDK = !sdk && 'Anthropic SDK not installed: npm install --no-save --no-package-lock @anthropic-ai/sdk@1.3.0';
-const MIGRATION = fs.readFileSync(new URL('../worker/migrations/0016_ai_checks.sql', import.meta.url), 'utf8');
+const MIGRATION = fs.readFileSync(new URL('../worker/migrations/0017_ai_checks.sql', import.meta.url), 'utf8');
 const iso = (ms) => new Date(ms).toISOString();
 const good = (extra = {}) => ({ injection_suspected: false, product: 'Posture corrector back brace', niche: 'Health and pain relief', customer: 'Office workers', angle: 'Stand straight again in two weeks',
   wow: 'medium', saturation: 'high', saturation_hint: 'Sold by many stores since 2021', claims_risk: 'medium', claims: ['relieves back pain'], pros: ['Easy to demo'], cons: ['Health claims'], fit: 58, confidence: 'medium', ...extra });
@@ -33,7 +33,7 @@ const good = (extra = {}) => ({ injection_suspected: false, product: 'Posture co
 // The table, the schema and the validator
 // ---------------------------------------------------------------------------
 
-test('migration 0016: only CREATE … IF NOT EXISTS, safe to run again and again, nothing dropped or changed', () => {
+test('migration 0017: only CREATE … IF NOT EXISTS, safe to run again and again, nothing dropped or changed', () => {
   const st = statements(MIGRATION);
   assert.deepStrictEqual(st.map((x) => x.split('(')[0].trim()), ['CREATE TABLE IF NOT EXISTS ai_checks', 'CREATE INDEX IF NOT EXISTS ai_checks_batch ON ai_checks']);
   assert.doesNotMatch(MIGRATION.replace(/--.*$/gm, ''), /\b(DROP|DELETE|ALTER|UPDATE|INSERT|REPLACE)\b/i, 'it only makes what is not there');

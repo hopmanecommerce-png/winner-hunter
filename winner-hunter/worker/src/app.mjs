@@ -15,6 +15,7 @@ import { adView } from './adview.mjs';
 import { TRAITS, AD_TRAITS, CHOICES, AD_CHOICES, SEP, YES_AT, VERSION } from './jev-questions.mjs';
 import { MARKET_RULES } from './market-rules.mjs';
 import { LAUNCH_JS, launchList, launchPost } from './launch.mjs';
+import { SOURCING_JS, sourcingGet, sourcingPost } from './sourcing.mjs';
 
 const COOKIE = '__Host-wh';
 const MAX_AGE = 90 * 864e2; // seconds
@@ -1375,6 +1376,20 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       const { j, err } = await readJson(req, url, 8000);
       if (err) return err;
       const out = await launchPost(env, j, now, deps);
+      return json(out.body, out.status);
+    }
+    // ---- 🔎 Sourcing (sourcing.mjs): the supplier match pipeline on a launch card. A block of its own, as the Launch view's.
+    // /sourcing.js: the links, the comparison and the messages the panel works out as you type.
+    if (path === '/api/sourcing' || path === '/sourcing.js') {
+      if (!ok) return json({ error: 'Log in first' }, 401);
+      if (path === '/sourcing.js') return method === 'GET' ? text(SOURCING_JS, 200, { 'Content-Type': 'text/javascript; charset=utf-8' }) : json({ error: 'Method not allowed' }, 405);
+      let out;
+      if (method === 'GET') out = await sourcingGet(env, url.searchParams, now);
+      else if (method === 'POST') {
+        const { j, err } = await readJson(req, url, 8000);
+        if (err) return err;
+        out = await sourcingPost(env, j, now);
+      } else return json({ error: 'Method not allowed' }, 405);
       return json(out.body, out.status);
     }
     // Off unless the Worker has AD_VIEWER = "on": the board no longer uses it, and a Meta token left in the Worker by an
