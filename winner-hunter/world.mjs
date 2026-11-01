@@ -11,7 +11,7 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { d1Client, d1Settings, chunks } from './lib/d1.mjs';
-import { pool } from './lib/meta.mjs';
+import { pool, checkTokens } from './lib/meta.mjs';
 import { EU_CODES } from './lib/eu.mjs';
 import { openLibrary } from './lib/adlibrary.mjs';
 import { MARKETS, KEEP_DAYS, parseWorldKeywords, searchesOf, toRow, checkStore, fetchProduct, suggestProduct, addUp, euFacts } from './lib/world.mjs';
@@ -26,7 +26,7 @@ const STORE_DAYS = 14; // a store's Shopify check and a product's facts are read
 const PAGE_DAYS = 7; // a shop's ad count per market is read again after this long
 const MAX_GUESSES = 400; // ad titles per run looked up in their store's search
 
-const USAGE_STOP = 60; // % of Meta's hourly limit: the EU check stops here
+const USAGE_STOP = 90; // % of Meta's hourly limit: the EU check stops here, before Meta blocks the token at 100. Only hand-started EU runs share it now.
 
 /** Meta's usage header: the highest of call count, CPU and time, 0–100. */
 function usagePct(res) {
@@ -289,7 +289,7 @@ async function night({ db, lib, keywords, doFetch = globalThis.fetch, now = Date
         const res = await doFetch(`${base}/${api}/ads_archive?${p}`, { signal: AbortSignal.timeout(30000) });
         const j = await res.json();
         if (usagePct(res) >= USAGE_STOP) {
-          stop = true; // leave room for the EU hunt
+          stop = true; // before Meta blocks the token
           log('EU check stopped: near Meta\'s hourly limit, the rest next run');
         }
         if (j.error) {
@@ -348,6 +348,24 @@ async function night({ db, lib, keywords, doFetch = globalThis.fetch, now = Date
   return t;
 }
 
+/**
+ * Saves when the Meta token expires, for the board's banner, and returns what is wrong with it ('' = nothing): this run
+ * then ends red, so GitHub sends its push. No token: nothing to warn about. A failed check changes nothing.
+ */
+export async function saveTokenCheck(db, token, { check = checkTokens, now = Date.now } = {}) {
+  const save = (v) => db.setState('token_expires_at', { ...v, checked_at: new Date(now()).toISOString() }).catch(() => {});
+  if (!token) {
+    await save({ at: null });
+    return '';
+  }
+  const [k] = await Promise.resolve().then(() => check([token])).catch(() => []);
+  if (!k || k.error) return '';
+  await save({ at: k.expiresAt ? new Date(k.expiresAt).toISOString() : null, valid: !!k.valid });
+  if (!k.valid) return 'Meta token META_TOKEN is invalid or expired: make a new one and update the GitHub secret';
+  if (k.expiresAt && k.expiresAt - now() < 7 * DAY) return `Meta token META_TOKEN expires on ${new Date(k.expiresAt).toISOString().slice(0, 10)}: make a new one now and update the GitHub secret`;
+  return '';
+}
+
 async function main() {
   const env = process.env;
   const s = d1Settings(env);
@@ -355,6 +373,12 @@ async function main() {
   const keywords = parseWorldKeywords(fs.readFileSync(new URL('./keywords-world.txt', import.meta.url), 'utf8'));
   const minutes = Math.min(Math.max(Number(env.WORLD_MINUTES) || 120, 1), 300);
   const db = d1Client(s);
+  const metaToken = String(env.META_TOKEN || '').replace(/\s+/g, '');
+  const tokenTrouble = await saveTokenCheck(db, metaToken);
+  if (tokenTrouble) {
+    console.log(`::error::${tokenTrouble}`);
+    process.exitCode = 1; // the hunt still runs: it only needs the token for the EU check
+  }
   const launch = async () => {
     const { chromium } = await import('playwright-core').catch(() => import('playwright'));
     return chromium.launch({ channel: 'chrome' }).catch(() => chromium.launch(env.CHROME_PATH ? { executablePath: env.CHROME_PATH } : {}));
@@ -368,7 +392,7 @@ async function main() {
     throw e;
   }
   try {
-    const t = await hunt({ db, lib, keywords, deadline: Date.now() + minutes * 60000, maxPages: Math.max(Number(env.WORLD_PAGES) || 80, 0), tokens: [env.META_TOKEN],
+    const t = await hunt({ db, lib, keywords, deadline: Date.now() + minutes * 60000, maxPages: Math.max(Number(env.WORLD_PAGES) || 80, 0), tokens: [metaToken],
       searchShare: Math.min(Math.max(Number(env.WORLD_SEARCH_SHARE) || 0.7, 0.05), 0.95) });
     if (env.GITHUB_STEP_SUMMARY) {
       fs.appendFileSync(env.GITHUB_STEP_SUMMARY, `\n**Outside the EU:** ${t.searches} searches, ${t.blocked} refused, ${t.ads} ads, ${t.products} products on the board (${t.health}).\n`);

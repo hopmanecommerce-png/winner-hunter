@@ -105,7 +105,7 @@ test('/api/ads: All is the default view (no Top 20): ads that pass the rules, on
   assert.strictEqual(a.zh, '连衣裙', 'search word dress → Chinese 1688 term');
 });
 
-test('alert banner: red for a failed run, no run in 36 hours or a Meta token expiring within 7 days; yellow for warnings', async () => {
+test('alert banner: red for a failed run or a Meta token expiring within 7 days; yellow for warnings; an old EU run is fine', async () => {
   const H = 3600e3;
   const iso = (ms) => new Date(ms).toISOString();
   const env = await seededEnv();
@@ -121,16 +121,17 @@ test('alert banner: red for a failed run, no run in 36 hours or a Meta token exp
   setState('last_run', { status: 'done', health: 'failed', alert: 'Run mislukt: 0 ads gecheckt (Meta token?) / Run failed: 0 ads checked (Meta token?)', finished_at: iso(NOW - 6 * H) });
   assert.deepStrictEqual(await alertOf(), { level: 'red', text: 'Run mislukt: 0 ads gecheckt (Meta token?) / Run failed: 0 ads checked (Meta token?)' });
   setState('last_run', { status: 'done', health: 'ok', finished_at: iso(NOW - 37 * H) });
-  assert.deepStrictEqual(await alertOf(), { level: 'red', text: 'Geen run in 36 uur / No run in 36 hours' });
-  assert.strictEqual(await alertOf(NOW - 2 * H), null, '35 hours: still fine');
+  assert.strictEqual(await alertOf(), null, 'the EU hunt only runs by hand: no recent run is no problem');
+  setState('last_run', { status: 'done', health: 'failed', alert: 'old failure', finished_at: iso(NOW - 37 * H) });
+  assert.strictEqual(await alertOf(), null, 'and an old failure no longer shows');
   setState('last_run', { status: 'running', started_at: iso(NOW - 40 * H) }, NOW - 39 * H);
-  assert.strictEqual((await alertOf()).level, 'red', 'a run stuck on "running" for 40 hours');
+  assert.deepStrictEqual(await alertOf(), { level: 'red', text: 'EU-run staat stil / The EU run has stopped moving' }, 'a run stuck on "running" for 40 hours');
   setState('last_run', { status: 'running', started_at: iso(NOW - 1 * H) });
   setState('token_expires_at', { at: iso(NOW + 3.5 * 864e5) });
   assert.deepStrictEqual(await alertOf(), { level: 'red', text: 'Meta token verloopt over 3 dagen / Meta token expires in 3 days' });
   setState('last_run', { status: 'done', health: 'warning', finished_at: iso(NOW - 40 * H) });
   setState('token_expires_at', { at: iso(NOW - 864e5) });
-  assert.deepStrictEqual(await alertOf(), { level: 'red', text: 'Geen run in 36 uur / No run in 36 hours · Meta token verlopen / Meta token expired' }, 'red wins over yellow');
+  assert.deepStrictEqual(await alertOf(), { level: 'red', text: 'Meta token verlopen / Meta token expired' }, 'red wins over yellow');
   // never-expiring token, no run yet, broken state
   assert.strictEqual(boardAlert(null, { at: null }, NOW), null);
   assert.strictEqual(boardAlert({ health: 'ok', finished_at: 'garbage' }, null, NOW), null);

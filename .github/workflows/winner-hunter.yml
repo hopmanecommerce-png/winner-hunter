@@ -1,7 +1,8 @@
-# Winner Hunter v2: every night, active Meta Ad Library ads from Shopify stores, scored with the dropshipping
+# Winner Hunter v2, the EU hunt. Off since 1 Nov 2026 (Connor: all capacity goes to the markets outside the EU, world-hunter.yml):
+# it only runs when started by hand. Active Meta Ad Library ads from Shopify stores, scored with the dropshipping
 # checklist. Winners and promising ads (score 55+) go into the Cloudflare D1 database after every batch of 2
 # keywords; the board (deploy-board.yml) shows them live. Each run goes on where the last one stopped.
-# Run it by hand: Actions → Winner Hunter → Run workflow (also in the GitHub app).
+# Run it: Actions → Winner Hunter → Run workflow (also in the GitHub app).
 # Secrets: META_TOKEN, CF_API_TOKEN, CF_ACCOUNT_ID (see winner-hunter/README.md). Optional: META_TOKEN_2, META_TOKEN_3.
 name: Winner Hunter
 
@@ -16,8 +17,6 @@ on:
         description: 'Only these keywords (empty = next ones from keywords.txt; several: dog | cat)'
         required: false
         default: ''
-  schedule:
-    - cron: '17 1 * * *' # every night ~03:00 Amsterdam time
 
 permissions:
   contents: read

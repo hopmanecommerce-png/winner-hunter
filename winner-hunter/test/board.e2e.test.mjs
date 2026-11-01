@@ -321,7 +321,7 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
       await page.waitForFunction((x) => !document.querySelector('.card') || document.querySelector('.card').dataset.id !== x, cur);
     }
     await page.waitForSelector('#zero:not([hidden])');
-    assert.match(await page.textContent('#zero'), /Inbox zero[\s\S]*cleared today[\s\S]*Next hunt/);
+    assert.match(await page.textContent('#zero'), /Inbox zero[\s\S]*cleared today[\s\S]*The EU hunt is off/);
     assert.ok(await page.locator('#tri').isHidden());
     await noSideScroll('Inbox zero');
     await shot('9-inbox-zero');

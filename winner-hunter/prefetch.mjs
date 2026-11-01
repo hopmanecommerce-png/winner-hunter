@@ -10,7 +10,7 @@ import { d1Client, d1Settings } from './lib/d1.mjs';
 import { PREFETCH_SQL } from './worker/src/app.mjs';
 import { renderAdUrl, waitReady, SKIP_TYPES, extractAd, cleanAd, scrub } from './worker/src/adview.mjs';
 
-const STALE_HOURS = 16; // the board serves a stored ad for 24 hours; this runs every 8 hours
+const STALE_HOURS = 16; // the board serves a stored ad for 24 hours
 const UPSERT = 'INSERT INTO ad_views (ad_id, json, fetched_at) VALUES (?1, ?2, ?3) ON CONFLICT(ad_id) DO UPDATE SET json = excluded.json, fetched_at = excluded.fetched_at';
 
 /** Opens and stores the ads that need it. `open(url)` returns what extractAd() read from the page. */

@@ -5,7 +5,7 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import { d1Client, migrate } from '../lib/d1.mjs';
 import { MARKETS, LANGS, euFacts, sameThing, resetCooling, parseWorldKeywords, searchesOf, libraryUrl, readLibrary, toRow, classify, checkStore, fetchProduct, suggestProduct, addUp, MIN_DAYS } from '../lib/world.mjs';
-import { hunt, ADS_SQL } from '../world.mjs';
+import { hunt, ADS_SQL, saveTokenCheck } from '../world.mjs';
 import { openLibrary } from '../lib/adlibrary.mjs';
 import { handle, makeToken, products, proofOf, worldRow, worldMarketsOf, worldAlert, PROOF, WORLD_MARKETS } from '../worker/src/app.mjs';
 import { MARKET_RULES } from '../worker/src/market-rules.mjs';
@@ -539,10 +539,32 @@ test('CSV outside the EU has the proof; cells cannot run as formulas', async () 
 
 test('a problem with the scan shows on its tab only', async () => {
   assert.strictEqual(worldAlert(null, NOW), null);
+  // The token now only serves this hunt, so its problem shows on this tab.
+  const iso = (ms) => new Date(ms).toISOString();
+  assert.strictEqual(worldAlert(null, NOW, { at: iso(NOW + 30 * 864e5), valid: true }), null);
+  assert.strictEqual(worldAlert(null, NOW, { at: null, valid: true }), null, 'a token that never expires');
+  assert.deepStrictEqual(worldAlert(null, NOW, { at: iso(NOW + 3.5 * 864e5) }), { level: 'red', text: 'Meta token verloopt over 3 dagen / Meta token expires in 3 days' });
+  assert.deepStrictEqual(worldAlert(null, NOW, { at: null, valid: false }), { level: 'red', text: 'Meta token ongeldig / Meta token invalid' });
+  assert.strictEqual(worldAlert({ health: 'failed', alert: 'x', finished_at: iso(NOW) }, NOW, { at: iso(NOW - 864e5) }).text, 'x · Meta token verlopen / Meta token expired');
+  assert.strictEqual(worldAlert({ health: 'warning', alert: 'y', finished_at: iso(NOW) }, NOW, { at: iso(NOW - 864e5) }).text, 'Meta token verlopen / Meta token expired', 'red wins over yellow');
+  const saved = [];
+  const db = { setState: async (k, v) => { saved.push([k, v]); } };
+  assert.strictEqual(await saveTokenCheck(db, 't', { check: async () => [{ n: 1, error: 'network' }] }), '');
+  assert.strictEqual(await saveTokenCheck(db, 't', { check: async () => { throw new Error('down'); } }), '');
+  assert.deepStrictEqual(saved, [], 'no answer: what is known stays');
+  assert.match(await saveTokenCheck(db, 't', { check: async () => [{ n: 1, valid: true, expiresAt: NOW + 864e5 }], now: () => NOW }), /expires on/);
+  assert.deepStrictEqual(saved.pop(), ['token_expires_at', { at: iso(NOW + 864e5), valid: true, checked_at: iso(NOW) }]);
+  assert.strictEqual(await saveTokenCheck(db, 't', { check: async () => [{ n: 1, valid: true, expiresAt: NOW + 30 * 864e5 }], now: () => NOW }), '');
+  assert.strictEqual(await saveTokenCheck(db, 't', { check: async () => [{ n: 1, valid: true, expiresAt: 0 }], now: () => NOW }), '', 'never expires');
+  assert.match(await saveTokenCheck(db, 't', { check: async () => [{ n: 1, valid: false }], now: () => NOW }), /invalid or expired/);
+  assert.deepStrictEqual(saved.pop(), ['token_expires_at', { at: null, valid: false, checked_at: iso(NOW) }]);
+  assert.strictEqual(await saveTokenCheck(db, '', { check: async () => { throw new Error('asked'); }, now: () => NOW }), '');
+  assert.deepStrictEqual(saved.pop(), ['token_expires_at', { at: null, checked_at: iso(NOW) }], 'no token: an old banner goes away');
   assert.strictEqual(worldAlert({ health: 'ok', finished_at: new Date(NOW - 3600e3).toISOString() }, NOW), null);
   assert.strictEqual(worldAlert({ health: 'failed', alert: 'x', finished_at: new Date(NOW).toISOString() }, NOW).level, 'red');
   assert.strictEqual(worldAlert({ health: 'warning', finished_at: new Date(NOW).toISOString() }, NOW).level, 'yellow');
-  assert.strictEqual(worldAlert({ health: 'ok', finished_at: new Date(NOW - 80 * 3600e3).toISOString() }, NOW).level, 'red');
+  assert.strictEqual(worldAlert({ health: 'ok', finished_at: new Date(NOW - 23 * 3600e3).toISOString() }, NOW), null);
+  assert.strictEqual(worldAlert({ health: 'ok', finished_at: new Date(NOW - 25 * 3600e3).toISOString() }, NOW).level, 'red');
   const { env, mem } = await setup();
   mem.prepare("INSERT INTO state (key, value, updated_at) VALUES ('world_run', ?, 'x')").run(JSON.stringify({ health: 'failed', alert: 'Refused', finished_at: new Date(NOW).toISOString() }));
   assert.strictEqual((await J(env, '/api/ads?scope=world')).alert.text, 'Refused');

@@ -22,7 +22,8 @@ export const MAX_AGE_DAYS = 42; // ad age today: the age when last seen + the wh
 export const MIN_REACH_PER_DAY = 500;
 const PIN_TRIES = 10; // wrong PINs per IP per 15 minutes
 const PIN_WINDOW = 15 * 60000;
-const STALE_HOURS = 36; // no finished run for this long: red banner
+const STALE_HOURS = 36; // the EU hunt only runs by hand: a run older than this no longer shows a banner, unless it hangs
+const WORLD_STALE_HOURS = 24; // the hunt outside the EU runs every 6 hours
 const TOKEN_DAYS = 7; // a Meta token expiring within this many days: red banner
 
 // ---------------------------------------------------------------------------
@@ -578,36 +579,53 @@ async function stateJson(DB, key) {
 }
 
 /**
- * The banner on top of the board, or null. Red: the last run failed, no run finished in 36 hours, or a Meta
- * token expires within 7 days. Yellow: the last run had warnings.
+ * The Meta token's problem for the banner, or ''. It expires within 7 days or Meta says it is invalid. Only an answer
+ * from the check says so: a token without a known date is fine.
+ */
+function tokenProblem(token, now) {
+  if (token && token.valid === false) return 'Meta token ongeldig / Meta token invalid';
+  const exp = token && token.at ? Date.parse(token.at) : NaN;
+  if (!Number.isFinite(exp) || exp - now >= TOKEN_DAYS * 864e5) return '';
+  const days = Math.floor((exp - now) / 864e5);
+  return days < 0 ? 'Meta token verlopen / Meta token expired' : `Meta token verloopt over ${days} dagen / Meta token expires in ${days} days`;
+}
+
+/**
+ * The banner on top of the EU tab, or null. Red: a recent run failed, a run hangs, or a Meta token expires within 7 days.
+ * Yellow: a recent run had warnings. The EU hunt only runs by hand since 1 Nov 2026, so an old finished run is no problem.
  */
 export function boardAlert(run, token, now = Date.now()) {
   const red = [];
   const yellow = [];
   if (run) {
-    if (run.health === 'failed') red.push(run.alert || 'Laatste run mislukt / Last run failed');
-    else if (run.health === 'warning') yellow.push(run.alert || 'Laatste run had waarschuwingen / Last run had warnings');
     const at = Date.parse(run.finished_at || run.started_at || run.updated_at || '');
-    if (Number.isFinite(at) && now - at > STALE_HOURS * 3600e3) red.push(`Geen run in ${STALE_HOURS} uur / No run in ${STALE_HOURS} hours`);
+    const old = Number.isFinite(at) && now - at > STALE_HOURS * 3600e3;
+    if (old && run.status === 'running') red.push('EU-run staat stil / The EU run has stopped moving');
+    else if (!old && run.health === 'failed') red.push(run.alert || 'Laatste run mislukt / Last run failed');
+    else if (!old && run.health === 'warning') yellow.push(run.alert || 'Laatste run had waarschuwingen / Last run had warnings');
   }
-  const exp = token && token.at ? Date.parse(token.at) : NaN;
-  if (Number.isFinite(exp) && exp - now < TOKEN_DAYS * 864e5) {
-    const days = Math.floor((exp - now) / 864e5);
-    red.push(days < 0 ? 'Meta token verlopen / Meta token expired' : `Meta token verloopt over ${days} dagen / Meta token expires in ${days} days`);
-  }
+  const tok = tokenProblem(token, now);
+  if (tok) red.push(tok);
   if (red.length) return { level: 'red', text: red.join(' · ') };
   if (yellow.length) return { level: 'yellow', text: yellow.join(' · ') };
   return null;
 }
 
 /** A problem with the hunt outside the EU, for its tab: { level, text } or null. */
-export function worldAlert(run, now = Date.now()) {
+export function worldAlert(run, now = Date.now(), token = null) {
+  const tok = tokenProblem(token, now); // without a working token the "Not in EU" check stops
+  const own = worldRunAlert(run, now);
+  if (tok && own && own.level === 'red') return { level: 'red', text: `${own.text} · ${tok}` };
+  return tok ? { level: 'red', text: tok } : own;
+}
+
+function worldRunAlert(run, now) {
   if (!run) return null;
   const at = Date.parse(run.finished_at || run.started_at || '');
   if (run.health === 'failed') return { level: 'red', text: run.alert || 'Laatste scan buiten de EU mislukt / Last scan outside the EU failed' };
   const moved = Date.parse(run.updated_at || run.started_at || '');
   if (run.status === 'running' && Number.isFinite(moved) && now - moved > 3 * 3600e3) return { level: 'red', text: 'Scan buiten de EU staat stil / The scan outside the EU has stopped moving' };
-  if (Number.isFinite(at) && now - at > 72 * 3600e3) return { level: 'red', text: 'Geen scan buiten de EU in 72 uur / No scan outside the EU in 72 hours' };
+  if (Number.isFinite(at) && now - at > WORLD_STALE_HOURS * 3600e3) return { level: 'red', text: `Geen scan buiten de EU in ${WORLD_STALE_HOURS} uur / No scan outside the EU in ${WORLD_STALE_HOURS} hours` };
   if (run.health === 'warning') return { level: 'yellow', text: run.alert || 'Laatste scan had waarschuwingen / Last scan had warnings' };
   return null;
 }
@@ -739,6 +757,7 @@ async function ads(url, env, now, viewer) {
   const counts = countsOf(list, now, scope);
   const run = await stateJson(env.DB, 'last_run');
   const worldRun = await stateJson(env.DB, 'world_run');
+  const token = await stateJson(env.DB, 'token_expires_at');
   // While a run hunts, the board also shows what the run before it found.
   const prev = run && run.status === 'running'
     ? await env.DB.prepare('SELECT started_at, finished_at, ads_checked, winners FROM runs WHERE finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 1').first()
@@ -752,7 +771,7 @@ async function ads(url, env, now, viewer) {
     last_run: run,
     prev_run: prev || null,
     world_run: worldRun,
-    alert: scope === 'world' ? worldAlert(worldRun, now) : boardAlert(run, await stateJson(env.DB, 'token_expires_at'), now),
+    alert: scope === 'world' ? worldAlert(worldRun, now, token) : boardAlert(run, token, now),
     viewer,
   });
 }

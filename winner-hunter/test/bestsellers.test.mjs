@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import { productKey, storeTop, productId, rankOf, addDay, movement } from '../lib/bestsellers.mjs';
-import { refresh } from '../bestsellers.mjs';
+import { refresh, WANTED_SQL } from '../bestsellers.mjs';
 import { storeTrust, trustIdIn, trustPage, businessUnitIn, UA } from '../lib/trust.mjs';
 import { handle, makeToken, productKey as boardKey, movement as boardMovement, bestOf, sellsBoost } from '../worker/src/app.mjs';
 import { d1Client } from '../lib/d1.mjs';
@@ -109,6 +109,12 @@ test('bestsellers.mjs: ranks for the board products, kept per day; the board sho
   assert.strictEqual(row('shop3.test/products/item-3').ok, 1);
   assert.strictEqual(row('shop5.test/products/item-5').ok, 0, 'no list: rank unknown');
 
+  // The hunt runs four times a day: the same day no store's list is asked for again.
+  const again = stores(WEEK1);
+  await refresh({ db, doFetch: again.doFetch, now: () => NOW + 3600e3, log: () => {} });
+  assert.ok(!again.calls.some((u) => /shop[1-5]\.test\/.*graphql\.json/.test(u)), again.calls.join(' '));
+  assert.strictEqual(row('shop1.test/products/item-1').checked_at, new Date(NOW).toISOString());
+
   // A week later: shop1's product climbed, shop2's fell, shop3's is new in the top 50. Known ids are not looked up again.
   const later = NOW + 8 * DAY;
   const w2 = stores(WEEK2);
@@ -151,12 +157,28 @@ test('the board without the bestseller table (not migrated yet) still works, jus
 });
 
 test('workflows: ranks after every hunt (also a red one) and before every test link', () => {
-  const hunt = fs.readFileSync(new URL('../../.github/workflows/winner-hunter.yml', import.meta.url), 'utf8');
+  const flow = (f) => fs.readFileSync(new URL(`../../.github/workflows/${f}.yml`, import.meta.url), 'utf8');
+  assert.match(flow('world-hunter'), /- name: Store signals\n\s+if: \$\{\{ !cancelled\(\) \}\}\n\s+run: node winner-hunter\/bestsellers\.mjs/);
+  const hunt = flow('winner-hunter');
   assert.match(hunt, /- name: Store best sellers\n\s+if: \$\{\{ !cancelled\(\) \}\}\n\s+run: node winner-hunter\/bestsellers\.mjs/);
   const prev = fs.readFileSync(new URL('../../.github/workflows/preview-board.yml', import.meta.url), 'utf8');
   const at = (x) => prev.indexOf(x);
   assert.ok(at('run: node winner-hunter/migrate.mjs') > 0 && at('run: node winner-hunter/migrate.mjs') < at('run: node winner-hunter/bestsellers.mjs'));
   assert.ok(at('run: node winner-hunter/bestsellers.mjs') < at('versions upload'));
+});
+
+test('all capacity goes outside the EU: only the world hunt runs by itself, four times a day, and its products are checked first', () => {
+  const flow = (f) => fs.readFileSync(new URL(`../../.github/workflows/${f}.yml`, import.meta.url), 'utf8');
+  for (const f of ['winner-hunter', 'ad-prefetch']) {
+    assert.doesNotMatch(flow(f), /^\s*(schedule|workflow_run):/m, f);
+    assert.match(flow(f), /workflow_dispatch:/, f);
+  }
+  const crons = [...flow('world-hunter').matchAll(/cron: '(\d+) (\d+) \* \* \*'/g)].map((m) => Number(m[2]));
+  assert.deepStrictEqual(crons, [1, 7, 13, 19]);
+  const board = fs.readFileSync(new URL('../worker/src/board.html', import.meta.url), 'utf8');
+  assert.match(board, /const HUNT_HOURS = \[1, 7, 13, 19\];/, 'the board says the same hours');
+  assert.match(WANTED_SQL, /0 AS later FROM world_products/);
+  assert.match(WANTED_SQL, /1 AS later FROM winners/);
 });
 
 // ---- Trustpilot (lib/trust.mjs): the store's Trustpilot page, else a real widget on the store ----

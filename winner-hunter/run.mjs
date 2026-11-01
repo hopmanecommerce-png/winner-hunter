@@ -111,7 +111,7 @@ export async function run(cfg, deps) {
   }
   if ((checked || []).some((k) => !k.error)) {
     await safe('Could not save token_expires_at in D1', () => db.setState('token_expires_at', {
-      at: soonest ? new Date(soonest).toISOString() : null, checked_at: startIso,
+      at: soonest ? new Date(soonest).toISOString() : null, valid: checked.every((k) => k.error || k.valid), checked_at: startIso,
       tokens: checked.filter((k) => !k.error).map((k) => ({ n: k.n, valid: !!k.valid, expires_at: k.expiresAt ? new Date(k.expiresAt).toISOString() : k.valid ? 'never' : null })),
     }, new Date(now())));
   }

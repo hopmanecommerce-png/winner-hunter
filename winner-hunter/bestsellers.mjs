@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
- * Store signals for every product on the board (and every ★ and ✓ Made ad product), once a day after the hunt
- * (winner-hunter.yml) and for a test link (preview-board.yml); the board shows them on the card:
+ * Store signals for every product on the board (and every ★ and ✓ Approved product), after the hunt, once a day per product
+ * (world-hunter.yml) and for a test link (preview-board.yml); the board shows them on the card:
  *   - its rank in its own store's best-seller list (top 50, lib/bestsellers.mjs) → D1 table `bestseller`; only for
  *     ads that link to a product page
  *   - its store's Trustpilot score and number of reviews, from the store's own Trustpilot page, else from a real
@@ -28,9 +28,9 @@ const TRUST_DAYS = 3; // a store's Trustpilot score is checked again after this 
 // Trustpilot's own page can be read.
 const SETTLED = new Set(['page', 'nopage', 'widget']);
 
-const WANTED_SQL = `SELECT DISTINCT product_url, store_url, 0 AS later FROM winners
+export const WANTED_SQL = `SELECT DISTINCT product_url, store_url, 1 AS later FROM winners
 WHERE (${STRICT} AND last_seen >= ?1) OR ad_id IN (SELECT ad_id FROM stars) OR ad_id IN (SELECT ad_id FROM hidden WHERE status = 'seen')
-UNION SELECT product_url, store_url, 1 AS later FROM world_products WHERE active = 1 ORDER BY later`; // the products outside the EU (world.mjs) too, after the EU's
+UNION SELECT product_url, store_url, 0 AS later FROM world_products WHERE active = 1 ORDER BY later`; // the products outside the EU (world.mjs) first, the EU's with the time that is left
 export const SAVE_SQL = `INSERT INTO bestseller (product_key, store, product_id, rank, ok, checked_at, history)
 SELECT json_extract(value, '$.key'), json_extract(value, '$.store'), json_extract(value, '$.id'), json_extract(value, '$.rank'),
   json_extract(value, '$.ok'), ?2, json_extract(value, '$.history') FROM json_each(?1) WHERE true
@@ -51,7 +51,7 @@ export async function refresh({ db, doFetch = globalThis.fetch, now = Date.now, 
   const start = now();
   const day = new Date(start).toISOString().slice(0, 10);
   const wanted = await db.query(WANTED_SQL, [new Date(start - 45 * DAY).toISOString()]);
-  const known = new Map((await db.query('SELECT product_key, product_id, history FROM bestseller')).map((r) => [r.product_key, r]));
+  const known = new Map((await db.query('SELECT product_key, product_id, history, checked_at FROM bestseller')).map((r) => [r.product_key, r]));
   const trusted = new Map((await db.query('SELECT store, status, checked_at FROM store_trust')).map((r) => [r.store, r]));
 
   // Products by store; one product page once. A store whose ads link elsewhere (home page, collection) gets no products,
@@ -108,6 +108,8 @@ export async function refresh({ db, doFetch = globalThis.fetch, now = Date.now, 
       }
     }
     if (!products.size) return; // no product page: no best-seller rank to look up
+    // The hunt runs four times a day and a rank is kept per day: a store done today leaves the time to the next ones.
+    if ([...products.keys()].every((k) => String((known.get(k) || {}).checked_at || '').startsWith(day))) return;
     const { top, error, limited } = await storeTop(store, { doFetch });
     if (limited) return; // Shopify says too many requests: yesterday's ranks stay, it is asked again next run
     if (!top) t.noList++;
