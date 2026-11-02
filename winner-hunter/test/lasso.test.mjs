@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import { findLasso, lassoSince, isLassoCheckout, urlscanSearch, sweep, candidatesOf, checkLassoStore, confidenceOf, marketsOf, toCsv, domainsIn, URLSCAN_QUERIES, CSV_COLS } from '../lib/lasso.mjs';
 import { discover, writeOut, STORES_SQL, MAX_AD_SEARCHES } from '../lasso.mjs';
 import { d1Client } from '../lib/d1.mjs';
@@ -255,7 +256,9 @@ test('the CSV: one row a store, its best seller first, text a spreadsheet cannot
     checkout_url: 'https://checkout.a.test/checkout', best_sellers: [{ title: 'Lamp, "big"\nnew', price: 49, currency: 'USD' }, { title: 'B' }], first_seen: '2026-10-02', last_seen: '2026-11-01', how: 'store page' }]);
   const [head, row] = csv.trimEnd().split(/\n(?=a\.test)/);
   assert.strictEqual(head, CSV_COLS.join(','));
-  assert.match(row, /^a\.test,high,1,"'=HYPERLINK\(""x""\)",NZ,NZD,en,7,v4,2026-06-25,https:\/\/checkout\.a\.test\/checkout,"Lamp, ""big""\nnew",49 USD,"Lamp, ""big""\nnew; B",2026-10-02,2026-11-01,store page$/);
+  assert.match(row, /^a\.test,high,1,"'=HYPERLINK\(""x""\)",NZ,NZD,en,7,v4,2026-06-25,https:\/\/checkout\.a\.test\/checkout,"Lamp, ""big""\nnew",49 USD,"Lamp, ""big""\nnew; B",2026-10-02,2026-11-01,store page,,,$/, 'saved before: no source, found_at or aliases');
+  const found = toCsv([{ store: 'b.test', confidence: 'medium', live: 1, best_sellers: [], how: 'dns: otx', source: 'dns', found_at: '2026-11-09T04:41:00.000Z', aliases: 'b-shop.test' }]);
+  assert.match(found.trimEnd().split('\n')[1], /,dns: otx,dns,2026-11-09T04:41:00\.000Z,b-shop\.test$/, 'a new store: how, source, found_at, aliases');
   assert.strictEqual(toCsv([]), CSV_COLS.join(',') + '\n');
 });
 
@@ -284,12 +287,16 @@ function world({ stores, scans = [] }) {
   };
   return { calls, doFetch };
 }
+// Each fake store has a Lasso store id of its own: the same id is the same store under another domain (lasso.mjs merges them).
+const idOf = (host) => '6a3c9a6d' + createHash('sha1').update(host).digest('hex').slice(0, 16);
+const storePage = (host, checkout = `checkout.${host}`) => STORE_V4.replace('6a3c9a6d78c8ee551d08f2f2', idOf(host)).replace(/checkout\.tryglowgummies\.com/g, checkout).replace(/tryglowgummies\.com/g, host);
 const lassoStore = (host, { country = 'US', currency = 'USD', products = 3 } = {}) => ({
-  [`https://${host}/`]: () => html(STORE_V4.replace(/tryglowgummies\.com/g, host)),
+  [`https://${host}/`]: () => html(storePage(host)),
   [`https://checkout.${host}/checkout`]: () => html(LASSO_CHECKOUT),
   [`https://${host}/meta.json`]: () => json({ name: host, country, currency, published_products_count: products }),
   [`https://${host}/api/2026-10/graphql.json`]: () => json({ data: { products: { nodes: [{ title: 'Best ' + host, handle: 'best', productType: '', createdAt: '', priceRange: { minVariantPrice: { amount: '29.95', currencyCode: currency } }, compareAtPriceRange: { maxVariantPrice: { amount: '0' } } }] } } }),
 });
+const URLSCAN = ['urlscan']; // the runs below test urlscan and the checks; every source: lasso-discover.test.mjs
 const sec = (daysAgo) => Math.floor((NOW - daysAgo * DAY) / 1000);
 const rawAd = (id, link, { page = '77', days = 20 } = {}) => ({ ad_archive_id: id, page_id: page, collation_id: 'c' + id, collation_count: 1, is_active: true, start_date: sec(days),
   snapshot: { page_name: 'Shop', page_id: page, page_like_count: 10, link_url: link, caption: new URL(link).host, title: 'Lamp', images: [{ resized_image_url: 'https://cdn.test/a.jpg' }], cards: [] } });
@@ -307,7 +314,7 @@ test('a run: found on urlscan, checked live, saved in D1 with the day it was fir
   rest.db.exec('DELETE FROM lasso_stores'); // without the research list (migration 0080; with it: lasso-filter.test.mjs)
   const db = d1Client({ accountId: 'a', databaseId: 'd', token: 't' }, { doFetch: rest.doFetch, retryMs: 0 });
   const { doFetch } = world({ stores, scans });
-  const t = await discover({ doFetch, db, now: () => NOW, sleep: noSleep, log: () => {} });
+  const t = await discover({ doFetch, db, now: () => NOW, sleep: noSleep, log: () => {}, sources: URLSCAN });
   assert.strictEqual(t.health, 'ok', t.alert);
   assert.strictEqual(t.candidates, 3);
   assert.strictEqual(t.searches, URLSCAN_QUERIES.length * 15, '30 days in windows of 2 days, per search');
@@ -326,7 +333,7 @@ test('a run: found on urlscan, checked live, saved in D1 with the day it was fir
   const left = { ...stores, 'https://us-lamps.test/': () => html(PLAIN_STORE), 'https://checkout.us-lamps.test/checkout': () => html(OTHER_APP, 404) };
   delete left['https://eu-dress.test/'];
   delete left['https://checkout.eu-dress.test/checkout'];
-  const t2 = await discover({ doFetch: world({ stores: left }).doFetch, db, now: () => later, sleep: noSleep, log: () => {} });
+  const t2 = await discover({ doFetch: world({ stores: left }).doFetch, db, now: () => later, sleep: noSleep, log: () => {}, sources: URLSCAN });
   assert.strictEqual(t2.candidates, 2, 'the saved stores');
   assert.deepStrictEqual(t2.stores, []);
   const again = rest.db.prepare('SELECT store, confidence, first_seen, last_seen, checked_at FROM lasso_stores ORDER BY store').all();
@@ -337,7 +344,7 @@ test('a run: found on urlscan, checked live, saved in D1 with the day it was fir
 });
 
 test('a run also checks the domain a store\'s checkout sits on: the same store under a second name is counted once, a sister store is added', async () => {
-  const page = (host, checkout) => html(STORE_V4.replace(/checkout\.tryglowgummies\.com/g, checkout).replace(/tryglowgummies\.com/g, host));
+  const page = (host, checkout) => html(storePage(host, checkout));
   const stores = {
     ...lassoStore('bella.test'),
     'https://bella.test/': () => page('bella.test', 'checkout.bella-nashville.test'),
@@ -349,7 +356,7 @@ test('a run also checks the domain a store\'s checkout sits on: the same store u
     ...lassoStore('july.test'), // a store of its own
   };
   const scans = [{ id: '1', q: 'lasso-script-v4.min.js', page: 'bella.test', t: NOW - DAY }, { id: '2', q: 'lasso-script-v4.min.js', page: 'ruby.test', t: NOW - DAY }];
-  const t = await discover({ doFetch: world({ stores, scans }).doFetch, now: () => NOW, sleep: noSleep, log: () => {} });
+  const t = await discover({ doFetch: world({ stores, scans }).doFetch, now: () => NOW, sleep: noSleep, log: () => {}, sources: URLSCAN });
   assert.strictEqual(t.candidates, 4, '2 from urlscan, 2 checkout domains');
   assert.deepStrictEqual(t.stores.map((r) => [r.store, r.confidence, r.how]).sort(), [
     ['bella.test', 'high', 'store page; checkout of bella.test'],
@@ -377,7 +384,7 @@ test('a run with LASSO_ADS: the stores\' own ads outside the EU go into world_ad
       return { ads: [rawAd('201', 'https://nz-gummy.test/pages/advertorial')], count: 1, blocked: false };
     },
   };
-  const t = await discover({ doFetch: world({ stores, scans }).doFetch, db, lib, now: () => NOW, sleep: noSleep, log: () => {} });
+  const t = await discover({ doFetch: world({ stores, scans }).doFetch, db, lib, now: () => NOW, sleep: noSleep, log: () => {}, sources: URLSCAN });
   assert.strictEqual(t.health, 'ok', t.alert);
   assert.deepStrictEqual(searched, [{ cc: 'NZ', q: 'nz-gummy.test' }, { cc: 'NZ', q: 'nz-gummy.test', exact: true }, { cc: 'US', q: 'us-lamps.test' }],
     'no search for the EU store; the exact phrase only when the words found none of the store\'s own ads');
@@ -394,7 +401,7 @@ test('a run with LASSO_ADS: the stores\' own ads outside the EU go into world_ad
   let asked = 0;
   const refusing = { search: async () => (asked++, { ads: [], count: null, blocked: true }) };
   const allStores = Object.assign({}, ...many.map((s) => lassoStore(s.page)));
-  const t2 = await discover({ doFetch: world({ stores: allStores, scans: many }).doFetch, db, lib: refusing, now: () => NOW, sleep: noSleep, log: () => {} });
+  const t2 = await discover({ doFetch: world({ stores: allStores, scans: many }).doFetch, db, lib: refusing, now: () => NOW, sleep: noSleep, log: () => {}, sources: URLSCAN });
   assert.strictEqual(asked, 6);
   assert.strictEqual(t2.ad_searches, 6);
   assert.ok(MAX_AD_SEARCHES >= 100);
@@ -412,17 +419,17 @@ test('an Ad Library search for a shop\'s domain is one exact phrase; keyword sea
 
 test('a run is red when urlscan answers nothing or D1 cannot save; yellow when some searches failed', async () => {
   const silent = async (url) => (new URL(url).host === 'urlscan.io' ? json({ message: 'down' }, 503) : (() => { throw new TypeError('fetch failed'); })());
-  const t = await discover({ doFetch: silent, now: () => NOW, sleep: noSleep, log: () => {} });
+  const t = await discover({ doFetch: silent, now: () => NOW, sleep: noSleep, log: () => {}, sources: URLSCAN });
   assert.strictEqual(t.health, 'failed');
-  assert.match(t.alert, /urlscan\.io answered none of 75 searches/);
+  assert.match(t.alert, /urlscan\.io answered none of 150 searches/);
   let n = 0;
   const flaky = async (url) => (new URL(url).host === 'urlscan.io' ? (++n % 10 === 0 ? json({ message: 'busy' }, 503) : json({ results: [], total: 0 })) : (() => { throw new TypeError('fetch failed'); })());
-  const y = await discover({ doFetch: flaky, now: () => NOW, sleep: noSleep, log: () => {} });
+  const y = await discover({ doFetch: flaky, now: () => NOW, sleep: noSleep, log: () => {}, sources: URLSCAN });
   assert.strictEqual(y.health, 'warning');
   const scans = [{ id: '1', q: 'lasso-script-v4.min.js', page: 'us-lamps.test', t: NOW - DAY }];
   const broken = d1Rest(undefined, { fail: (b) => /INSERT INTO lasso_stores/.test(b.sql) });
   const db = d1Client({ accountId: 'a', databaseId: 'd', token: 't' }, { doFetch: broken.doFetch, retryMs: 0 });
-  const r = await discover({ doFetch: world({ stores: lassoStore('us-lamps.test'), scans }).doFetch, db, now: () => NOW, sleep: noSleep, log: () => {} });
+  const r = await discover({ doFetch: world({ stores: lassoStore('us-lamps.test'), scans }).doFetch, db, now: () => NOW, sleep: noSleep, log: () => {}, sources: URLSCAN });
   assert.strictEqual(r.health, 'failed');
   assert.match(r.alert, /not saved in D1/);
   assert.strictEqual(r.stores.length, 1, 'the list is still written to the files');

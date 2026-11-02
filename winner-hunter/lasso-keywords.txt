@@ -1,0 +1,98 @@
+# Keywords for the Lasso discovery's paid ad search (lasso.mjs, source "ads"): Scrape Creators' Meta Ad Library search,
+# active ads in all countries, one page (about 30 ads) and 1 credit per keyword. Each run takes the next keywords until
+# its credit cap (LASSO_CREDITS, 50 by default), then the list starts again. Every shop an ad links to is checked for
+# Lasso's checkout. One keyword a line; # starts a comment.
+#
+# The products the verified Lasso stores sell (docs/research/lasso-stores.md and lasso-discovery.md). On 2026-11-02, 2 of
+# the 151 shops such ads linked to were on Lasso (the board's own keywords: 3 of 390): a small, paid source next to the
+# free ones. Physical and digital products alike: nothing is left out for being digital.
+
+# Comfort and orthopedic footwear (a top-5 best seller in 19 Lasso stores)
+orthopedic shoes women
+orthopaedic sandals
+orthopedic loafers
+orthopedic sneakers
+comfort slip on shoes
+wide fit boots women
+arch support sandals
+cork sandals
+orthopädische schuhe
+orthopädische sandalen
+chaussures orthopédiques
+orthopedische schoenen
+ortopædiske sko
+
+# Quilted baskets, artisan bags (best seller in 10 Lasso stores)
+hand quilted basket
+quilted laundry basket
+artisan tote bag
+quilted tote bag
+handmade shoulder bag
+leather shoulder bag women
+
+# Women's fashion of the "boutique" stores
+maxi dress
+midi dress women
+linen dress
+one shoulder dress
+knit sweater women
+oversized cardigan
+corduroy top
+wide leg trousers women
+two piece suit women
+jumpsuit women
+ankle boots women
+chelsea boots
+blazer women
+fließendes kleid
+damen strickpullover
+robe longue femme
+jurk dames
+
+# Men's comfort clothing (the German stores)
+komforthose
+langarm poloshirt
+half zip pullover men
+men's knitted polo
+men's comfort trousers
+men's leather boots
+winter jacket men
+
+# Jewelry
+copper bracelet
+copper jewelry
+gold necklace women
+cuban link chain
+pendant necklace
+birthstone ring
+anti tarnish jewelry
+
+# Home and garden ("maker story" stores)
+bird bath
+bee hotel
+garden lantern
+wood carved birdhouse
+velvet bedding
+duvet cover set
+wall lamp
+handmade doll
+cat tree
+dog bed orthopedic
+pet grooming comb
+heated blanket
+air cooler
+titanium pan
+kitchen utensil set
+copper water bottle
+advent calendar 2026
+mystery box
+
+# Single products and small brands
+red light therapy belt
+smartwatch
+padded cycling shorts
+massage slippers
+posture
+shapewear postpartum
+hair concealer
+scalp care bar
