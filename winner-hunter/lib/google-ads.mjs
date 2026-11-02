@@ -7,6 +7,7 @@
  *   await api.companyAds({ domain | advertiserId, … })      { ads, cursor, estimate }                                     1 credit a page
  *   await api.adDetails(creativeUrl)                        { firstShown, lastShown, regions, impressions, variations, … } 1 credit (0 cached)
  *   googleRules(facts, { now })                             our four rules, each 'exact', 'approx' or not checked (unknown)
+ *   scrapeCreators({ key, cap, kinds })                     the capped client itself, for any Scrape Creators endpoint
  *
  * Endpoints, parameters, fields and prices: docs.scrapecreators.com (OpenAPI spec read 2026-11-01). The vendor says its
  * Google answers "might not all be 100% the same", so every field is read defensively: a missing or odd field is
@@ -206,19 +207,22 @@ export function cursorOf(c) {
 export const OUTAGE_AFTER = 3; // calls that failed in a row (after their own tries): the vendor is down, the run stops
 
 /**
- * The Scrape Creators client for Google's ad library. cap: the most credits this run may spend; a call that could pass it
- * is never sent (GoogleApiError kind 'cap'). Each answer says what it cost (credits_charged): that is counted. An answer
+ * A Scrape Creators client under a hard credit cap, for any of its endpoints: kinds = { kind: { path, cost } } (cost: the
+ * listed credits a call). call(kind, params) → the answer's JSON, or null (a 404, or success false). Used by googleClient
+ * below and by the Lasso discovery's ad search (lib/lasso-sources.mjs). Errors are GoogleApiError (it names no endpoint).
+ * cap: the most credits this run may spend; a call that could pass it is never sent (GoogleApiError kind 'cap'). Each
+ * answer says what it cost (credits_charged): that is counted. An answer
  * that does not say counts its listed price, and so does a try whose answer was lost (a timeout or a cut connection: the
  * vendor may have done the work), so the cap holds against what the vendor bills. 401 (key) and 402 (no credits) stop the
  * run, a 404 is nothing found (null), 429 and 5xx are asked again twice, a lost answer once. OUTAGE_AFTER calls in a row
  * that fail stop the run (kind 'outage'). stats(): ok (calls answered) and failed (calls that ended in an error) count
- * calls, not tries. The key never appears in an error or a log.
+ * calls, not tries; by: the credits per kind. The key never appears in an error or a log.
  */
-export function googleClient({ key, fetch: doFetch = globalThis.fetch, cap = 0, base = API, sleep = wait, tries = 3, timeout = 60000 } = {}) {
+export function scrapeCreators({ key, fetch: doFetch = globalThis.fetch, cap = 0, base = API, sleep = wait, tries = 3, timeout = 60000, kinds } = {}) {
   const k = String(key || '').trim();
   if (!k) throw new GoogleApiError(`No API key: add the GitHub secret ${SECRET}`, { kind: 'key', stop: true });
   const limit = Math.max(0, Math.floor(Number(cap) || 0));
-  const t = { spent: 0, cap: limit, remaining: null, ok: 0, failed: 0, cached: 0, lost: 0, by: { search: 0, ads: 0, ad: 0 } };
+  const t = { spent: 0, cap: limit, remaining: null, ok: 0, failed: 0, cached: 0, lost: 0, by: Object.fromEntries(Object.keys(kinds).map((x) => [x, 0])) };
   let held = 0; // credits of calls on their way: calls at the same moment can never pass the cap together
   let inRow = 0;
   const hide = (s) => String(s ?? '').split(k).join('***');
@@ -231,8 +235,8 @@ export function googleClient({ key, fetch: doFetch = globalThis.fetch, cap = 0, 
   };
 
   async function call(kind, params) {
-    const cost = COST[kind];
-    const u = new URL(PATHS[kind], base);
+    const { path, cost } = kinds[kind];
+    const u = new URL(path, base);
     for (const [name, v] of Object.entries(params)) if (v != null && v !== '') u.searchParams.set(name, String(v));
     for (let attempt = 1; ; attempt++) {
       if (t.spent + held + cost > t.cap) throw new GoogleApiError(`Credit cap reached: ${t.spent} of ${t.cap} credits spent`, { kind: 'cap', stop: true });
@@ -290,8 +294,14 @@ export function googleClient({ key, fetch: doFetch = globalThis.fetch, cap = 0, 
     }
   }
 
+  return { call, stats: () => ({ ...t, by: { ...t.by } }) };
+}
+
+/** The Scrape Creators client for Google's ad library: scrapeCreators() on its three endpoints (PATHS, COST). */
+export function googleClient(opts = {}) {
+  const { call, stats } = scrapeCreators({ ...opts, kinds: Object.fromEntries(Object.keys(PATHS).map((x) => [x, { path: PATHS[x], cost: COST[x] }])) });
   return {
-    stats: () => ({ ...t, by: { ...t.by } }),
+    stats,
     /** Advertisers whose name matches, and websites that match (Google's own search box). region: 2 letters, default US. */
     async searchAdvertisers(query, region = '') {
       const q = str(query, 100);

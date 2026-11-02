@@ -300,7 +300,7 @@ test('the discovery job runs on top of the research list: a store it finds joins
     throw new TypeError('fetch failed');
   };
   const db = d1Client({ accountId: 'a', databaseId: 'd', token: 't' }, { doFetch: d1Rest(env.db).doFetch, retryMs: 0 });
-  const t = await discover({ doFetch, db, now: () => later, sleep: async () => {}, log: () => {}, concurrency: 8 });
+  const t = await discover({ doFetch, db, now: () => later, sleep: async () => {}, log: () => {}, concurrency: 8, sources: ['urlscan'] });
   assert.strictEqual(t.health, 'ok', t.alert);
   assert.ok(t.candidates > 140, 'the stores of the research list are checked again too');
   assert.deepStrictEqual(t.stores.map((r) => [r.store, r.confidence]), [['shop2.test', 'high']]);
@@ -310,7 +310,9 @@ test('the discovery job runs on top of the research list: a store it finds joins
   assert.strictEqual(row('tryglowgummies.com').confidence, 'high', 'did not answer: as it was');
 
   const eu = await env.ads('view=all', later);
-  assert.deepStrictEqual(eu.ads.find((a) => a.id === '9002').lasso, { store: 'shop2.test', sure: true, at: new Date(later).toISOString().slice(0, 10) }, 'found by the job: on the board');
+  const day = new Date(later).toISOString().slice(0, 10);
+  assert.deepStrictEqual(eu.ads.find((a) => a.id === '9002').lasso, { store: 'shop2.test', sure: true, at: day, found: day, src: 'urlscan' }, 'found by the job: on the board, and when');
+  assert.deepStrictEqual(eu.lasso_new, { n: 1, by: { urlscan: 1 }, stores: ['shop2.test'], days: 7, run: { at: new Date(later).toISOString(), health: 'ok' } }, 'the chip\'s "+1 new"');
   assert.strictEqual(eu.lasso, 5);
   const world = await env.ads('view=all&scope=world&lasso=1', later);
   assert.deepStrictEqual(world.ads.map((a) => a.title), ['Wool Coat'], 'FasciaBlaster left Lasso: off the filter');

@@ -198,7 +198,7 @@ Add these 4 secrets in GitHub: **Settings → Secrets and variables → Actions 
 | `CF_ACCOUNT_ID` | Your Cloudflare account ID (Cloudflare dashboard → Workers & Pages, right side). |
 | `BOARD_PIN` | The PIN for the board. Use 6+ digits. 10 tries per address (IPv6: per /64) and 30 per network (IPv6 /48, IPv4 /24) per 15 minutes. |
 | `CF_D1_TOKEN` | Optional, better: a second Cloudflare token with only **Account → D1 → Edit**. The hunts (World Hunter, Winner Hunter, Google Hunter, Jev check, Ad prefetch, Lasso stores) then use it instead of `CF_API_TOKEN`, so the jobs that open Facebook and shops hold no token that can change the board. |
-| `SCRAPECREATORS_API_KEY` | Optional: the Scrape Creators API key for the **Google** tab (Google Hunter). Without it the Google hunt does not run; nothing else needs it. |
+| `SCRAPECREATORS_API_KEY` | Optional: the Scrape Creators API key for the **Google** tab (Google Hunter), also used by **Lasso stores** for its capped ad searches (`LASSO_CREDITS`). Without it the Google hunt does not run and Lasso stores uses its free sources only. |
 | `URLSCAN_API_KEY` | Optional, only for **Lasso stores**: a free urlscan.io account's API key (more searches a day). |
 
 The login cookie is keyed by the PIN and a random key the board makes at the first login and keeps in D1 (`state` row
@@ -274,7 +274,7 @@ question: [docs/google-ads/README.md](../docs/google-ads/README.md).
 run.mjs          nightly run (batches, cursor, time budget)
 google.mjs       the Google hunt (lib/google-ads.mjs: the Scrape Creators client, its answers, our rules on them; worker/src/google.mjs: the tab)
 bestsellers.mjs  store signals for the board's products: best-seller rank + Trustpilot (after the hunt; lib/bestsellers.mjs, lib/trust.mjs)
-lasso.mjs        optional discovery source: stores with Lasso's hosted checkout (lib/lasso.mjs; the board's chip: worker/src/lasso.mjs)
+lasso.mjs        the weekly Lasso discovery: stores with Lasso's hosted checkout (lib/lasso.mjs, lib/lasso-sources.mjs; the board's chip: worker/src/lasso.mjs)
 momentum.mjs     once a day: each product's numbers, trend, rivals and crowding (lib/momentum.mjs; the board: worker/src/momentum.mjs)
 migrate.mjs      creates the D1 tables (safe to run every time)
 import.mjs       one-time import of the old winners
@@ -288,23 +288,42 @@ test/            npm test (node --test); test/board.e2e.test.mjs opens the board
 
 Test locally: `cd winner-hunter && npm test` (Node 22+).
 
-## Lasso stores (optional, off)
+## Lasso stores (optional, off): the weekly discovery
 
 Lasso (lassocommerce.com) is a hosted checkout with upsells and order bumps, paid through Whop, Stripe and others. A
 Shopify store that pays $149+ a month and 1% of its sales for it usually runs paid traffic on a product that sells, so
-those stores are a place to find products. The research, the fingerprints and the stores found on 2026-11-01 are in
-`docs/research/lasso-stores.md`.
+those stores are a place to find products. The first research (fingerprints, 143 stores of 2026-11-01) is in
+`docs/research/lasso-stores.md`; which discovery methods work, tested on real data with their hit rates, in
+`docs/research/lasso-discovery.md`.
 
-- **What it does** (`lasso.mjs`, workflow **Lasso stores**): urlscan.io's free search finds the pages that load Lasso's
-  script (`checkout.<store>/shopify-scripts/lasso-script-v4.min.js`) and Lasso's checkout pages. Each store is then
-  checked live: the script on its page and Lasso's checkout app on `checkout.<store>/checkout` = **high**, one of the two
-  = **medium**, the script left but its checkout gone = **low** (it left Lasso). Per store: country, currency, language,
+- **What it does** (`lasso.mjs`, workflow **Lasso stores**): it finds candidate stores in five sources (`LASSO_SOURCES`,
+  default all) and checks every one live: Lasso's script on its page (`checkout.<store>/shopify-scripts/lasso-script-v4.min.js`,
+  or `subscriptions-script.js`) and Lasso's checkout app on `checkout.<store>/checkout` = **high**, one of the two =
+  **medium**, the script left but its checkout gone = **low** (it left Lasso). Per store: country, currency, language,
   product count, the day it joined Lasso (from its Lasso store id) and its 5 best sellers.
-- **Off by default.** Run it by hand: Actions → Lasso stores → Run workflow. Weekly (Mondays): add a repository variable
-  `LASSO_STORES` = `on`.
-- **Where the list goes:** the run's artifact **lasso-stores** (CSV + JSON, 14 days) and, with the D1 secrets, the D1
-  table `lasso_stores` (the stores saved before are checked again every run; a store that left gets confidence ''). This
-  repository is public: any signed-in GitHub user can download an artifact, so the run's summary only has counts.
+
+  | Source | What | Cost |
+  |---|---|---|
+  | `dns` | who points at Lasso's checkout CNAME (`1a28dfb57b1e1efc.vercel-dns-016.com`) and portal address: AlienVault OTX and Mnemonic passive DNS (85 % of what they give is a Lasso store) | free, no key |
+  | `urlscan` | pages that load Lasso's scripts or Whop's pixel, Lasso's checkout and portal pages, last 30 days | free (`URLSCAN_API_KEY` optional) |
+  | `board` | the shops already on the board (EU, outside the EU, Google, TikTok), at most 300 a run | free |
+  | `ads` | Scrape Creators' Meta Ad Library search for the next keywords of `lasso-keywords.txt` (products Lasso stores sell): the shops the ads link to | **1 credit a keyword, hard cap `LASSO_CREDITS` (default 50 ≈ $0.09 a run)**; 0 or no `SCRAPECREATORS_API_KEY` = off |
+  | `extra` | `lasso-extra.txt` (the 115 live stores only WhoisFreaks' sample showed), the **extra** box, `LASSO_EXTRA_FILE` | free |
+
+- **One store, one row:** the same store under another domain is merged (the board's registrable domain, a redirect, or
+  the same Lasso store id); its other domains go into `aliases`, so the filter finds its products there too. A domain
+  checked in the last 30 days is left alone (7 days when it did not answer; D1 table `lasso_candidates`), and every store
+  saved before is checked again (one that left Lasso gets confidence '').
+- **New stores:** a store found for the first time is saved in `lasso_stores` with **`source`** (the method that found it)
+  and **`found_at`** (the day). The board's chip shows **"+N new"**: the live Lasso stores found in the last 7 days (its
+  title: by source, the newest names, the last run). The research list (0080) and stores saved before have neither.
+- **Off by default.** Run it by hand: Actions → Lasso stores → Run workflow (tick **dry run** to see what it finds without
+  saving anything). Weekly (Mondays 04:41 UTC): add a repository variable `LASSO_STORES` = `on`. The credit cap of the
+  weekly run: the repository variable `LASSO_CREDITS` (`0` = the free sources only).
+- **Where the list goes:** the run's artifact **lasso-stores** (CSV + JSON, 14 days; new stores have a `source` and
+  `found_at`) and, with the D1 secrets, the D1 tables. This repository is public: any signed-in GitHub user can download
+  an artifact, so the run's summary only has counts. The run ends red when no source answered or D1 failed, yellow when
+  one source failed or Scrape Creators refused the key or had no credits (the free sources still ran).
 - **Into the Inbox:** run it with **ads** = `on` (or a repository variable `LASSO_ADS` = `on`): for every store selling
   outside the EU it searches the public Ad Library for the store's domain in its market (as words, then as one exact
   phrase when the words found none of its ads) and saves the store's own active ads in `world_ads` with the keyword
@@ -313,17 +332,18 @@ those stores are a place to find products. The research, the fingerprints and th
   no market there: start Winner Hunter by hand with their domains as keywords.
 - **On the board: the "Lasso checkout" chip** (`worker/src/lasso.mjs`), on and off without this workflow: in Browse among
   the filters, in the Inbox beside the views, on every tab. It keeps only the products of Lasso stores (high or medium)
-  and shows how many the view holds; their cards get a **Lasso** tag, the CSV a `lasso_checkout` column. A store matches
+  and shows how many the view holds; their cards get a **Lasso** tag (its title says when the discovery found the store),
+  the CSV a `lasso_checkout` column. A store matches
   by its registrable domain (lowercase, no www: `us.store.com` = `store.com`; `x.myshopify.com` stays itself) and by its
   other domains (column `aliases`). The 143 stores of the research are in `lasso_stores` from the start (migration
   `0080_lasso_seed.sql`; it never changes a store this workflow saved). A store this workflow finds, or marks as gone,
   changes the chip at the board's next read of its tables (after a hunt saves, or within 15 minutes).
-- **Optional secret `URLSCAN_API_KEY`:** a free urlscan.io account's key (1,000 searches a day). Without it urlscan only
-  searches the last 30 days, 100 results a search (the run asks per 2-day window, so that is enough for now).
-- **More stores at once:** urlscan only sees the stores someone scanned in the last 30 days (about 140 on 2026-11-01).
-  StoreLeads counts about 1,300 stores with Lasso. A reverse-CNAME list (WhoisFreaks, free credits after sign-up) gives
-  candidate checkout hostnames; check them all locally:
-  `LASSO_EXTRA_FILE=whoisfreaks.csv node winner-hunter/lasso.mjs` (with the D1 secrets to save them).
+- **Secrets: nothing new.** `CF_API_TOKEN` (or `CF_D1_TOKEN`) and `CF_ACCOUNT_ID` to read and save; `SCRAPECREATORS_API_KEY`
+  (the Google hunt's) for the ad searches; `URLSCAN_API_KEY` optional (a free urlscan.io account: 1,000 searches a day;
+  without it urlscan searches the last 30 days, 100 results and 30 searches a minute, which the run keeps to).
+- **More stores at once:** WhoisFreaks counts 3,153 hostnames on Lasso's checkout CNAME (84 % of a sample were Lasso
+  stores). With a free WhoisFreaks account (500 credits) export that reverse-CNAME list and put the hosts in
+  `lasso-extra.txt` (or run with `LASSO_EXTRA_FILE=whoisfreaks.csv`): the next run checks them and keeps the live ones.
 
 ## Outside the EU
 

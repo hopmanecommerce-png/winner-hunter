@@ -31,6 +31,9 @@ async function lassoEnv() {
   put(product('www.fasciablaster.com/products/tool', '1001', { product_title: 'FasciaBlaster Original Tool', in_eu: 1 }));
   put(product('strong.test/products/pod', '1002', { product_title: 'Pillow Pod', in_eu: 0 }));
   env.db.prepare("INSERT INTO lasso_stores (store, confidence, live, aliases, checked_at) VALUES ('shop1.test', 'high', 1, NULL, '2026-10-30T09:00:00.000Z'), ('shop4-main.test', 'medium', 1, 'shop4.test', NULL)").run();
+  // shop4-main.test: found by the weekly discovery two days before (lasso.mjs), on a run that had a warning.
+  env.db.prepare("UPDATE lasso_stores SET source = 'dns', found_at = ? WHERE store = 'shop4-main.test'").run(new Date(NOW - 2 * 864e5).toISOString());
+  env.db.prepare("INSERT INTO state (key, value, updated_at) VALUES ('lasso_run', ?, ?)").run(JSON.stringify({ at: new Date(NOW - 2 * 864e5).toISOString(), health: 'warning', new: 1 }), new Date(NOW - 2 * 864e5).toISOString());
   return env;
 }
 
@@ -88,6 +91,11 @@ test('Lasso checkout on a phone: the chip in the Inbox and in Browse, its count,
     assert.ok(await chip(page, 'lbr').isHidden(), 'the Browse chip stays with the Browse filters');
     assert.strictEqual(await chip(page, 'lin').getAttribute('aria-pressed'), 'false');
     assert.strictEqual(await chip(page, 'lin').getAttribute('title'), 'Only products from stores that use the Lasso checkout (lassocommerce.com)');
+    // "+1 new": the live Lasso stores the weekly discovery found in the last 7 days, what found them, the last run.
+    const news = chip(page, 'lin').locator('.lnew');
+    assert.ok(await news.isVisible());
+    assert.strictEqual(await news.innerText(), '+1 new');
+    assert.strictEqual(await news.getAttribute('title'), `1 Lasso store found by the weekly discovery in the last 7 days (dns 1): shop4-main.test. Last run ${new Date(NOW - 2 * 864e5).toISOString().slice(0, 10)} (warning).`);
     assert.strictEqual(await page.textContent('#ileft'), '27 left');
     assert.strictEqual(await page.textContent('#inew'), '26 new today');
     assert.ok(await noSideScroll(page), 'no sideways scroll in the Inbox');
@@ -137,6 +145,8 @@ test('Lasso checkout on a phone: the chip in the Inbox and in Browse, its count,
     assert.match(await page.getAttribute('#csv', 'href'), /[?&]lasso=1(&|$)/, 'the CSV follows the chip at once');
     await page.waitForFunction((c) => !c.isConnected && document.querySelectorAll('#grid .card').length === 4, shown);
     assert.strictEqual(await page.locator('#grid .card .badges .tag.lasso').count(), 4, 'every card has its tag, on the photo');
+    assert.match(await page.locator('#grid .card[data-id="9004"] .tag.lasso').getAttribute('title'), /^shop4-main\.test uses the Lasso checkout .*, found by the weekly discovery on \d{4}-\d{2}-\d{2} \(dns\)$/);
+    assert.strictEqual(await chip(page, 'lbr').locator('.lnew').innerText(), '+1 new', 'Browse\'s chip says it too');
     assert.match(await page.textContent('#count'), /^4 matches · /);
     assert.match(await page.getAttribute('#csv', 'href'), /[?&]lasso=1(&|$)/);
     await page.click('[data-f="hidden"]');
@@ -175,6 +185,7 @@ test('Lasso checkout on a desktop: the Inbox chip beside the views; /lasso.js th
   const browser = await launch();
   if (!browser) return t.skip('no browser');
   const env = await lassoEnv();
+  env.db.prepare('UPDATE lasso_stores SET found_at = NULL, source = NULL').run(); // nothing new this week
   const server = await serve(env);
   try {
     // /lasso.js held back until the board shows its first products.
@@ -187,6 +198,7 @@ test('Lasso checkout on a desktop: the Inbox chip beside the views; /lasso.js th
     assert.strictEqual(await page.locator('.lchip').count(), 0, 'not there yet');
     release();
     await page.waitForFunction(() => document.querySelector('.lchip.lin small') && document.querySelector('.lchip.lin small').textContent === '4');
+    assert.ok(await chip(page, 'lin').locator('.lnew').isHidden(), 'nothing new this week: no badge');
     const seg = await page.locator('.bar2 > .seg').boundingBox();
     const box = await chip(page, 'lin').boundingBox();
     assert.ok(box.x >= seg.x + seg.width && Math.abs(box.y + box.height / 2 - (seg.y + seg.height / 2)) < 4, 'on the row of the views, right of them');

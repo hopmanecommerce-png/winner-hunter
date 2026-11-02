@@ -1,5 +1,10 @@
 # Lasso checkout stores: how to find them, who they are, what they sell
 
+> **Update 2026-11-02:** which methods find new Lasso stores every week, tested on real data with their hit rates, and the
+> weekly job built on them: [`lasso-discovery.md`](lasso-discovery.md). Two corrections to this report: the CNAME
+> `1a28dfb57b1e1efc.vercel-dns-016.com` *is* a good sign (84 % of the hostnames pointing there serve Lasso's checkout
+> app), and `e4e52b5c1254e1d1.vercel-dns-016.com` is not Lasso at all (0 of 147 hostnames).
+
 Research for Winner Hunter, 2026-11-01. Every store in this report was fetched live on 2026-11-01. Where something
 is an inference (a shared owner, a network), the text says so. The full list is `docs/research/lasso-stores.csv` (one row per store, 28 columns, 143 rows: the 129 live stores, plus the closed ones and the ones that left Lasso). The weekly method is built
 into the repo as an optional, switched-off discovery source (`winner-hunter/lasso.mjs`, workflow **Lasso stores**).
@@ -324,7 +329,8 @@ Left Lasso (6: the script is still on the page, the checkout subdomain is gone o
 ## 7. A weekly method (built in, off by default)
 
 Everything below runs as `winner-hunter/lasso.mjs` (workflow **Lasso stores**, see the README). Without any account
-it costs nothing.
+it costs nothing. Since 2026-11-02 the job has more sources (passive DNS, the board's shops, capped ad searches, an import
+list) and merges a store's domains into one row: [`lasso-discovery.md`](lasso-discovery.md), section 4.
 
 1. **Find** (urlscan.io, free): for each of these searches, every 2-day window of the last 30 days (a window with more
    than 100 results is split, so nothing is cut off):

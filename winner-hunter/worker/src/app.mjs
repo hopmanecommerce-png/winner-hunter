@@ -23,7 +23,7 @@ import { SOURCING_JS, sourcingGet, sourcingPost } from './sourcing.mjs';
 import { GOOGLE_SQL, TIKTOK_SHOPS_SQL, GOOGLE_CSV_COLS, googleRow, crossLink, googleProof, googleFacts, googleMarketsOf, googleAlert } from './google.mjs';
 import { ECON_JS, econContext, econAd, econBoard, econSorts, econGet, econPost, decisionsGet, decisionsPost, decisionLogged, tiktokLogged } from './econ.mjs';
 import { RISK_JS, riskChecks, riskHide, riskOut, riskList, riskPost } from './risk.mjs';
-import { LASSO_JS, readLasso, attachLasso, lassoBoard, lassoView, lassoCard } from './lasso.mjs';
+import { LASSO_JS, readLasso, readLassoNew, attachLasso, lassoBoard, lassoView, lassoCard } from './lasso.mjs';
 import { PIPELINE_JS, pipelineGet, pipelinePost, pipelineImage } from './pipeline.mjs';
 
 const COOKIE = '__Host-wh';
@@ -1167,8 +1167,8 @@ async function login(req, env, now) {
 async function ads(url, env, now, viewer) {
   // The products and the run states at the same time: the board waits for one round trip to D1, not five in a row.
   // With the unit economics' settings and inputs (econ.mjs): every card gets its margin and verdict, and Browse can sort by them.
-  const [list, states, ec, checks] = await Promise.all([board(env, now), statesJson(env.DB, ['last_run', 'world_run', 'token_expires_at', 'world_check', 'google_run']),
-    econContext(env.DB, now, { pageKey: productKey }), riskChecks(env)]);
+  const [list, states, ec, checks, lassoNew] = await Promise.all([board(env, now), statesJson(env.DB, ['last_run', 'world_run', 'token_expires_at', 'world_check', 'google_run', 'lasso_run']),
+    econContext(env.DB, now, { pageKey: productKey }), riskChecks(env), readLassoNew(env.DB, now)]);
   riskHide(list, url.searchParams, checks, toAd); // ?risk=hide: the risk radar's Block products leave Inbox and Browse (risk.mjs)
   const q = lassoView(url.searchParams, econBoard(list, ec, url.searchParams.get('sort')), viewOf); // + ?lasso=1 and its count (lasso.mjs)
   const scope = ['world', 'google'].includes(url.searchParams.get('scope')) ? url.searchParams.get('scope') : 'eu';
@@ -1185,6 +1185,8 @@ async function ads(url, env, now, viewer) {
     total: q.total,
     offset: q.offset,
     lasso: q.lasso, // how many products of this view a Lasso checkout store sells: the chip's count (lasso.mjs)
+    // The live Lasso stores the weekly discovery found in the last 7 days, and its last run: the chip's "+N new" (lasso.mjs).
+    lasso_new: lassoNew && { ...lassoNew, run: states.lasso_run ? { at: states.lasso_run.at || states.lasso_run.updated_at, health: states.lasso_run.health || '' } : null },
     counts,
     last_run: run,
     prev_run: prev || null,
