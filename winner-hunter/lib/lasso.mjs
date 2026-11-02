@@ -3,15 +3,18 @@
  * Service": upsells, order bumps, subscriptions, payments over Whop, Stripe, Adyen and NMI). A store pays $149 a month
  * and 1% of its sales for that, so it is mostly a store with paid traffic on a product that sells: a place to find products.
  *
- * How a Lasso store shows itself (checked on live stores, 2026-11-01; docs/research/lasso-stores.md):
+ * How a Lasso store shows itself (checked on live stores, 2026-11-01 and 2026-11-02; docs/research/lasso-stores.md and
+ * lasso-discovery.md):
  *   - its pages load <script src="https://checkout.<store>/shopify-scripts/lasso-script-v4.min.js" data-store-id="<24 hex>"
- *     data-checkout-url="checkout.<store>/checkout"> (older: lasso-script-v2.min.js, lasso-script.min.js), which talks to
- *     api.lassocheckout.com
+ *     data-checkout-url="checkout.<store>/checkout"> (older: lasso-script-v2.min.js, lasso-script.min.js; for subscriptions:
+ *     shopify-scripts/subscriptions-script.js), which talks to api.lassocheckout.com. Some stores run Lasso from theme code
+ *     without any of these: their checkout still shows it.
  *   - checkout.<store>/checkout is Lasso's checkout app ("Secure Checkout", with lasso_theme_hint and lasso-dark-boot in it).
- *     Its DNS points at a *.vercel-dns-016.com address, but other Vercel apps share those addresses: that is no proof.
+ *     Its DNS is a CNAME to 1a28dfb57b1e1efc.vercel-dns-016.com (84 % of the hostnames there are Lasso checkouts; a few are
+ *     other apps, so only the page itself is proof). lib/lasso-sources.mjs finds them that way.
  *   - data-store-id is a MongoDB ObjectId: its first 8 hex digits are the moment the store's Lasso account was made.
  * urlscan.io's search finds the pages that load that script, without an account (then only the last 30 days, at most 100
- * results a search: sweep() asks per day window).
+ * results a search, 30 searches a minute: sweep() asks per day window).
  *
  *   findLasso(html)                     → [{ src, version, storeId, checkoutUrl, checkoutHost, apiUrl }], one per script tag
  *   lassoSince(storeId)                 → '2026-06-25' (the day the store joined Lasso) or ''
@@ -32,34 +35,48 @@ const DAY = 864e5;
 export const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36';
 
 // The urlscan.io searches. The script's file name finds every store page that loads it; api.lassocheckout.com also finds
-// the customer portals (account.<store>, a CNAME to lasso-customer-portal.pages.dev); the last one finds checkout pages.
+// the customer portals (account.<store>, a CNAME to lasso-customer-portal.pages.dev); the fifth one finds checkout pages.
+// Tested 2026-11-02 (docs/research/lasso-discovery.md): Whop's pixel and payment elements, which Lasso stores load even
+// without Lasso's script on the page (6 and 1 stores the others missed, 12 % and 2 % of their pages are Lasso stores);
+// Lasso's subscriptions script; and the favicon of Lasso's customer portals.
 export const URLSCAN_QUERIES = [
   'filename:"lasso-script-v4.min.js"',
   'filename:"lasso-script-v2.min.js"',
   'filename:"lasso-script.min.js"',
   'domain:lassocheckout.com',
   'page.domain:checkout.* AND page.title:"Secure Checkout"',
+  'domain:t.whop.tw',
+  'domain:cdn.whop.com',
+  'filename:"subscriptions-script.js"',
+  'filename:"subscriptions-script.min.js"',
+  'filename:"lasso-favicon.png"',
 ];
 export const URLSCAN_MAX = 100; // results in one answer
+export const URLSCAN_PAUSE_MS = 2100; // urlscan allows 30 searches a minute without a key (header x-rate-limit-limit)
 export const CHECKOUT_MARKERS = /lasso_theme_hint|lasso-dark-boot/;
 const PORTAL_PREFIX = /^(account|accounts|subscriptions|subscription|billing|portal|my|members)\./;
-// Pages that are no store: a link shortener, Shopify's own addresses, preview sites.
-const NOT_A_STORE = /(^|\.)(share\.google|myshopify\.com|shopify\.com|pages\.dev|vercel\.app|lassocheckout\.com|lassocommerce\.com|lassocart\.com)$/;
+// Pages that are no store: a link shortener, Shopify's own addresses, preview sites, Lasso's and Whop's own sites.
+const NOT_A_STORE = /(^|\.)(share\.google|myshopify\.com|shopify\.com|pages\.dev|vercel\.app|lassocheckout\.com|lassocommerce\.com|lassocart\.com|whop\.com|whop\.site|whop\.tw)$/;
 
 const attr = (tag, name) => (new RegExp(`\\b${name}\\s*=\\s*["']([^"']*)["']`, 'i').exec(tag) || [])[1] || '';
 
-/** The Lasso script tags of a page: [{ src, version ('v4', 'v2', 'v1'), storeId, checkoutUrl, checkoutHost, apiUrl }]. */
+/**
+ * The Lasso script tags of a page: [{ src, version ('v4', 'v2', 'v1', 'subscriptions'), storeId, checkoutUrl, checkoutHost,
+ * apiUrl }]. The subscriptions script has a name another app could use: it counts with Lasso's path and store id only.
+ */
 export function findLasso(html) {
   const out = [];
-  for (const [tag] of String(html || '').matchAll(/<script\b[^>]*lasso-script[^>]*>/gi)) {
+  for (const [tag] of String(html || '').matchAll(/<script\b[^>]*(?:lasso-script|shopify-scripts\/subscriptions-script)[^>]*>/gi)) {
     const src = attr(tag, 'src');
     const v = /lasso-script(?:-v(\d+))?(?:\.min)?\.js/i.exec(src);
-    if (!v) continue;
+    const storeId = attr(tag, 'data-store-id');
+    const subs = !v && /\/shopify-scripts\/subscriptions-script(?:\.min)?\.js/i.test(src) && /^[0-9a-f]{24}$/i.test(storeId);
+    if (!v && !subs) continue;
     const checkoutUrl = attr(tag, 'data-checkout-url');
     out.push({
       src,
-      version: v[1] ? 'v' + v[1] : 'v1',
-      storeId: attr(tag, 'data-store-id'),
+      version: subs ? 'subscriptions' : v[1] ? 'v' + v[1] : 'v1',
+      storeId,
       checkoutUrl,
       checkoutHost: hostOf(/^https?:\/\//i.test(checkoutUrl) ? checkoutUrl : 'https://' + checkoutUrl) || hostOf(src) || '',
       apiUrl: attr(tag, 'data-api-url'),
@@ -106,7 +123,7 @@ export async function urlscanSearch(q, { doFetch = globalThis.fetch, key = '', s
  * without a key, so it asks per window of 2 days and splits a window that holds more, down to 2 hours.
  * → { scans: [raw results, one per scan], errors, searches }
  */
-export async function sweep(q, { days = 30, now = Date.now(), pauseMs = 1500, sleep = wait, ...opts } = {}) {
+export async function sweep(q, { days = 30, now = Date.now(), pauseMs = URLSCAN_PAUSE_MS, sleep = wait, ...opts } = {}) {
   const scans = new Map();
   let errors = 0;
   let searches = 0;
@@ -273,7 +290,8 @@ export function marketsOf({ country = '', currency = '' } = {}) {
   return out.slice(0, 2);
 }
 
-export const CSV_COLS = ['store', 'confidence', 'live', 'name', 'country', 'currency', 'lang', 'products', 'script', 'lasso_since', 'checkout_url', 'best_seller', 'best_seller_price', 'best_sellers', 'first_seen', 'last_seen', 'how'];
+// source and found_at: set for a store this run found new (lasso.mjs), '' for one saved before.
+export const CSV_COLS = ['store', 'confidence', 'live', 'name', 'country', 'currency', 'lang', 'products', 'script', 'lasso_since', 'checkout_url', 'best_seller', 'best_seller_price', 'best_sellers', 'first_seen', 'last_seen', 'how', 'source', 'found_at', 'aliases'];
 
 /** The list as CSV. A cell that starts like a formula (= + - @) gets a ' first, so a spreadsheet shows it as text. */
 export function toCsv(rows) {

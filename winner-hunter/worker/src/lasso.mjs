@@ -3,17 +3,19 @@
  * checkout (lassocommerce.com). A block of its own, as the AI read: app.mjs reads the stores with the winners and runs its
  * views through lassoView (?lasso=1 on /api/ads and /export.csv); /lasso.js puts the "Lasso checkout" chip with its count
  * on the board, and a "Lasso" tag on those products' cards.
- * The stores are D1's lasso_stores (0019): the research list of 2026-11-01 (0080) and every store the discovery job
+ * The stores are D1's lasso_stores (0019): the research list of 2026-11-01 (0080) and every store the weekly discovery
  * (lasso.mjs, workflow "Lasso stores") finds or checks again later. A store counts while its confidence is high or medium;
  * one that left Lasso (low, or '' after a check) does not. A store the job saves shows on the board at the next read of
- * the tables (after a hunt saves, or within 15 minutes).
+ * the tables (after a hunt saves, or within 15 minutes). A store the discovery found has a source and a found_at (0081):
+ * the chip shows "+N new" for the live ones found in the last NEW_DAYS days, the card's tag says when.
  *   registrable(hostOrUrl)   → 'store.com': lowercase, no www, the registrable domain ('' when there is none)
- *   lassoIndex(rows)         → Map registrable domain → { store, sure, at } of the stores on Lasso now, with their aliases
+ *   lassoIndex(rows)         → Map registrable domain → { store, sure, at, found, src } of the stores on Lasso now, with their aliases
  *   readLasso(DB)            → that index from D1 (empty without the table)
+ *   readLassoNew(DB, now)    → the stores the discovery found in the last NEW_DAYS days: { n, by, stores, days } (null: no column yet)
  *   attachLasso(rows, index) → each product's r.lasso: its store's entry, or null
  *   lassoBoard(list)         → the board (products() in app.mjs) with only Lasso stores' products
  *   lassoView(p, list, view) → view(p, list); with ?lasso=1 only Lasso stores' products; .lasso: how many this view holds
- *   lassoCard(r)             → for the card and the CSV: { store, sure, at } or null
+ *   lassoCard(r)             → for the card and the CSV: { store, sure, at } (+ found, src when the discovery found it) or null
  *   LASSO_JS                 → /lasso.js
  */
 
@@ -73,26 +75,51 @@ export function lassoIndex(rows) {
     const was = index.get(k);
     if (k && (!was || (e.sure && !was.sure && was.own === e.own))) index.set(k, e);
   };
-  const entry = (r, own) => ({ store: String(r.store).toLowerCase(), sure: ON[r.confidence], at: String(r.checked_at || '').slice(0, 10), own });
+  const entry = (r, own) => ({ store: String(r.store).toLowerCase(), sure: ON[r.confidence], at: String(r.checked_at || '').slice(0, 10),
+    found: String(r.found_at || '').slice(0, 10), src: String(r.source || ''), own });
   for (const r of on) add(registrable(r.store), entry(r, true));
   for (const r of on) for (const d of String(r.aliases || '').split(/[\s,;]+/)) add(registrable(d), entry(r, false));
   return index;
 }
 
-const STORES_SQL = "SELECT store, confidence, aliases, checked_at FROM lasso_stores WHERE confidence IN ('high', 'medium') ORDER BY store";
-// A database without migration 0080 (a test link uses the live database before a merge): no aliases yet.
-const OLDER_SQL = STORES_SQL.replace(', aliases', '');
+// The columns, newest migration first: a database without 0081 (no found_at, source) or 0080 (no aliases) still works (a
+// test link uses the live database before a merge).
+const COLUMNS = ['store, confidence, aliases, checked_at, found_at, source', 'store, confidence, aliases, checked_at', 'store, confidence, checked_at'];
 
 /** The index of the Lasso stores in D1. No table yet: empty. Any other D1 error is thrown (app.mjs reads again). */
 export async function readLasso(DB) {
-  const all = (sql) => DB.prepare(sql).all().then((r) => (r && r.results) || []);
+  for (const cols of COLUMNS) {
+    try {
+      const r = await DB.prepare(`SELECT ${cols} FROM lasso_stores WHERE confidence IN ('high', 'medium') ORDER BY store`).all();
+      return lassoIndex((r && r.results) || []);
+    } catch (e) {
+      const msg = String(e && e.message);
+      if (/no such table/i.test(msg)) return new Map();
+      if (!/no such column/i.test(msg)) throw e;
+    }
+  }
+  return new Map();
+}
+
+export const NEW_DAYS = 7; // "this week" on the chip: the live Lasso stores found in the last 7 days
+const NEW_SQL = `SELECT store, source FROM lasso_stores WHERE found_at >= ?1 AND live = 1 AND confidence IN ('high', 'medium')
+ORDER BY found_at DESC, store LIMIT 1000`;
+
+/**
+ * The live Lasso stores the weekly discovery found in the last NEW_DAYS days: { n, by: { source: n }, stores: the newest 8,
+ * days }. null when D1 has no found_at yet (before 0081) or does not answer: the chip then shows no "new" (never an error
+ * for the board).
+ */
+export async function readLassoNew(DB, now = Date.now()) {
   try {
-    return lassoIndex(await all(STORES_SQL));
+    const r = await DB.prepare(NEW_SQL).bind(new Date(now - NEW_DAYS * 864e5).toISOString()).all();
+    const rows = (r && r.results) || [];
+    const by = {};
+    for (const x of rows) by[x.source || 'other'] = (by[x.source || 'other'] || 0) + 1;
+    return { n: rows.length, by, stores: rows.slice(0, 8).map((x) => x.store), days: NEW_DAYS };
   } catch (e) {
-    const msg = String(e && e.message);
-    if (/no such table/i.test(msg)) return new Map();
-    if (/no such column/i.test(msg)) return lassoIndex(await all(OLDER_SQL));
-    throw e;
+    if (!/no such (table|column)/i.test(String(e && e.message))) console.error(e);
+    return null;
   }
 }
 
@@ -121,15 +148,20 @@ export function lassoView(p, list, view, { count = true } = {}) {
   return q;
 }
 
-/** For the card (toAd in app.mjs) and the CSV. */
-export const lassoCard = (r) => (r && r.lasso ? { store: r.lasso.store, sure: r.lasso.sure, at: r.lasso.at } : null);
+/** For the card (toAd in app.mjs) and the CSV. found and src only for a store the weekly discovery found. */
+export function lassoCard(r) {
+  if (!r || !r.lasso) return null;
+  const { store, sure, at, found, src } = r.lasso;
+  return found ? { store, sure, at, found, src } : { store, sure, at };
+}
 
 /**
  * The board's side, sent as source text (/lasso.js), run once after the board's own script (it uses the board's st, ADS,
  * DONE and load). Two chips, one state (st.lasso, which params() in board.html sends): Browse has it among its filters;
  * the Inbox, which has no filter row, where Browse has its search. Its count: the server's (j.lasso of /api/ads, through
- * LASSO.header in the board's header()), less the Lasso products decided in the Inbox since. A "Lasso" tag goes on each
- * card of a Lasso store as the cards come.
+ * LASSO.header in the board's header()), less the Lasso products decided in the Inbox since. "+N new" on the chip: the
+ * live Lasso stores the weekly discovery found in the last 7 days (j.lasso_new), its title says by which source and
+ * names the newest. A "Lasso" tag goes on each card of a Lasso store as the cards come.
  */
 export function lassoKit() {
   const grid = document.getElementById('grid');
@@ -140,11 +172,14 @@ export function lassoKit() {
   if (me && me.nonce) css.setAttribute('nonce', me.nonce);
   css.textContent = `
   .lchip small { margin-left: 4px; font-size: 11px; font-weight: 500; opacity: .75; }
+  .lchip .lnew { margin-left: 6px; padding: 2px 5px; border: 1px solid currentColor; border-radius: 6px; font: 600 10px/1 var(--mono); color: var(--win); }
+  .lchip .lnew[hidden] { display: none; }
+  .lchip[aria-pressed="true"] .lnew { color: inherit; }
   body:not(.inbox) .lchip.lin { display: none; }
   `;
   document.head.appendChild(css);
 
-  const L = { n: null, ids: new Set(), base: new Set() };
+  const L = { n: null, ids: new Set(), base: new Set(), fresh: null };
   window.LASSO = L;
   const list = () => (typeof ADS !== 'undefined' && Array.isArray(ADS) ? ADS : []);
   // The server's count, less the Lasso products decided in the Inbox since it came (the Inbox decides without asking again).
@@ -154,12 +189,28 @@ export function lassoKit() {
     if (st.view === 'inbox' && typeof DONE !== 'undefined') for (const id of L.ids) if (DONE.has(id) && !L.base.has(id)) n--;
     return Math.max(0, n);
   }
+  // "+N new": the live Lasso stores the weekly discovery found in the last days, with what found them and the last run.
+  function fresh() {
+    const f = L.fresh;
+    if (!f || !(f.n > 0)) return null;
+    const by = Object.entries(f.by || {}).map(([k, v]) => `${k} ${v}`).join(', ');
+    const names = (f.stores || []).join(', ') + (f.n > (f.stores || []).length ? ', …' : '');
+    const run = f.run && f.run.at ? ` Last run ${String(f.run.at).slice(0, 10)}${f.run.health && f.run.health !== 'ok' ? ` (${f.run.health})` : ''}.` : '';
+    return { text: `+${f.n.toLocaleString('en-US')} new`,
+      title: `${f.n} Lasso store${f.n === 1 ? '' : 's'} found by the weekly discovery in the last ${f.days || 7} days${by ? ` (${by})` : ''}: ${names}.${run}` };
+  }
   const chips = [];
   function paint() {
     const n = count();
+    const f = fresh();
     for (const b of chips) {
       b.setAttribute('aria-pressed', String(!!st.lasso));
       b.querySelector('small').textContent = n == null ? '' : n.toLocaleString('en-US');
+      const s = b.querySelector('.lnew');
+      s.hidden = !f;
+      s.textContent = f ? f.text : '';
+      if (f) s.title = f.title;
+      else s.removeAttribute('title');
     }
   }
   function chip(where) {
@@ -167,7 +218,10 @@ export function lassoKit() {
     b.type = 'button';
     b.className = 'chip lchip ' + where;
     b.title = 'Only products from stores that use the Lasso checkout (lassocommerce.com)';
-    b.append('Lasso checkout', document.createElement('small'));
+    const news = document.createElement('span');
+    news.className = 'lnew';
+    news.hidden = true;
+    b.append('Lasso checkout', document.createElement('small'), news);
     b.addEventListener('click', () => {
       st.lasso = !st.lasso;
       const csv = document.getElementById('csv'); // the CSV link follows the chip at once, not only when the answer is drawn (render())
@@ -185,6 +239,7 @@ export function lassoKit() {
   /** From the board's header(j): the count for this view. Products decided here that the server still counted are taken off. */
   L.header = (j) => {
     L.n = j && typeof j.lasso === 'number' ? j.lasso : null;
+    L.fresh = j && j.lasso_new && typeof j.lasso_new === 'object' ? j.lasso_new : null;
     L.ids = new Set((j && Array.isArray(j.ads) ? j.ads : []).filter((a) => a && a.lasso).map((a) => a.id));
     L.base = new Set(st.view === 'inbox' && typeof DONE !== 'undefined' ? [...L.ids].filter((id) => DONE.has(id)) : []);
     if (L.n != null) L.n = Math.max(0, L.n - L.base.size);
@@ -195,7 +250,8 @@ export function lassoKit() {
     const s = document.createElement('span');
     s.className = 'tag lasso';
     s.textContent = 'Lasso';
-    s.title = `${x.store} uses the Lasso checkout (lassocommerce.com): ${x.sure ? 'sure, its Lasso script and checkout were found' : 'likely, its Lasso script or checkout was found'}${x.at ? ', checked ' + x.at : ''}`;
+    s.title = `${x.store} uses the Lasso checkout (lassocommerce.com): ${x.sure ? 'sure, its Lasso script and checkout were found' : 'likely, its Lasso script or checkout was found'}${x.at ? ', checked ' + x.at : ''}`
+      + (x.found ? `, found by the weekly discovery on ${x.found}${x.src ? ` (${x.src})` : ''}` : '');
     return s;
   }
   function scan() {
