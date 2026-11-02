@@ -11,6 +11,7 @@
 <script nonce="__NONCE__" src="/lasso.js" id="lakit" defer></script>
 <link rel="stylesheet" nonce="__NONCE__" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <script nonce="__NONCE__" src="/launch.js" id="lnkit" defer></script>
+<script nonce="__NONCE__" src="/supplier.js" id="spkit" defer></script>
 <script nonce="__NONCE__" src="/sourcing.js" id="sxkit" defer></script>
 <script nonce="__NONCE__" src="/econ.js" id="eckit" defer></script>
 <style nonce="__NONCE__">
@@ -693,6 +694,54 @@
   .lnrs.no { color: var(--bad); }
   .lnbtn { height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid rgba(76, 195, 138, .4); background: rgba(76, 195, 138, .12); color: var(--win); font: 500 14px var(--sans); cursor: pointer; }
   .lnbtn:disabled { opacity: .5; cursor: default; }
+  /* 🏭 Suppliers (supplier.mjs): the Launch view's second tab. Up to 5 suppliers side by side, the gates, the decision. */
+  body:not(.lnv) #spbox, .tt #spbox { display: none !important; }
+  .lnbar { display: flex; min-width: 0; }
+  .lntabs { display: inline-flex; max-width: 100%; padding: 4px; border-radius: 12px; background: var(--card2); border: 1px solid var(--line); }
+  .lntabs button { border: 0; background: none; border-radius: 9px; min-height: 36px; padding: 0 12px; color: var(--muted); font: 500 14px var(--sans); cursor: pointer; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .lntabs button[aria-pressed="true"] { color: var(--ink); background: rgba(217, 164, 65, .1); }
+  .lntabs small { font: 500 11px var(--num); color: var(--faint); }
+  .lnlinks .lnuse { align-self: center; }
+  .spv { display: grid; gap: 12px; min-width: 0; }
+  .spvt { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+  .spvs { margin: 0; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+  .sprank { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .sprank li { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 56px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card2); }
+  .sprank li.fail { opacity: .72; }
+  .sprank .n { font: 500 13px var(--num); color: var(--muted); }
+  .sprank b { font-weight: 500; overflow-wrap: anywhere; }
+  .sprank small { display: block; font-size: 12px; overflow-wrap: anywhere; }
+  .sps { font: 600 14px var(--num); margin-left: 4px; }
+  .spst.pass { color: var(--win); }
+  .spst.open { color: var(--amb); }
+  .spst.fail { color: var(--bad); }
+  .spchosen { color: var(--win); font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .spchoose { display: grid; gap: 12px; padding: 12px; border: 1px solid rgba(217, 164, 65, .5); border-radius: 12px; min-width: 0; }
+  .spchoose p { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+  .spcmp { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
+  .sph { margin: 0; font-size: 14px; font-weight: 500; color: var(--muted); }
+  .sptw { overflow-x: auto; max-width: 100%; border: 1px solid var(--line); border-radius: 12px; background: var(--card); -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+  .spt { border-collapse: separate; border-spacing: 0; min-width: 100%; font-size: 13px; }
+  .spt th, .spt td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .spt tbody tr:last-child th, .spt tbody tr:last-child td { border-bottom: 0; }
+  .spt thead th { font-weight: 500; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+  .spt th:first-child { position: sticky; left: 0; z-index: 1; background: var(--card); color: var(--muted); font-weight: 400; }
+  .spt td small, .spt th small { color: var(--faint); font-size: 11px; }
+  .spt .sptot td b { font: 600 15px var(--num); }
+  .spsub { grid-column: 1 / -1; margin: 4px 0 0; font-size: 13px; font-weight: 500; color: var(--ink); }
+  .spgates { display: grid; gap: 12px; min-width: 0; }
+  .spgate { display: grid; gap: 4px; min-width: 0; font-size: 14px; color: var(--ink); }
+  .spgl small { display: block; color: var(--muted); font-size: 12px; }
+  .spgl .spmust { display: inline; color: var(--amb); margin-left: 4px; }
+  .spgate .selw, .spgate select.chip { width: 100%; min-width: 0; }
+  .spgate select.chip { height: 44px; font-size: 16px; font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+  .spgate > .spst { font-size: 13px; overflow-wrap: anywhere; }
+  .spmsg { display: grid; gap: 8px; min-width: 0; }
+  .spmsg textarea { font-size: 14px !important; }
+  .spbtns { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sphist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+  .spadd { display: grid; gap: 12px; padding-top: 8px; min-width: 0; }
+  .spback { justify-self: start; }
   @media (pointer: coarse) { .lnpin, .lnuse, .lnremove { min-height: 44px; } }
   @media (min-width: 760px) {
     .lnfields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1241,6 +1290,7 @@
     <div class="loadmore" id="ttload"><button id="ttmore" hidden>Show more</button></div>
   </section>
   <section class="lnbox" id="lnbox" aria-label="Launch" hidden></section>
+  <section class="lnbox" id="spbox" aria-label="Suppliers" hidden></section>
   <section class="ecbox" id="ecbox" aria-label="Unit economics" hidden></section>
 </div>
 <div class="toast" id="toast" role="status" hidden><span id="toastMsg"></span><button id="undo">Undo</button></div>
@@ -2677,7 +2727,8 @@ if ('IntersectionObserver' in window) new IntersectionObserver((es) => { if (es.
 // decision on top (margin, break-even ROAS, how long its ads run, store size, risk flags: Go or No go in ten seconds)
 // and the seven-step checklist under it. The numbers are worked out as you type by the code the server runs too
 // (/launch.js: window.LAUNCH). Each step saves on its own, one save after the other.
-const LN = { list: null, focus: '', pick: null, picking: false, open: new Set(), timers: new Map(), chain: Promise.resolve(), saving: 0 };
+// tab: 'launch' (the launch cards) or 'supplier' (🏭 Suppliers, below: its own box, #spbox).
+const LN = { list: null, focus: '', pick: null, picking: false, open: new Set(), timers: new Map(), chain: Promise.resolve(), saving: 0, tab: 'launch' };
 const lnReady = new Promise((ok, no) => {
   if (window.LAUNCH) { ok(); return; }
   $('lnkit').addEventListener('load', () => (window.LAUNCH ? ok() : no(new Error('the launch code did not run'))), { once: true });
@@ -2714,6 +2765,9 @@ async function lnView() {
   $('grid').innerHTML = '';
   for (const id of ['allrow', 'allrow2', 'count', 'empty', 'moreBtn', 'ibox', 'dock', 'zero', 'pnote', 'learn']) $(id).hidden = true;
   radar();
+  if (LN.tab === 'supplier') { $('lnbox').hidden = true; $('lnbox').innerHTML = ''; spView(); return; }
+  $('spbox').hidden = true;
+  $('spbox').innerHTML = ''; // one tab's content at a time: nothing of the other one is left in the page
   $('lnbox').hidden = false;
   const shown = LN.list && window.LAUNCH ? JSON.stringify(LN.list) : '';
   if (shown) lnRender();
@@ -2721,25 +2775,38 @@ async function lnView() {
   try {
     await lnReady;
     await lnLoad();
-    if (st.view !== 'launch') return;
+    if (st.view !== 'launch' || LN.tab === 'supplier') return; // another view, or the Suppliers tab meanwhile
     if (JSON.stringify(LN.list) !== shown) lnRender(); // unchanged: no new render, so a field you tapped keeps its keyboard
     if (LN.picking && !LN.pick) lnPick();
+    if (!SP.list) spLoadList().then(spCount, () => {}); // the count on the Suppliers tab
   } catch (e) {
-    if (st.view === 'launch') $('lnbox').innerHTML = `<p class="lnmuted">Could not load the launch cards: ${esc(e.message)}</p>`;
+    if (st.view === 'launch' && LN.tab !== 'supplier') $('lnbox').innerHTML = `<p class="lnmuted">Could not load the launch cards: ${esc(e.message)}</p>`;
   }
 }
 function lnLeave() {
   if (!document.body.classList.contains('lnv')) return;
   lnFlush();
+  spFlush();
   document.body.classList.remove('lnv');
   $('lnbox').hidden = true;
+  $('spbox').hidden = true;
   $('lnseg').setAttribute('aria-pressed', 'false');
+}
+// The two tabs of the view: the launch cards and 🏭 Suppliers. Saves on their way go out first.
+const lnBarHtml = () => `<div class="lnbar"><div class="lntabs" role="group" aria-label="Launch cards or suppliers"><button data-tab="launch" aria-pressed="${LN.tab !== 'supplier'}">🚀 Launch cards</button><button data-tab="supplier" aria-pressed="${LN.tab === 'supplier'}">🏭 Suppliers <small data-nsup>${SP.list && SP.list.length ? SP.list.length : ''}</small></button></div></div>`;
+function lnTab(t) {
+  if (LN.tab === t) return;
+  LN.tab = t;
+  if (t === 'supplier') lnFlush();
+  else spFlush();
+  lnView();
+  window.scrollTo({ top: 0 });
 }
 
 function lnRender() {
   const l = lnFocus();
   const others = (LN.list || []).filter((x) => x !== l);
-  $('lnbox').innerHTML = `<div class="lnhead"><h2>Launch</h2><small class="lnsaved" id="lnsaved" aria-live="polite"></small>
+  $('lnbox').innerHTML = `${lnBarHtml()}<div class="lnhead"><h2>Launch</h2><small class="lnsaved" id="lnsaved" aria-live="polite"></small>
       <p>${l ? 'One product, from the supplier to a test campaign. Everything saves as you type.' : 'Pick an approved product: its launch card holds the checklist and the numbers for a go or a no-go.'}</p></div>
     ${l ? lnCardHtml(l) + lnStepsHtml(l) : ''}
     ${others.length ? `<section class="lnother" aria-label="Other launch cards"><h3>Other launch cards</h3>${others.map(lnRowHtml).join('')}</section>` : ''}
@@ -2824,7 +2891,8 @@ function lnHelp(l, k) {
   const f = l.facts;
   const q = encodeURIComponent(l.title || f.title || '');
   const links = {
-    sourcing: [lnA(src1688(f.zh || f.title || ''), 'Search 1688'), lnA('https://www.aliexpress.com/wholesale?SearchText=' + q, 'Search AliExpress')],
+    sourcing: [lnA(src1688(f.zh || f.title || ''), 'Search 1688'), lnA('https://www.aliexpress.com/wholesale?SearchText=' + q, 'Search AliExpress'),
+      `<button class="lnuse" data-spopen="${esc(l.key)}" title="Score up to 5 suppliers side by side, check the gates, record the choice">🏭 Compare suppliers</button>`],
     compliance: [lnA('https://www.tmdn.org/tmview/#/tmview/results?page=1&pageSize=30&criteria=C&basicSearch=' + q, 'Trademarks (TMview)'), lnA('https://transparency.meta.com/policies/ad-standards/', "Meta's ad rules")],
     research: [lnA(f.ad, f.source === 'tiktok' ? 'Its Meta ads' : 'Its ad'), lnA('https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&media_type=all&search_type=keyword_unordered&q=' + q, 'Search the Ad Library'), lnA(f.product || f.store, f.source === 'tiktok' ? 'On TikTok' : 'Their shop')],
   }[k];
@@ -3003,7 +3071,9 @@ async function lnRemove(b) {
 $('lnbox').addEventListener('click', (e) => {
   const b = e.target.closest('button');
   if (!b || b.disabled) return;
-  if (b.dataset.start) lnStart(b);
+  if (b.dataset.tab) lnTab(b.dataset.tab);
+  else if (b.dataset.spopen) spFromLaunch(b.dataset.spopen);
+  else if (b.dataset.start) lnStart(b);
   else if (b.dataset.focus) { lnFlush(); Object.assign(LN, { focus: b.dataset.focus, open: new Set() }); lnRender(); window.scrollTo({ top: 0 }); }
   else if (b.dataset.use) lnUse(b.dataset.use);
   else if (b.dataset.ld) lnDecide(b.dataset.ld);
@@ -3021,6 +3091,539 @@ for (const b of document.querySelectorAll('[data-view], [data-scope]')) b.addEve
 addEventListener('pagehide', lnFlush);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') lnFlush(); });
 addEventListener('load', () => { if (!LN.list) lnLoad().catch(() => {}); }); // the count on 🚀: cards that are not a no-go
+
+// ---- 🏭 Suppliers (supplier.mjs), the Launch view's second tab: which supplier to choose for a product, with the
+// evidence. Up to 5 suppliers side by side, scored on 7 criteria (quality and delivery count most; the weights are
+// yours), the hard gates (one fail and it is out), the checklist, the questions for suppliers in English and Chinese,
+// and the decision record with a re-check every 90 days. The board scores as you type with the code the server runs
+// (/supplier.js: window.SUPPLIER). Each part saves on its own, one save after the other.
+// html: what the verdict, the table and the suppliers' boxes show now. A box is only written again when it changes:
+// leaving a field fires 'change' after its last 'input', and a box written again then would swallow the tap that left it.
+const SP = { list: null, focus: '', prod: null, open: new Set(), timers: new Map(), chain: Promise.resolve(), saving: 0, choosing: 0, html: {} };
+const spReady = new Promise((ok, no) => {
+  if (window.SUPPLIER) { ok(); return; }
+  $('spkit').addEventListener('load', () => (window.SUPPLIER ? ok() : no(new Error('the supplier code did not run'))), { once: true });
+  $('spkit').addEventListener('error', () => no(new Error('the supplier code did not load')), { once: true });
+});
+spReady.catch(() => {}); // said when the tab opens
+const SP_MARKET = { eu: 'NL/DE', us: 'the US', both: 'NL/DE and the US' };
+const spK = () => window.SUPPLIER;
+// A decision and its re-check are dated in full: '30 Jan 2027'.
+const spDate = (iso) => { const d = new Date(iso); return Number.isFinite(+d) ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''; };
+const spSaved = (t) => { const el = $('spsaved'); if (el) el.textContent = t; };
+const spOn = () => st.view === 'launch' && LN.tab === 'supplier';
+const spCount = () => { for (const el of document.querySelectorAll('[data-nsup]')) el.textContent = SP.list && SP.list.length ? SP.list.length : ''; };
+const spSumText = (r) => (!r ? '' : `${r.score}/100 · ${r.status === 'fail' ? '✗ ' + r.failed.join(', ') : r.status === 'open' ? `${r.open.length} gate${r.open.length === 1 ? '' : 's'} open` : '✓ gates'}`);
+const spGateText = (x) => (!x ? '' : (x.state === 'pass' ? '✓ ' : x.state === 'fail' ? '✗ ' : '… ') + x.why);
+const spAutoLabel = (c, x) => (x && x.auto != null ? `Auto: ${x.auto}` : c.auto ? 'Auto: not known yet (counts 0)' : 'Not scored (counts 0)');
+
+async function spLoadList() {
+  await SP.chain; // saves on their way land first
+  const res = await fetch('/api/supplier', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+  if (res.status === 401) { location.reload(); return; }
+  const j = await res.json();
+  if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+  SP.list = j.products;
+}
+async function spLoadOne(key) {
+  await SP.chain;
+  const res = await fetch('/api/supplier?key=' + encodeURIComponent(key), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+  if (res.status === 401) { location.reload(); return; }
+  const j = await res.json();
+  if (res.status === 404) { Object.assign(SP, { focus: '', prod: null }); return; } // removed in another tab
+  if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+  SP.prod = j.product;
+}
+// The tab: the list of scorecards, or the one you work on.
+async function spView() {
+  $('spbox').hidden = false;
+  const shown = SP.list && window.SUPPLIER ? JSON.stringify([SP.list, SP.prod]) : '';
+  if (shown) spRender();
+  else $('spbox').innerHTML = `${lnBarHtml()}<div class="sload"><i class="spin"></i>Loading…</div>`;
+  try {
+    await spReady;
+    await Promise.all([spLoadList(), SP.focus ? spLoadOne(SP.focus) : null, LN.list ? null : lnLoad().catch(() => {})]);
+    if (!spOn()) return;
+    if (JSON.stringify([SP.list, SP.prod]) !== shown) spRender(); // unchanged: no new render, a field you tapped keeps its keyboard
+    spCount();
+  } catch (e) {
+    if (spOn()) $('spbox').innerHTML = `${lnBarHtml()}<p class="lnmuted">Could not load the suppliers: ${esc(e.message)}</p>`;
+  }
+}
+function spRender() {
+  const p = SP.focus && SP.prod && SP.prod.key === SP.focus ? SP.prod : null;
+  $('spbox').innerHTML = `${lnBarHtml()}<div class="lnhead"><h2>Suppliers</h2><small class="lnsaved" id="spsaved" aria-live="polite"></small>
+      <p>${p ? 'Up to 5 suppliers side by side. Quality and delivery count most; one failed gate and a supplier is out. Everything saves as you type.' : 'Which supplier to choose, with the evidence: score up to 5 side by side, check the gates, record the choice and re-check it.'}</p></div>
+    ${p ? spProdHtml(p) : spListHtml()}`;
+}
+
+function spListHtml() {
+  const list = SP.list || [];
+  const have = new Set(list.map((x) => x.key));
+  const cards = (LN.list || []).filter((l) => !have.has(l.key) && l.decision !== 'no');
+  const rows = list.map((x) => {
+    const sub = [x.suppliers ? `${x.suppliers} supplier${x.suppliers === 1 ? '' : 's'}` : 'No suppliers yet', x.chosen ? `chosen: ${x.chosen.name}` : x.best ? `best: ${x.best.name} ${x.best.score}` : '', `checklist ${x.checks.done}/${x.checks.of}`].filter(Boolean).join(' · ');
+    const state = x.chosen ? (x.chosen.overdue ? 'Re-check due' : 'Chosen') : x.best && x.best.status !== 'fail' ? x.best.score + '/100' : '';
+    return `<button class="lnrow" data-spfocus="${esc(x.key)}"><span class="lnth">${lnImg({ img: x.img, title: x.title })}</span><span class="lnrt"><b>${esc(x.title)}</b><small>${esc(sub)}</small></span><span class="lnrs${x.chosen ? ' go' : ''}">${esc(state)}</span></button>`;
+  }).join('');
+  return `<section class="lnother" aria-label="Scorecards">${list.length ? `<h3>Products</h3>${rows}` : '<p class="lnmuted">No scorecards yet.</p>'}</section>
+    <section class="lnpick" aria-label="Start a scorecard"><h3>Start a scorecard</h3>
+      ${cards.map((l) => `<div class="lnrow"><span class="lnth">${lnImg(l.facts)}</span><span class="lnrt"><b>${esc(l.title || l.facts.title)}</b><small>${esc((LN_SRC[l.facts.source] || '') + ' · its launch card')}</small></span><button class="lnbtn" data-spstart="${esc(l.key)}">Start</button></div>`).join('')}
+      <div class="spadd"><label class="lnf"><span>A product by name (one without a launch card too)</span><input id="spname" type="text" maxlength="120" placeholder="Product name" autocomplete="off"></label>
+        <label class="lnf"><span>Its link (optional)</span><input id="splink" type="url" inputmode="url" spellcheck="false" maxlength="500" placeholder="https://" autocomplete="off"></label>
+        <button class="lnstart" data-sp="add">+ Start a scorecard</button></div></section>`;
+}
+
+// One product: its card with the verdict, the ranking, the side-by-side table, the suppliers, the setup and the record.
+function spProdHtml(p) {
+  const K = spK();
+  const s = K.summaryOf(p, Date.now());
+  const f = p.facts || {};
+  const set = s.setup;
+  const q = encodeURIComponent(p.title || f.title || '');
+  const price = f.price != null ? money(f.price, f.cur) + (f.source === 'own' ? ' at the competitor' : ' in their shop') : '';
+  const links = [lnA(f.link, f.source === 'own' ? 'Their product' : 'Shop'), lnA(src1688(set.zh || p.title || ''), 'Search 1688'), lnA('https://www.alibaba.com/trade/search?SearchText=' + q, 'Alibaba'), lnA('https://www.aliexpress.com/wholesale?SearchText=' + q, 'AliExpress')];
+  return `<button class="lnuse spback" data-sp="back">← All products</button>
+    <article class="lncard">
+      <div class="lnprod"><span class="lnth big">${lnImg(f)}</span>
+        <div class="lnpt"><h3>${esc(p.title)}</h3><small>${esc([price, f.note].filter(Boolean).join(' · '))}</small><div class="lnlinks">${links.join('')}</div></div></div>
+      <div id="spverdict">${(SP.html.verdict = spVerdictHtml(p, s))}</div>
+      <div id="spchoose">${SP.choosing ? spChooseHtml(s) : ''}</div>
+    </article>
+    <section class="spcmp" aria-label="Side by side"><h3 class="sph">Side by side</h3><div id="sptable">${(SP.html.table = spTableHtml(s))}</div></section>
+    ${spSupsHtml(p, s)}
+    ${spSetupHtml(p, s)}
+    <button class="lnremove" data-sp="remove">Remove this scorecard</button>`;
+}
+function spVerdictHtml(p, s) {
+  const K = spK();
+  const set = s.setup;
+  const c = p.choice && p.choice.current;
+  const top = s.rows.find((r) => r.slot === (s.chosen ? s.chosen.slot : s.pick));
+  let sub = '';
+  if (s.chosen) sub = `Chosen ${spDate(s.chosen.at)}${top ? ` · ${top.score}/100 now` : ''} · re-check by ${spDate(s.chosen.next)}${s.chosen.overdue ? ' (overdue)' : ''}: every ${K.RECHECK_DAYS} days and before every reorder`;
+  else if (top) sub = [`${top.score}/100`, top.days != null ? `${top.days} days to ${SP_MARKET[set.market]}` : '', top.landed != null ? `${money(top.landed, set.cur)} an order landed` : '', top.status === 'pass' ? 'every gate passed' : top.open.length ? `to confirm: ${top.open.join(', ')}` : ''].filter(Boolean).join(' · ');
+  const backup = s.chosen ? c.backup : s.rows.find((r) => r.slot === s.backup);
+  const flags = s.flags.length ? s.flags.map((x) => `<li class="${esc(x.level)}">${esc(x.text)}</li>`).join('') : '<li class="green">No flags</li>';
+  return `<div class="spv" data-level="${esc(s.level)}"><p class="spvt">${esc(s.verdict)}</p>${sub ? `<p class="spvs">${esc(sub)}</p>` : ''}
+      ${backup ? `<p class="spvs">Backup: ${esc(backup.name)} (${esc(backup.score)}/100)</p>` : ''}
+      <ul class="lnflags" aria-label="Flags">${flags}</ul>
+      ${s.rows.length ? `<ol class="sprank" aria-label="Ranking">${s.rows.map((r) => spRankHtml(r, s)).join('')}</ol>` : ''}</div>`;
+}
+function spRankHtml(r, s) {
+  const chosen = s.chosen && s.chosen.slot === r.slot;
+  const gate = r.status === 'fail' ? `✗ out: ${r.failed.join(', ')}` : r.status === 'open' ? `${r.open.length} gate${r.open.length === 1 ? '' : 's'} open` : '✓ every gate';
+  const sub = [gate, r.days != null ? r.days + ' days' : '', r.landed != null ? money(r.landed, s.setup.cur) : '', `${r.scored}/${r.of} scored`].filter(Boolean).join(' · ');
+  const act = chosen ? '<span class="spchosen">✓ Chosen</span>' : r.status === 'fail' ? '' : `<button class="lnuse" data-spchoose="${r.slot}">Choose</button>`;
+  return `<li class="${esc(r.status)}"><span class="n">${esc(r.rank)}</span><span><b>${esc(r.name)}</b><span class="sps">${esc(r.score)}</span><small class="spst ${esc(r.status)}">${esc(sub)}</small></span>${act}</li>`;
+}
+function spChooseHtml(s) {
+  const r = s.rows.find((x) => x.slot === SP.choosing);
+  if (!r || r.status === 'fail') return '';
+  const others = s.rows.filter((x) => x.slot !== r.slot && x.status !== 'fail');
+  return `<div class="spchoose"><p>Choose <b>${esc(r.name)}</b> (${esc(r.score)}/100)?${r.open.length ? ` Still to confirm before you pay for stock: ${esc(r.open.join(', '))}.` : ''}</p>
+      <label class="lnf wide"><span>Why this one (kept in the decision record)</span><textarea id="spwhy" rows="3" maxlength="1000" placeholder="Best sample, 9 days to NL, answers within a day"></textarea></label>
+      <label class="lnf wide"><span>Backup</span><span class="selw"><select class="chip" id="spbackup">${others.map((x, i) => `<option value="${esc(x.slot)}"${i ? '' : ' selected'}>${esc(x.name)} (${esc(x.score)}/100)</option>`).join('')}<option value="0"${others.length ? '' : ' selected'}>No backup</option></select></span></label>
+      <div class="spbtns"><button class="lnbtn" data-sp="decide">Save the decision</button><button class="lnuse" data-sp="cancel">Cancel</button></div></div>`;
+}
+// Side by side: a column per supplier, best first; the table scrolls sideways inside its box, never the page.
+function spTableHtml(s) {
+  if (!s.rows.length) return '<p class="lnmuted">Add the suppliers you compare below: up to 5.</p>';
+  const K = spK();
+  const set = s.setup;
+  const line = (label, f, cls) => `<tr${cls ? ` class="${cls}"` : ''}><th scope="row">${label}</th>${s.rows.map((r) => `<td>${f(r)}</td>`).join('')}</tr>`;
+  const part = (c) => (r) => { const x = r.parts[c.k]; return x.v == null ? '–' : esc(x.v) + (x.manual ? '' : ' <small>auto</small>'); };
+  const cur = (v) => (v == null ? '–' : esc(money(v, set.cur)));
+  return `<div class="sptw" role="region" aria-label="Suppliers side by side" tabindex="0"><table class="spt">
+    <thead><tr><th scope="col">Supplier</th>${s.rows.map((r) => `<th scope="col" title="${esc(r.name)}">${esc(r.rank)}. ${esc(r.name)}</th>`).join('')}</tr></thead><tbody>
+    ${line('Score', (r) => `<b>${esc(r.score)}</b>`, 'sptot')}
+    ${line('Gates', (r) => `<span class="spst ${esc(r.status)}">${r.status === 'fail' ? '✗ ' + esc(r.failed.join(', ')) : r.status === 'open' ? esc(r.open.length + ' open') : '✓ all'}</span>`)}
+    ${K.CRITERIA.map((c) => line(`${esc(c.short)} <small>${esc(set.weights[c.k])}</small>`, part(c))).join('')}
+    ${line('Landed / order', (r) => cur(r.landed))}
+    ${line('Break-even ROAS', (r) => (r.be_roas == null ? '–' : esc(r.be_roas + '×')))}
+    ${line('Days to ' + esc(SP_MARKET[set.market]), (r) => (r.days == null ? '–' : esc(r.days) + (r.measured ? ' <small>measured</small>' : ' <small>quoted</small>')))}
+    ${line('Lead time', (r) => (r.lead == null ? '–' : esc(r.lead + ' d')))}
+    ${line('MOQ', (r) => (r.moq == null ? '–' : esc(r.moq)))}
+    ${line('Sample tests', (r) => (r.sample.done ? esc(`${r.sample.passed}/${r.sample.of} passed`) : '–'))}
+    </tbody></table></div>`;
+}
+
+function spField(f, val, attr, ph = '') {
+  const a = `${attr}="${esc(f.k)}"`;
+  if (f.t === 'tick') return `<label class="lncheck"><input type="checkbox" ${a}${val === true ? ' checked' : ''}><span>${esc(f.label)}</span></label>`;
+  if (f.t === 'choice') return `<label class="lnf wide"><span>${esc(f.label)}</span><span class="selw"><select class="chip" ${a}><option value="">Not set</option>${f.options.map(([x, t]) => `<option value="${esc(x)}"${val === x ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></span></label>`;
+  if (f.t === 'long') return `<label class="lnf wide"><span>${esc(f.label)}</span><textarea ${a} rows="3" maxlength="1000" placeholder="${esc(ph)}">${esc(val ?? '')}</textarea></label>`;
+  const wide = f.t === 'url' || f.t === 'text';
+  const kind = f.t === 'url' ? 'type="url" inputmode="url" spellcheck="false"' : f.t === 'text' ? 'type="text"' : `type="text" inputmode="${f.t === 'int' ? 'numeric' : 'decimal'}"`;
+  return `<label class="lnf${wide ? ' wide' : ''}"><span>${esc(f.label)}</span><input ${kind} ${a} value="${esc(val ?? '')}" placeholder="${esc(ph || (f.t === 'url' ? 'https://' : ''))}" maxlength="${f.t === 'url' ? 500 : wide ? 200 : 12}" autocomplete="off"></label>`;
+}
+function spSupsHtml(p, s) {
+  const K = spK();
+  SP.html.sups = JSON.stringify([s.setup.tests, s.setup.certs_needed]); // what the boxes are made for
+  const slots = [1, 2, 3, 4, 5].filter((n) => p.suppliers && p.suppliers['s' + n]);
+  const free = [1, 2, 3, 4, 5].find((n) => !(p.suppliers && p.suppliers['s' + n]));
+  return `<section class="lnsteps" aria-label="Suppliers" id="spsups"><h3 class="sph">Suppliers</h3>${slots.map((n) => spSupHtml(p, s, n)).join('')}
+    ${free ? `<button class="lnstart" data-sp="addsup" data-slot="${free}">+ Add a supplier (${slots.length} of ${K.MAX_SUPPLIERS})</button>` : `<p class="lnmuted">${K.MAX_SUPPLIERS} suppliers: the most to compare. Remove one to add another.</p>`}</section>`;
+}
+function spSupHtml(p, s, slot) {
+  const K = spK();
+  const id = 's' + slot;
+  const v = K.cleanSupplier(p.suppliers[id], p.setup);
+  const r = s.rows.find((x) => x.slot === slot);
+  const fld = (k, ph) => spField(K.FIELDS.find((x) => x.k === k), v[k], 'data-sk', ph);
+  const gate = (g) => {
+    const x = r && r.gates.find((y) => y.k === g.k);
+    if (g.auto) return `<div class="spgate"><span class="spgl">${esc(g.label)}</span><span class="spst ${esc(x ? x.state : 'open')}" data-autogate="${esc(g.k)}">${esc(spGateText(x))}</span></div>`;
+    const val = v.gates[g.k] || '';
+    const q = g.k === 'certs' && !s.setup.certs_needed ? 'Not needed for this product (setup): the gate passes' : g.q;
+    return `<label class="spgate"><span class="spgl">${esc(g.label)}<small>${esc(q)}</small></span><span class="selw"><select class="chip" data-sg="${esc(g.k)}"><option value="">Not known yet</option><option value="yes"${val === 'yes' ? ' selected' : ''}>Yes</option><option value="no"${val === 'no' ? ' selected' : ''}>No: it is out</option></select></span></label>`;
+  };
+  const test = (t) => {
+    const val = v.tests[t.k] || '';
+    return `<label class="spgate"><span class="spgl">${esc(t.label)}${t.must ? '<small class="spmust">must pass</small>' : ''}</span><span class="selw"><select class="chip" data-st="${esc(t.k)}"><option value="">Not tested</option><option value="pass"${val === 'pass' ? ' selected' : ''}>Pass</option><option value="fail"${val === 'fail' ? ' selected' : ''}>Fail</option></select></span></label>`;
+  };
+  const score = (c) => {
+    const val = v.scores[c.k];
+    return `<label class="spgate"><span class="spgl">${esc(c.label)} · weight ${esc(s.setup.weights[c.k])}${c.auto ? `<small>Auto: ${esc(c.auto)}</small>` : ''}</span><span class="selw"><select class="chip" data-sc="${esc(c.k)}"><option value="">${esc(spAutoLabel(c, r && r.parts[c.k]))}</option>${c.levels.map((t, i) => [i, t]).reverse().map(([i, t]) => `<option value="${i}"${val === i ? ' selected' : ''}>${i} · ${esc(t)}</option>`).join('')}</select></span></label>`;
+  };
+  return `<details class="lnstep" data-sps="${id}"${SP.open.has(id) ? ' open' : ''}>
+      <summary><span class="lnn">${slot}</span><span class="lnst" data-spname>${esc(r ? r.name : 'Supplier ' + slot)}</span><small data-spsum>${esc(spSumText(r))}</small></summary>
+      <div class="lnbody">
+        <div class="lnfields">${fld('name', 'Supplier ' + slot)}${fld('link')}${fld('route')}${fld('from')}${fld('place', 'Yuyao, Zhejiang')}</div>
+        <div class="lnfields"><p class="spsub">Numbers (in ${esc(s.setup.cur)}; the days: order to doorstep)</p>${['unit', 'ship_eu', 'ship_us', 'days_eu', 'days_us', 'lead', 'moq'].map((k) => fld(k)).join('')}${fld('ddp')}${fld('measured')}</div>
+        <div class="lnfields"><p class="spsub">Trust</p>${['years', 'repeat', 'reply'].map((k) => fld(k)).join('')}${fld('brand')}</div>
+        <p class="spsub">Gates: one no and it is out</p><div class="spgates">${K.GATES.map(gate).join('')}</div>
+        <p class="spsub">Sample tests</p><div class="spgates">${s.setup.tests.length ? s.setup.tests.map(test).join('') : '<p class="lnmuted">No tests set: add them under Sample tests below.</p>'}</div>
+        <p class="spsub">Scores, 0 to 5 (Auto where the board can work it out)</p><div class="spgates">${K.CRITERIA.map(score).join('')}</div>
+        ${fld('note', 'What they answered, what the sample showed')}
+        <button class="lnremove" data-sp="drop" data-slot="${slot}">Remove this supplier</button>
+      </div></details>`;
+}
+function spSetupHtml(p, s) {
+  const K = spK();
+  const set = s.setup;
+  const raw = K.cleanSetup(p.setup);
+  const f = p.facts || {};
+  const sf = (k, ph) => spField(K.SETUP.find((x) => x.k === k), raw[k], 'data-sf', ph);
+  const fold = (id, title, sub, body) => `<details class="lnstep" data-spf="${id}"${SP.open.has(id) ? ' open' : ''}><summary><span class="lnst">${esc(title)}</span><small data-spfs="${id}">${esc(sub)}</small></summary><div class="lnbody">${body}</div></details>`;
+  const checks = K.CHECKS.map((c) => `<label class="lncheck"><input type="checkbox" data-sck="${esc(c.k)}"${p.checks && p.checks[c.k] === true ? ' checked' : ''}><span>${esc(c.label)}</span></label>`).join('')
+    + `<p class="lnmuted">${s.chosen ? `Decision: ${esc(s.chosen.name)}, ${esc(spDate(s.chosen.at))}. Re-check by ${esc(spDate(s.chosen.next))}, and before every reorder.` : 'Decision: not recorded yet. Choose a supplier in the ranking on top.'}</p>`;
+  const tests = `<p class="lnhint">One test per line. Start a line with ! for a must-pass test: one fail and the supplier is out. Every supplier gets these to tick.</p>
+      <label class="lnf wide"><span>Tests</span><textarea data-sf="tests" rows="9" maxlength="3000">${esc(K.testsText(set.tests))}</textarea></label>`;
+  const questions = `<p class="lnhint">One question per line: the English, then | and the Chinese. Send the message to your top 5 (1688 chat, Alibaba, email), with a photo of the product.</p>
+      <label class="lnf wide"><span>Questions</span><textarea data-sf="questions" rows="10" maxlength="9000">${esc(K.questionsText(set.questions))}</textarea></label>
+      <div class="spmsg"><label class="lnf wide"><span>The message in English</span><textarea id="spmsg-en" rows="6" readonly>${esc(K.messageOf(p, 'en'))}</textarea></label><button class="lnuse" data-spcopy="en">Copy the English</button></div>
+      <div class="spmsg"><label class="lnf wide"><span>The message in Chinese (中文)</span><textarea id="spmsg-zh" rows="6" readonly>${esc(K.messageOf(p, 'zh'))}</textarea></label><button class="lnuse" data-spcopy="zh">Copy the Chinese</button></div>`;
+  const W = K.CRITERIA.reduce((a, c) => a + set.weights[c.k], 0);
+  const setup = `<div class="lnfields">${sf('market')}${sf('max_days', '12')}${sf('price', f.price != null ? `They ask ${money(f.price, f.cur)}` : '')}${sf('units', '1')}${sf('vat', '21')}${sf('fees', '3')}${sf('duty_eu', String(K.EU_PARCEL))}${sf('cur')}${sf('zh', p.title)}</div>
+      <label class="lncheck"><input type="checkbox" data-sf="certs_none"${set.certs_needed ? '' : ' checked'}><span>This product needs no certificates or test reports (the gate passes)</span></label>
+      ${sf('certs', 'Which certificates and test reports, for which market')}
+      <div class="lnfields"><p class="spsub">Weights: what each criterion counts. The score is out of 100 whatever the total.</p>${K.CRITERIA.map((c) => `<label class="lnf"><span>${esc(c.short)}</span><input type="text" inputmode="decimal" data-sw="${esc(c.k)}" value="${esc(raw.weights && raw.weights[c.k] != null ? raw.weights[c.k] : '')}" placeholder="${esc(c.w)}" maxlength="5" autocomplete="off"></label>`).join('')}</div>
+      <p class="lnmuted" data-spw>Total ${esc(W)}</p><button class="lnuse" data-sp="defweights">Back to the default weights</button>`;
+  return `<section class="lnsteps" aria-label="Setup and record"><h3 class="sph">Setup and record</h3>
+    ${fold('checks', 'Checklist', `${s.checks.done}/${s.checks.of}`, checks)}
+    ${fold('tests', 'Sample tests', `${set.tests.length} tests`, tests)}
+    ${fold('questions', 'Questions for suppliers', `${set.questions.length} questions`, questions)}
+    ${fold('setup', 'Market, limits and weights', `${SP_MARKET[set.market]} · ${set.max_days} days`, setup)}
+    ${fold('decision', 'Decision record', s.chosen ? s.chosen.name : 'not yet', spDecisionHtml(p, s))}</section>`;
+}
+function spDecisionHtml(p, s) {
+  const K = spK();
+  const set = s.setup;
+  const c = p.choice && p.choice.current;
+  const past = p.choice && Array.isArray(p.choice.past) ? p.choice.past : [];
+  const hist = past.length ? `<p class="spsub">Before</p><ul class="sphist">${past.map((x) => `<li>${esc(x.name)}: ${esc(spDate(x.at))} to ${esc(spDate(x.ended))}, ${esc(x.why)}${x.note ? ' · ' + esc(x.note) : ''}</li>`).join('')}</ul>` : '';
+  if (!c) return `<p class="lnmuted">No decision yet. Tap Choose next to a supplier in the ranking on top: its numbers are kept here with your reason, and a re-check comes up every ${K.RECHECK_DAYS} days.</p>${hist}`;
+  const row = (label, v) => (v == null || v === '' ? '' : `<div><dt>${esc(label)}</dt><dd>${esc(v)}</dd></div>`);
+  const cur = (v) => (v == null ? null : money(v, set.cur));
+  const launch = (LN.list || []).find((l) => l.key === p.key);
+  const re = Array.isArray(c.rechecks) ? c.rechecks : [];
+  return `<dl class="lnout">${row('Chosen', `${c.name}, ${spDate(c.at)}`)}${row('Score then', `${c.score}/100`)}${row('Unit cost', cur(c.unit))}${row('Shipping to NL/DE', cur(c.ship_eu))}${row('Shipping to the US', cur(c.ship_us))}
+      ${row('Landed per order', cur(c.landed))}${row('Days to the customer', c.days)}${row('Lead time', c.lead != null ? c.lead + ' days' : null)}${row('MOQ', c.moq)}
+      ${row('Still to confirm then', (c.open || []).join(', '))}${row('Backup', c.backup ? `${c.backup.name} (${c.backup.score}/100)` : 'none')}${row('Why', c.note)}${row('Next re-check', spDate(c.next) + (s.chosen && s.chosen.overdue ? ' (overdue)' : ''))}</dl>
+    <label class="lnf wide"><span>Re-check: the price now, new complaints, the delivery days (before every reorder, and every ${K.RECHECK_DAYS} days)</span><textarea id="sprecheck" rows="2" maxlength="1000" placeholder="Same price, no new complaints, 8 days to NL"></textarea></label>
+    <div class="spbtns"><button class="lnbtn" data-sp="recheck">Re-checked today</button>${launch ? '<button class="lnuse" data-sp="tolaunch">Fill the launch card’s Sourcing step</button>' : ''}<button class="lnuse" data-sp="undecide">Take the decision back</button></div>
+    ${re.length ? `<p class="spsub">Re-checks</p><ul class="sphist">${re.map((x) => `<li>${esc(spDate(x.at))}: ${esc([x.note, x.score != null ? x.score + '/100' : '', x.unit != null ? money(x.unit, set.cur) : '', x.days != null ? x.days + ' days' : ''].filter(Boolean).join(' · '))}</li>`).join('')}</ul>` : ''}${hist}`;
+}
+
+// Saves go out one after the other, so an older save never lands after a newer one.
+function spPost(body) {
+  SP.saving++;
+  spSaved('Saving…');
+  const run = async () => {
+    const res = await fetch('/api/supplier', { method: 'POST', credentials: 'same-origin', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+    return j;
+  };
+  const p = SP.chain.then(run);
+  SP.chain = p.then(() => {}, () => {});
+  p.then(() => { if (--SP.saving === 0) spSaved('Saved ✓'); }, (e) => { SP.saving--; spSaved(''); toast('Could not save: ' + e.message, ''); });
+  return p;
+}
+function spSave(id) {
+  const p = SP.prod;
+  if (!p) return;
+  if (id === 'setup') spPost({ key: p.key, setup: p.setup }).catch(() => {});
+  else if (id === 'checks') spPost({ key: p.key, checks: p.checks }).catch(() => {});
+  else if (p.suppliers && p.suppliers[id]) spPost({ key: p.key, slot: Number(id.slice(1)), supplier: p.suppliers[id] }).catch(() => {});
+}
+// One timer per part: typing saves 0.7 s after the last key; a pick, a tick or leaving the field saves at once.
+function spQueue(id, wait) {
+  clearTimeout(SP.timers.get(id));
+  SP.timers.set(id, setTimeout(() => { SP.timers.delete(id); spSave(id); }, wait));
+}
+function spFlush() {
+  for (const [id, t] of SP.timers) { clearTimeout(t); spSave(id); }
+  SP.timers.clear();
+}
+// What you typed, cleaned as the server cleans it; what cannot be saved (not a number, not a link) is marked.
+function spMark(box, attr, v, el, changed) {
+  for (const x of box.querySelectorAll(`input[${attr}]:not([type="checkbox"])`)) {
+    const k = x.getAttribute(attr);
+    const ok = !x.value.trim() || v[k] !== undefined;
+    if (ok) x.removeAttribute('aria-invalid');
+    else if (changed) x.setAttribute('aria-invalid', 'true');
+    if (changed && ok && x === el && x.type === 'url' && v[k]) x.value = v[k]; // https:// added
+  }
+}
+function spEdit(el, changed) {
+  const p = SP.prod;
+  if (!p || !spOn() || !el.closest) return;
+  const K = spK();
+  const sup = el.closest('#spbox [data-sps]');
+  if (sup && el.matches('[data-sk], [data-sg], [data-st], [data-sc]')) {
+    const id = sup.dataset.sps;
+    const raw = { gates: {}, scores: {}, tests: {} };
+    for (const x of sup.querySelectorAll('[data-sk]')) raw[x.dataset.sk] = x.type === 'checkbox' ? x.checked : x.value;
+    for (const x of sup.querySelectorAll('[data-sg]')) if (x.value) raw.gates[x.dataset.sg] = x.value;
+    for (const x of sup.querySelectorAll('[data-st]')) if (x.value) raw.tests[x.dataset.st] = x.value;
+    for (const x of sup.querySelectorAll('[data-sc]')) if (x.value !== '') raw.scores[x.dataset.sc] = Number(x.value);
+    const v = K.cleanSupplier(raw, p.setup);
+    spMark(sup, 'data-sk', v, el, changed);
+    p.suppliers = Object.assign({}, p.suppliers, { [id]: v });
+    spLive();
+    spQueue(id, changed ? 0 : 700);
+  } else if (el.matches('#spbox [data-sck]')) {
+    const checks = {};
+    for (const x of document.querySelectorAll('#spbox [data-sck]')) if (x.checked) checks[x.dataset.sck] = true;
+    p.checks = checks;
+    spLive();
+    spQueue('checks', 0);
+  } else if (el.matches('#spbox [data-sf], #spbox [data-sw]')) {
+    const raw = {};
+    for (const x of document.querySelectorAll('#spbox [data-sf]')) {
+      const k = x.dataset.sf;
+      if (k === 'tests') raw.tests = K.parseTests(x.value);
+      else if (k === 'questions') raw.questions = K.parseQuestions(x.value);
+      else if (k === 'certs_none') raw.certs_needed = !x.checked;
+      else raw[k] = x.value;
+    }
+    raw.weights = {};
+    for (const x of document.querySelectorAll('#spbox [data-sw]')) if (x.value.trim()) raw.weights[x.dataset.sw] = x.value;
+    const set = K.cleanSetup(raw);
+    spMark($('spbox'), 'data-sf', set, el, changed);
+    spMark($('spbox'), 'data-sw', set.weights || {}, el, changed);
+    p.setup = set;
+    // New tests, or certificates no longer needed: every supplier's boxes change. Typing in a box: when you leave it.
+    if (changed && (el.dataset.sf === 'tests' || el.dataset.sf === 'certs_none')) spSupsRender(set);
+    spLive();
+    spQueue('setup', changed ? 0 : 700);
+  }
+}
+function spSupsRender(set) {
+  const box = $('spsups');
+  const full = spK().setupOf(set);
+  const now = JSON.stringify([full.tests, full.certs_needed]);
+  if (!box || SP.html.sups === now) return;
+  SP.html.sups = now;
+  box.outerHTML = spSupsHtml(SP.prod, spK().summaryOf(SP.prod, Date.now()));
+}
+// After every change: the verdict, the ranking, the table, each supplier's line, the Auto scores and gates follow.
+function spLive() {
+  const p = SP.prod;
+  const K = spK();
+  const s = K.summaryOf(p, Date.now());
+  const put = (id, k, html) => { if ($(id) && SP.html[k] !== html) { SP.html[k] = html; $(id).innerHTML = html; } };
+  put('spverdict', 'verdict', spVerdictHtml(p, s));
+  put('sptable', 'table', spTableHtml(s));
+  for (const d of document.querySelectorAll('#spbox [data-sps]')) {
+    const r = s.rows.find((x) => 's' + x.slot === d.dataset.sps);
+    d.querySelector('[data-spname]').textContent = r ? r.name : '';
+    d.querySelector('[data-spsum]').textContent = spSumText(r);
+    for (const g of d.querySelectorAll('[data-autogate]')) {
+      const x = r && r.gates.find((y) => y.k === g.dataset.autogate);
+      g.textContent = spGateText(x);
+      g.className = 'spst ' + (x ? x.state : 'open');
+    }
+    for (const sel of d.querySelectorAll('[data-sc]')) sel.options[0].textContent = spAutoLabel(K.CRITERIA.find((c) => c.k === sel.dataset.sc), r && r.parts[sel.dataset.sc]);
+  }
+  const sub = { checks: `${s.checks.done}/${s.checks.of}`, tests: `${s.setup.tests.length} tests`, questions: `${s.setup.questions.length} questions`, setup: `${SP_MARKET[s.setup.market]} · ${s.setup.max_days} days` };
+  for (const [k, t] of Object.entries(sub)) { const el = document.querySelector(`#spbox [data-spfs="${k}"]`); if (el) el.textContent = t; }
+  if ($('spmsg-en')) $('spmsg-en').value = K.messageOf(p, 'en');
+  if ($('spmsg-zh')) $('spmsg-zh').value = K.messageOf(p, 'zh');
+  const w = document.querySelector('#spbox [data-spw]');
+  if (w) w.textContent = 'Total ' + K.CRITERIA.reduce((a, c) => a + s.setup.weights[c.k], 0);
+}
+
+async function spOpen(key) {
+  spFlush();
+  Object.assign(SP, { focus: key, prod: null, choosing: 0, open: new Set() });
+  $('spbox').innerHTML = `${lnBarHtml()}<div class="sload"><i class="spin"></i>Loading…</div>`;
+  try { await spLoadOne(key); } catch (e) { toast('Could not load the scorecard: ' + e.message, ''); }
+  if (!spOn()) return;
+  if (SP.prod && !SP.prod.summary.rows.length) SP.open.add('questions'); // no suppliers yet: the next step is asking
+  spRender();
+  window.scrollTo({ top: 0 });
+}
+async function spStart(body, b) {
+  if (b) b.disabled = true;
+  let j;
+  try {
+    await spReady;
+    j = await spPost(body);
+  } catch (e) {
+    if (b) b.disabled = false;
+    if (spOn() && !SP.prod) spView(); // from a launch card, and it failed: the list
+    return;
+  }
+  Object.assign(SP, { prod: j.product, focus: j.product.key, choosing: 0, open: new Set(j.product.summary.rows.length ? [] : ['questions']) });
+  if (SP.list && !SP.list.some((x) => x.key === j.product.key)) SP.list = null; // a new one: the list and its count come again
+  if (!spOn()) return;
+  spRender();
+  window.scrollTo({ top: 0 });
+  if (!SP.list) spLoadList().then(spCount, () => {});
+}
+// From a launch card's Sourcing step: its scorecard, made when it has none.
+function spFromLaunch(key) {
+  lnFlush();
+  LN.tab = 'supplier';
+  Object.assign(SP, { focus: '', prod: null });
+  $('lnbox').hidden = true;
+  $('lnbox').innerHTML = '';
+  $('spbox').hidden = false;
+  $('spbox').innerHTML = `${lnBarHtml()}<div class="sload"><i class="spin"></i>Loading…</div>`;
+  window.scrollTo({ top: 0 });
+  spStart({ start: key });
+}
+function spAddProduct(b) {
+  const title = $('spname').value.trim();
+  if (!title) { toast('Give the product a name', ''); $('spname').focus(); return; }
+  spStart({ add: { title, link: $('splink').value.trim() } }, b);
+}
+async function spAddSup(slot) {
+  const p = SP.prod;
+  spFlush();
+  let j;
+  try { j = await spPost({ key: p.key, slot, supplier: {} }); } catch (e) { return; }
+  SP.prod = j.product;
+  SP.open.add('s' + slot);
+  spRender();
+  const el = document.querySelector(`#spbox [data-sps="s${slot}"] [data-sk="name"]`);
+  if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); }
+}
+// A second tap, so a slip never wipes a supplier or a scorecard.
+function spSure(b, again, label) {
+  if (b.dataset.sure) return true;
+  b.dataset.sure = '1';
+  b.textContent = again;
+  setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = label; } }, 3000);
+  return false;
+}
+async function spDrop(b) {
+  if (!spSure(b, 'Tap again to remove', 'Remove this supplier')) return;
+  const slot = Number(b.dataset.slot);
+  clearTimeout(SP.timers.get('s' + slot));
+  SP.timers.delete('s' + slot);
+  spFlush();
+  let j;
+  try { j = await spPost({ key: SP.prod.key, slot, drop: true }); } catch (e) { return; }
+  SP.prod = j.product;
+  SP.open.delete('s' + slot);
+  spRender();
+  toast('Supplier removed', '');
+}
+async function spAct(body, done) {
+  spFlush();
+  let j;
+  try { j = await spPost(Object.assign({ key: SP.prod.key }, body)); } catch (e) { return null; }
+  SP.prod = j.product;
+  SP.list = null; // its line in the list changed
+  spRender();
+  spLoadList().then(spCount, () => {});
+  toast(done(j.product), '');
+  return j;
+}
+function spDecide() {
+  const note = $('spwhy') ? $('spwhy').value : '';
+  const backup = $('spbackup') ? Number($('spbackup').value) : null;
+  const slot = SP.choosing;
+  SP.choosing = 0;
+  SP.open.add('decision');
+  spAct({ choose: { slot, backup, note } }, (p) => `Chosen: ${p.choice.current.name}. Re-check by ${spDate(p.choice.current.next)}`).then((j) => { if (!j) SP.choosing = slot; });
+}
+async function spRemove(b) {
+  if (!spSure(b, 'Tap again to remove the scorecard', 'Remove this scorecard')) return;
+  for (const [, t] of SP.timers) clearTimeout(t);
+  SP.timers.clear();
+  try { await spPost({ key: SP.prod.key, remove: true }); } catch (e) { return; }
+  Object.assign(SP, { focus: '', prod: null, choosing: 0, list: null });
+  try { await spLoadList(); } catch (e) { /* the list says so */ }
+  spRender();
+  spCount();
+  toast('Scorecard removed', '');
+}
+async function spToLaunch() {
+  const p = SP.prod;
+  const c = p && p.choice && p.choice.current;
+  const l = c && (LN.list || []).find((x) => x.key === p.key);
+  if (!l) return;
+  const market = spK().summaryOf(p, Date.now()).setup.market;
+  const cur = (l.steps && l.steps.sourcing) || { done: false, note: '', v: {} };
+  const ship = market === 'us' ? c.ship_us : c.ship_eu;
+  const v = Object.assign({}, cur.v, c.link ? { supplier: c.link } : {}, c.unit != null ? { unit: c.unit } : {}, ship != null ? { ship } : {}, c.moq != null ? { moq: c.moq } : {}, c.lead != null ? { lead: c.lead } : {});
+  try { await lnPost({ key: l.key, step: 'sourcing', done: cur.done === true, note: cur.note || '', v }); } catch (e) { return; }
+  l.steps = Object.assign({}, l.steps, { sourcing: { done: cur.done === true, note: cur.note || '', v } });
+  toast('The launch card’s Sourcing step has the chosen supplier', '');
+}
+function spCopy(lang) {
+  const el = $('spmsg-' + lang);
+  if (!el) return;
+  const pick = () => { el.focus(); el.select(); toast('Selected: copy it with your phone’s Copy', ''); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(el.value).then(() => toast('Copied: paste it into the chat', ''), pick);
+  else pick();
+}
+function spDefWeights() {
+  const all = document.querySelectorAll('#spbox [data-sw]');
+  for (const x of all) x.value = '';
+  if (all.length) spEdit(all[0], true);
+}
+$('spbox').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b || b.disabled) return;
+  if (b.dataset.tab) lnTab(b.dataset.tab);
+  else if (b.dataset.spfocus) spOpen(b.dataset.spfocus);
+  else if (b.dataset.spstart) spStart({ start: b.dataset.spstart }, b);
+  else if (b.dataset.spchoose) { SP.choosing = Number(b.dataset.spchoose); $('spchoose').innerHTML = spChooseHtml(spK().summaryOf(SP.prod, Date.now())); if ($('spwhy')) { $('spwhy').scrollIntoView({ block: 'center' }); $('spwhy').focus(); } }
+  else if (b.dataset.spcopy) spCopy(b.dataset.spcopy);
+  else if (b.dataset.sp === 'add') spAddProduct(b);
+  else if (b.dataset.sp === 'back') { spFlush(); Object.assign(SP, { focus: '', prod: null, choosing: 0 }); spRender(); window.scrollTo({ top: 0 }); spLoadList().then(() => { if (spOn() && !SP.focus) spRender(); }, () => {}); }
+  else if (b.dataset.sp === 'addsup') spAddSup(Number(b.dataset.slot));
+  else if (b.dataset.sp === 'drop') spDrop(b);
+  else if (b.dataset.sp === 'decide') spDecide();
+  else if (b.dataset.sp === 'cancel') { SP.choosing = 0; $('spchoose').innerHTML = ''; }
+  else if (b.dataset.sp === 'undecide') spAct({ choose: null }, () => 'Decision taken back: it stays in the history');
+  else if (b.dataset.sp === 'recheck') spAct({ recheck: { note: $('sprecheck') ? $('sprecheck').value : '' } }, (p) => `Re-checked. Next re-check by ${spDate(p.choice.current.next)}`);
+  else if (b.dataset.sp === 'tolaunch') spToLaunch();
+  else if (b.dataset.sp === 'defweights') spDefWeights();
+  else if (b.dataset.sp === 'remove') spRemove(b);
+});
+$('spbox').addEventListener('input', (e) => spEdit(e.target, false));
+$('spbox').addEventListener('change', (e) => spEdit(e.target, true));
+$('spbox').addEventListener('toggle', (e) => { const d = e.target; const id = d.dataset && (d.dataset.sps || d.dataset.spf); if (id) { if (d.open) SP.open.add(id); else SP.open.delete(id); } }, true);
+$('spbox').addEventListener('error', (e) => { if (e.target.tagName === 'IMG') { const i = document.createElement('i'); i.textContent = '?'; e.target.replaceWith(i); } }, true);
+addEventListener('pagehide', spFlush);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') spFlush(); });
 
 // Momentum (momentum.js): its script or the TikTok summaries can arrive after the cards: draw them again with their rows.
 addEventListener('momentum', () => { if (st.scope === 'tiktok') { if (TT) ttRender(); } else if (ADS.length && ['all', 'made', 'starred', 'inbox'].includes(st.view)) render(); });
