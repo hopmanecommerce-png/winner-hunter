@@ -79,7 +79,8 @@ rejected. Per product: what it is (a plain name), niche, the ads' hook, the buye
   the first message to suppliers in English and Chinese, and **Choose**: the decision record (why, the price, the days,
   the lead time, a backup) with a re-check every 90 days and before every reorder. D1 table `sourcing`
   (`worker/src/supplier.mjs`). The method, for every product: `docs/sourcing/supplier-selection.md`. The filtered
-  showerhead is seeded as the first scorecard (its tests and questions, no suppliers): `docs/sourcing/showerhead-muravai.md`.
+  showerhead is seeded as the first scorecard (its tests and questions, no suppliers): `docs/sourcing/showerhead-muravai.md`,
+  with its refill economics and the EU and US rules.
 - **Browse**: everything that passes, most reach per day first, with search, sort and filters. **★**: your kept products.
   **✓**: every product you approved, the last one first, with the day you approved it (also after it ages out of
   the rules). The ✓ count jumps each time you tap **✓ Approved**.
