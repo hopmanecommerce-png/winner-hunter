@@ -1,0 +1,170 @@
+{
+  "_sample": "SAMPLE DATA. Made up to test the Google hunt without an API key: no real advertiser, shop, ad or figure. Shapes follow the vendor's documented answers (vendor-*.json). Dates written as @-20d mean 20 days before the run (test/helpers/fake-google.mjs). Shops use the reserved .example domain; advertiser and ad ids are AR1000…/CR1000… on purpose.",
+  "search": {
+    "posture|NL": {
+      "advertisers": [
+        { "name": "SAMPLE Posture Pro", "advertiser_id": "AR10000000000000000001", "region": "NL", "number_of_ads_estimate": 240 },
+        { "name": "SAMPLE Tiny Desk Shop", "advertiser_id": "AR10000000000000000002", "region": "NL", "number_of_ads_estimate": 12 }
+      ],
+      "websites": [{ "domain": "posturepro-sample.example" }, { "domain": "bigbrand-sample.example" }, { "domain": "amazon.de" }]
+    },
+    "posture|DE": {
+      "advertisers": [{ "name": "SAMPLE Posture Pro", "advertiser_id": "AR10000000000000000001", "region": "DE", "number_of_ads_estimate": 240 }],
+      "websites": []
+    },
+    "lamp|NL": {
+      "advertisers": [{ "name": "SAMPLE Brightly Home", "advertiser_id": "AR10000000000000000003", "region": "NL", "number_of_ads_estimate": 130 }],
+      "websites": [{ "domain": "brightly-sample.example" }]
+    }
+  },
+  "companies": {
+    "adv:AR10000000000000000001": [
+      {
+        "cursor": "sample-page-2",
+        "number_of_ads_estimate": 180,
+        "ads": [
+          { "advertiserId": "AR10000000000000000001", "creativeId": "CR10000000000000000101", "format": "image", "adUrl": "https://adstransparency.google.com/advertiser/AR10000000000000000001/creative/CR10000000000000000101", "advertiserName": "SAMPLE Posture Pro", "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/sample101", "firstShown": "@-20d", "lastShown": "@-0.3d" },
+          { "advertiserId": "AR10000000000000000001", "creativeId": "CR10000000000000000102", "format": "text", "adUrl": "https://adstransparency.google.com/advertiser/AR10000000000000000001/creative/CR10000000000000000102", "advertiserName": "SAMPLE Posture Pro", "imageUrl": null, "firstShown": "@-15d", "lastShown": "@-0.5d" },
+          { "advertiserId": "AR10000000000000000001", "creativeId": "CR10000000000000000103", "format": "video", "adUrl": "https://adstransparency.google.com/advertiser/AR10000000000000000001/creative/CR10000000000000000103", "advertiserName": "SAMPLE Posture Pro", "imageUrl": null, "firstShown": "@-3d", "lastShown": "@-0.2d" },
+          { "advertiserId": "AR10000000000000000001", "creativeId": "CR10000000000000000104", "format": "image", "adUrl": "https://adstransparency.google.com/advertiser/AR10000000000000000001/creative/CR10000000000000000104", "advertiserName": "SAMPLE Posture Pro", "imageUrl": null, "firstShown": "@-60d", "lastShown": "@-0.2d" }
+        ]
+      },
+      {
+        "cursor": null,
+        "number_of_ads_estimate": 180,
+        "ads": [
+          { "advertiserId": "AR10000000000000000001", "creativeId": "CR10000000000000000105", "format": "image", "adUrl": "https://adstransparency.google.com/advertiser/AR10000000000000000001/creative/CR10000000000000000105", "advertiserName": "SAMPLE Posture Pro", "imageUrl": null, "firstShown": "@-25d", "lastShown": "@-1d" }
+        ]
+      }
+    ],
+    "domain:posturepro-sample.example": [
+      {
+        "cursor": null,
+        "number_of_ads_estimate": 180,
+        "ads": [
+          { "advertiserId": "AR10000000000000000001", "creativeId": "CR10000000000000000101", "format": "image", "adUrl": "https://adstransparency.google.com/advertiser/AR10000000000000000001/creative/CR10000000000000000101", "advertiserName": "SAMPLE Posture Pro", "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/sample101", "firstShown": "@-20d", "lastShown": "@-0.3d" },
+          { "advertiserId": "AR10000000000000000001", "creativeId": "CR10000000000000000102", "format": "text", "adUrl": "https://adstransparency.google.com/advertiser/AR10000000000000000001/creative/CR10000000000000000102", "advertiserName": "SAMPLE Posture Pro", "imageUrl": null, "firstShown": "@-15d", "lastShown": "@-0.5d" }
+        ]
+      }
+    ],
+    "adv:AR10000000000000000003": [
+      {
+        "cursor": null,
+        "number_of_ads_estimate": 130,
+        "ads": [
+          { "advertiserId": "AR10000000000000000003", "creativeId": "CR10000000000000000301", "format": "image", "adUrl": "https://adstransparency.google.com/advertiser/AR10000000000000000003/creative/CR10000000000000000301", "advertiserName": "SAMPLE Brightly Home", "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/sample301", "firstShown": "@-12d", "lastShown": "@-0.2d" },
+          { "advertiserId": "AR10000000000000000003", "creativeId": "CR10000000000000000302", "format": "text", "adUrl": "https://adstransparency.google.com/advertiser/AR10000000000000000003/creative/CR10000000000000000302", "advertiserName": "SAMPLE Brightly Home", "imageUrl": null, "firstShown": "@-30d", "lastShown": "@-4d" },
+          { "advertiserId": "AR10000000000000000003", "creativeId": "CR10000000000000000303", "format": "text", "adUrl": "https://adstransparency.google.com/advertiser/AR10000000000000000003/creative/CR10000000000000000303", "advertiserName": "SAMPLE Brightly Home", "imageUrl": null, "firstShown": "@-9d", "lastShown": "@-0.1d" }
+        ]
+      }
+    ],
+    "domain:brightly-sample.example": [
+      {
+        "cursor": null,
+        "number_of_ads_estimate": 130,
+        "ads": [
+          { "advertiserId": "AR10000000000000000003", "creativeId": "CR10000000000000000301", "format": "image", "adUrl": "https://adstransparency.google.com/advertiser/AR10000000000000000003/creative/CR10000000000000000301", "advertiserName": "SAMPLE Brightly Home", "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/sample301", "firstShown": "@-12d", "lastShown": "@-0.2d" }
+        ]
+      }
+    ],
+    "domain:glowlamp-sample.example": [
+      {
+        "cursor": null,
+        "number_of_ads_estimate": 95,
+        "ads": [
+          { "advertiserId": "AR10000000000000000004", "creativeId": "CR10000000000000000201", "format": "image", "adUrl": "https://adstransparency.google.com/advertiser/AR10000000000000000004/creative/CR10000000000000000201", "advertiserName": "SAMPLE Glow Lamp Co", "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/sample201", "firstShown": "@-10d", "lastShown": "@-0.4d" }
+        ]
+      }
+    ],
+    "domain:quietshop-sample.example": [
+      {
+        "cursor": null,
+        "number_of_ads_estimate": 20,
+        "ads": [
+          { "advertiserId": "AR10000000000000000005", "creativeId": "CR10000000000000000501", "format": "text", "adUrl": "https://adstransparency.google.com/advertiser/AR10000000000000000005/creative/CR10000000000000000501", "advertiserName": "SAMPLE Quiet Shop", "imageUrl": null, "firstShown": "@-14d", "lastShown": "@-0.5d" }
+        ]
+      }
+    ]
+  },
+  "ads": {
+    "CR10000000000000000101": {
+      "advertiserId": "AR10000000000000000001", "creativeId": "CR10000000000000000101", "firstShown": "@-20d", "lastShown": "@-0.3d", "format": "image",
+      "url": "https://adstransparency.google.com/advertiser/AR10000000000000000001/creative/CR10000000000000000101",
+      "overallImpressions": { "min": "900000", "max": "1000000" },
+      "creativeRegions": [{ "regionCode": "NL", "regionName": "Netherlands" }, { "regionCode": "DE", "regionName": "Germany" }],
+      "regionStats": [
+        { "regionCode": "NL", "regionName": "Netherlands", "firstShown": "@-20d", "lastShown": "@-0.3d", "impressions": { "lower": "400000", "upper": "450000" }, "platformImpressions": [] },
+        { "regionCode": "DE", "regionName": "Germany", "firstShown": "@-18d", "lastShown": "@-0.3d", "impressions": { "lower": "300000", "upper": "350000" }, "platformImpressions": [] }
+      ],
+      "variations": [{ "destinationUrl": "posturepro-sample.example/products/posture-corrector-pro", "headline": "Posture Corrector Pro", "description": "SAMPLE ad text", "allText": "SAMPLE Posture Pro posturepro-sample.example Posture Corrector Pro", "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/sample101" }]
+    },
+    "CR10000000000000000102": {
+      "advertiserId": "AR10000000000000000001", "creativeId": "CR10000000000000000102", "firstShown": null, "lastShown": "@-0.5d", "format": "text",
+      "url": "https://adstransparency.google.com/advertiser/AR10000000000000000001/creative/CR10000000000000000102",
+      "overallImpressions": null,
+      "creativeRegions": [{ "regionCode": "NL", "regionName": "Netherlands" }],
+      "regionStats": [],
+      "variations": [{ "destinationUrl": "posturepro-sample.example", "headline": "Posture Corrector Pro | Free shipping", "description": "SAMPLE: sit up straight in two weeks", "allText": "SAMPLE text ad" }]
+    },
+    "CR10000000000000000105": {
+      "advertiserId": "AR10000000000000000001", "creativeId": "CR10000000000000000105", "firstShown": "@-25d", "lastShown": "@-1d", "format": "image",
+      "url": "https://adstransparency.google.com/advertiser/AR10000000000000000001/creative/CR10000000000000000105",
+      "creativeRegions": [{ "regionCode": "NL", "regionName": "Netherlands" }],
+      "variations": [{ "destinationUrl": "https://posturepro-sample.example/products/magnesium-sleep-gummies?utm_source=google", "headline": "Magnesium Sleep Gummies" }]
+    },
+    "CR10000000000000000201": {
+      "advertiserId": "AR10000000000000000004", "creativeId": "CR10000000000000000201", "firstShown": "@-10d", "lastShown": "@-0.4d", "format": "image",
+      "url": "https://adstransparency.google.com/advertiser/AR10000000000000000004/creative/CR10000000000000000201",
+      "creativeRegions": [{ "regionCode": "NL", "regionName": "Netherlands" }, { "regionCode": "BE", "regionName": "Belgium" }],
+      "regionStats": [],
+      "variations": [{ "destinationUrl": "https://www.glowlamp-sample.example/nl/products/sunset-lamp", "headline": "Glow Sunset Lamp", "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/sample201" }]
+    },
+    "CR10000000000000000301": {
+      "advertiserId": "AR10000000000000000003", "creativeId": "CR10000000000000000301", "firstShown": "@-12d", "lastShown": "@-0.2d", "format": "image",
+      "url": "https://adstransparency.google.com/advertiser/AR10000000000000000003/creative/CR10000000000000000301",
+      "overallImpressions": { "min": "50000", "max": "60000" },
+      "creativeRegions": [{ "regionCode": "US", "regionName": "United States" }],
+      "regionStats": [{ "regionCode": "US", "regionName": "United States", "impressions": { "lower": "50000", "upper": "60000" }, "platformImpressions": [] }],
+      "variations": [{ "destinationUrl": "brightly-sample.example", "headline": "Sunset Projection Lamp", "imageUrl": "https://tpc.googlesyndication.com/archive/simgad/sample301" }]
+    },
+    "CR10000000000000000303": {
+      "advertiserId": "AR10000000000000000003", "creativeId": "CR10000000000000000303", "firstShown": "@-9d", "lastShown": "@-0.1d", "format": "text",
+      "url": "https://adstransparency.google.com/advertiser/AR10000000000000000003/creative/CR10000000000000000303",
+      "creativeRegions": [{ "regionCode": "NL", "regionName": "Netherlands" }],
+      "regionStats": [{ "regionCode": "NL", "regionName": "Netherlands", "impressions": { "lower": "100", "upper": "900" }, "platformImpressions": [] }],
+      "variations": [{ "destinationUrl": "brightly-sample.example/products/desk-lamp", "headline": "Foldable LED Desk Lamp" }]
+    },
+    "CR10000000000000000501": {
+      "advertiserId": "AR10000000000000000005", "creativeId": "CR10000000000000000501", "firstShown": "@-14d", "lastShown": "@-0.5d", "format": "text",
+      "url": "https://adstransparency.google.com/advertiser/AR10000000000000000005/creative/CR10000000000000000501",
+      "variations": [{ "destinationUrl": "quietshop-sample.example/products/quiet-fan", "headline": "Quiet Desk Fan" }]
+    }
+  },
+  "stores": {
+    "posturepro-sample.example": {
+      "meta": { "myshopify_domain": "posturepro-sample.myshopify.com", "currency": "EUR", "published_products_count": 38 },
+      "products": {
+        "posture-corrector-pro": { "title": "Posture Corrector Pro", "product_type": "Posture", "tags": ["sample"], "variants": [{ "price": "39.95", "compare_at_price": "79.95" }], "image": { "src": "https://cdn.shopify.com/s/files/1/sample/posture.jpg" } },
+        "magnesium-sleep-gummies": { "title": "Magnesium Sleep Gummies", "product_type": "Supplements", "variants": [{ "price": "24.95" }] }
+      }
+    },
+    "brightly-sample.example": {
+      "meta": { "myshopify_domain": "brightly-sample.myshopify.com", "currency": "USD", "published_products_count": 120 },
+      "products": {
+        "sunset-projection-lamp": { "title": "Sunset Projection Lamp", "product_type": "Lighting", "variants": [{ "price": "34.00" }], "image": { "src": "https://cdn.shopify.com/s/files/1/sample/sunset.jpg" } },
+        "desk-lamp": { "title": "Foldable LED Desk Lamp", "product_type": "Lighting", "variants": [{ "price": "29.00" }] }
+      }
+    },
+    "glowlamp-sample.example": {
+      "meta": { "myshopify_domain": "glowlamp-sample.myshopify.com", "currency": "EUR", "published_products_count": 12 },
+      "products": {
+        "sunset-lamp": { "title": "Glow Sunset Lamp", "product_type": "Lighting", "variants": [{ "price": "44.95", "compare_at_price": "89.95" }], "image": { "src": "https://cdn.shopify.com/s/files/1/sample/glow.jpg" } }
+      }
+    },
+    "quietshop-sample.example": {
+      "meta": { "myshopify_domain": "quietshop-sample.myshopify.com", "currency": "EUR", "published_products_count": 6 },
+      "products": { "quiet-fan": { "title": "Quiet Desk Fan", "variants": [{ "price": "19.95" }] } }
+    },
+    "bigbrand-sample.example": { "notShopify": true }
+  }
+}

@@ -61,6 +61,7 @@ test('store best sellers and Trustpilot on the cards: rank and weekly move, Trus
   const page = await ctx.newPage();
   await page.clock.setFixedTime(new Date(NOW));
   await page.addInitScript(() => localStorage.setItem('wh-scope', 'eu')); // the seeded products are in the EU; the board opens outside the EU
+  await page.addInitScript(() => localStorage.setItem('wh-risk', 'all')); // every seeded product: risk.e2e.test.mjs has Block hidden
   page.on('pageerror', (e) => errors.push(e.message));
   await ctx.route(/^https:\/\//, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>' }));
   try {

@@ -157,7 +157,7 @@ for (const [name, viewport] of [['phone', { width: 390, height: 844 }], ['deskto
       await page.click('#jevbody [data-jev="yes:electric"]');
       await page.waitForFunction(() => document.querySelectorAll('.card').length === 3);
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'no sideways scroll with the breakdown open');
-      // No in-between: a tap on the card or on ▶ opens the Ad Library, the card does not expand. Shop, its ads and 1688 sit on the shop line.
+      // No in-between: a tap on the card or on ▶ opens the Ad Library, the card does not expand. Shop and its ads sit on the shop line, no 1688 link.
       const pod = page.locator('.card', { hasText: 'Pillow Pod' }).first();
       const lib = (await pod.locator('a.view').getAttribute('href'));
       assert.match(lib, /facebook\.com\/ads\/library/);
@@ -171,7 +171,8 @@ for (const [name, viewport] of [['phone', { width: 390, height: 844 }], ['deskto
       await pod.locator('.acts').click({ position: { x: 1, y: 1 } }); // a missed tap beside Approved and Reject
       await page.waitForTimeout(150);
       assert.strictEqual(page.context().pages().length, before, 'beside the buttons: no Ad Library');
-      assert.ok(await pod.locator('.who a.shop').isVisible() && await pod.locator('.who a.src', { hasText: '1688 ↗' }).isVisible());
+      assert.ok(await pod.locator('.who a.shop').isVisible() && await pod.locator('.who a', { hasText: 'Ads ↗' }).isVisible());
+      assert.strictEqual(await page.locator('#grid .card a[href*="1688.com"]').count(), 0, 'no 1688 link on the cards');
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'no sideways scroll with the shop line');
       assert.ok(await page.locator('.card').evaluateAll((cs) => cs.every((c) => c.scrollWidth <= c.clientWidth + 1)), 'nothing runs off a card');
       assert.ok(await page.locator('.acts button').evaluateAll((bs) => bs.every((b) => b.scrollWidth <= b.clientWidth + 1 && b.getBoundingClientRect().right <= b.closest('.card').getBoundingClientRect().right)), 'Approved and Reject fit on the card');

@@ -13,7 +13,7 @@
  *   GET  /launch.js                                 launchKit as a script: the board works the numbers out as you type
  * key: the product's key on the board. 'eu|<store.com/products/handle>' (an EU product: its product page, as the board
  * groups it; an ad without a product page: 'eu|<page id>|<title>', its advertiser + title), 'world|<store.com/products/handle>'
- * (outside the EU) or 'tiktok|<id>'. A card keeps the key it was saved under: one saved before the board grouped EU
+ * (outside the EU), 'google|<store.com/products/handle>' (the Google tab) or 'tiktok|<id>'. A card keeps the key it was saved under: one saved before the board grouped EU
  * products by product page has its advertiser + title key and is still its product's card (cardProducts). Start and the
  * pick list find it under either key. A change (step, pin, decision, remove) names the card by the key it is saved under,
  * as GET and start give it: a key with no card is a 404, never another card of the same product.
@@ -227,8 +227,8 @@ export const LAUNCH_JS = `'use strict';\nwindow.LAUNCH = (${launchKit})();\n`;
  * The card's key of a board product (a row of products().k in app.mjs): 'eu|' + its group key (groupKey in app.mjs: its
  * product page, else its advertiser + title), or 'world|…' as it is.
  */
-export const keyOf = (r) => (r.world ? String(r.gk) : 'eu|' + r.gk);
-const keyIn = (k) => (typeof k === 'string' && k.length <= 1000 && /^(eu|world|tiktok)\|./s.test(k) ? k : '');
+export const keyOf = (r) => (r.world || r.google ? String(r.gk) : 'eu|' + r.gk); // 'google|<store.com/products/handle>' (google.mjs)
+const keyIn = (k) => (typeof k === 'string' && k.length <= 1000 && /^(eu|world|google|tiktok)\|./s.test(k) ? k : '');
 // An EU key of a product page ('eu|store.com/products/handle'). A host never holds '|' or '/', and an advertiser +
 // title key always has a '|' right after its page id, so the two kinds never look alike.
 const PAGE_KEY = /^eu\|[^|/]+\/products\//;
@@ -345,9 +345,9 @@ function titleOf(a) {
 /** A board product's facts for its card, from the board's own card data (toAd in app.mjs). */
 export function boardFacts(r, toAd) {
   const a = toAd(r);
-  const w = a.world;
+  const w = a.world || a.google; // outside the EU and on Google: proof instead of reach
   return {
-    source: w ? 'world' : 'eu', id: a.id, title: titleOf(a), img: a.img, price: numOr(a.price), cur: a.cur, store: a.store, product: a.product,
+    source: a.google ? 'google' : w ? 'world' : 'eu', id: a.id, title: titleOf(a), img: a.img, price: numOr(a.price), cur: a.cur, store: a.store, product: a.product,
     ad: a.ad, kw: a.kw, adv: a.adv, age: numOr(a.age), shop_ads: numOr(a.ads), copies: numOr(a.scaled), products: numOr(a.products),
     rpd: w ? null : numOr(a.rpd), proof: w && w.proof ? { n: w.proof.n, of: w.proof.of } : null, best: a.best ? a.best.rank : null,
     trust: a.trust && (a.trust.status === 'page' || a.trust.status === 'widget') ? { score: a.trust.score, reviews: a.trust.reviews } : null,

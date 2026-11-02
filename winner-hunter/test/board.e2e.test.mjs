@@ -92,6 +92,7 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
   };
   try {
     await page.addInitScript(() => localStorage.setItem('wh-scope', 'eu')); // this test is about the EU tabs
+    await page.addInitScript(() => localStorage.setItem('wh-risk', 'all')); // the board as before: risk.e2e.test.mjs has Block hidden
     await page.goto(base + '/');
     await noSideScroll('PIN screen');
     await shot('1-pin');
@@ -161,10 +162,11 @@ test('board on an iPhone: PIN, All, open a card, mark seen, filters; no sideways
     [tab] = await Promise.all([ctx.waitForEvent('page'), v.click()]);
     await tab.waitForURL(lib('9000'));
     await tab.close();
-    // the shop name links to the product (or the store), with a 1688 search next to it; no "Ad ↗" (the card is the ad)
+    // the shop name links to the product (or the store); no "Ad ↗" (the card is the ad) and no 1688 search
     const c1 = page.locator('.card').nth(1);
     const sh = c1.locator('.who a.shop');
-    assert.ok(await sh.isVisible() && (await c1.locator('.who a.src', { hasText: '1688 ↗' }).isVisible()));
+    assert.ok(await sh.isVisible());
+    assert.strictEqual(await page.locator('#grid .card a[href*="1688.com"]').count(), 0, 'no 1688 link on the cards');
     assert.match(await sh.getAttribute('href'), /^https:\/\/shop\d\.test/);
     assert.ok(await page.locator('.card .who a.shop[href*="/products/"]').count() > 0, 'a product page when there is one');
     assert.strictEqual(await page.locator('.card .links, .card .more').count(), 0, 'no link row or hidden details on the compact cards');
