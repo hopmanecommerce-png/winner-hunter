@@ -85,6 +85,44 @@ test('migration 0060: additive and safe to run again and again; the showerhead i
   assert.match(facts.img, /^https:\/\//);
 });
 
+test('migration 0061: the showerhead’s seeded setup is brought up to date only where nobody changed it; the sample tests stay; safe to run again', () => {
+  const SQL = fs.readFileSync(new URL('../worker/migrations/0061_sourcing_showerhead_update.sql', import.meta.url), 'utf8');
+  const st = statements(SQL);
+  assert.strictEqual(st.length, 1);
+  assert.match(st[0], /^UPDATE sourcing SET setup = '.*'\nWHERE product_key = 'own\|muravai-filtered-showerhead' AND setup = '.*'$/s, 'one guarded update of one row');
+  const base = () => {
+    const db = new DatabaseSync(':memory:');
+    db.exec(fs.readFileSync(new URL('../worker/migrations/0001_init.sql', import.meta.url), 'utf8'));
+    db.exec(MIGRATION);
+    return db;
+  };
+  const setupIn = (db) => JSON.parse(db.prepare('SELECT setup FROM sourcing WHERE product_key = ?').get(SEED).setup);
+  // As seeded by 0060 (production since 2 Nov 2026): a draft certificate text
+  const db = base();
+  const seeded = setupIn(db);
+  assert.match(seeded.certs, /^DRAFT/);
+  for (let i = 0; i < 2; i++) db.exec(SQL); // the workflows run every migration on every run
+  const now = setupIn(db);
+  assert.doesNotMatch(now.certs, /DRAFT/);
+  assert.match(now.certs, /no CE mark/);
+  assert.match(now.certs, /DOE certification/);
+  assert.deepStrictEqual(cleanSetup(now), now, 'clean as the board saves it');
+  assert.deepStrictEqual(now.tests, seeded.tests, 'the sample tests stay, so results saved under their keys keep their test');
+  assert.ok(now.questions.some((q) => /grams of each layer/.test(q.en)) && now.questions.some((q) => /EN 1113/.test(q.en)) && now.questions.every((q) => q.zh));
+  assert.deepStrictEqual(setupIn(memoryDb()), now, 'a new database ends the same way');
+  // Your own edit wins: the update matches only the setup exactly as 0060 seeded it
+  const edited = base();
+  edited.prepare('UPDATE sourcing SET setup = ? WHERE product_key = ?').run(JSON.stringify(cleanSetup({ ...seeded, max_days: 7 })), SEED);
+  edited.exec(SQL);
+  assert.strictEqual(setupIn(edited).max_days, 7);
+  assert.match(setupIn(edited).certs, /^DRAFT/, 'not overwritten');
+  // Removed on the board: nothing to update, nothing made
+  const gone = base();
+  gone.prepare('DELETE FROM sourcing').run();
+  gone.exec(SQL);
+  assert.strictEqual(gone.prepare('SELECT COUNT(*) AS n FROM sourcing').get().n, 0);
+});
+
 // ---------------------------------------------------------------------------
 // Scoring
 // ---------------------------------------------------------------------------
@@ -121,12 +159,12 @@ test('automatic scores: delivery from the days and your limit, cost from the bre
   assert.deepStrictEqual([bySlot(both, 1).days, bySlot(both, 1).parts.delivery.v], [8, 2], 'both markets: the slower one');
   assert.strictEqual(bySlot(card({ s1: sup({ days_eu: 3 }) }, { market: 'both' }), 1).days, null, 'both: needs both');
 
-  // Cost with your price: 49.95 incl. 21% VAT, 3% fees; 2 units × 2.10 + 6.50 shipping + €5 EU duty and fees = 15.70.
-  // 49.95 / 1.21 = 41.28 − 1.50 fees − 15.70 = 24.08 left: break-even ROAS 2.07 → 3.
+  // Cost with your price: 49.95 incl. 21% VAT, 3% fees; 2 units × 2.10 + 6.50 shipping + €5.42 EU duty and fee = 16.12.
+  // 49.95 / 1.21 = 41.28 − 1.50 fees − 16.12 = 23.66 left: break-even ROAS 2.11 → 3.
   const priced = card({ s1: sup({ unit: 2.1, ship_eu: 6.5 }) }, { price: 49.95, units: 2 });
   const r = bySlot(priced, 1);
-  assert.deepStrictEqual([r.landed, r.duty, r.be_roas, r.parts.cost.v, r.cost_basis], [15.7, 5, 2.07, 3, 'margin']);
-  assert.strictEqual(r.be_roas, marginOf({ price: 49.95, cogs: 4.2, ship: 11.5, fees: 3, vat: 21 }).be_roas, 'the launch card’s margin');
+  assert.deepStrictEqual([r.landed, r.duty, r.be_roas, r.parts.cost.v, r.cost_basis], [16.12, 5.42, 2.11, 3, 'margin']);
+  assert.strictEqual(r.be_roas, marginOf({ price: 49.95, cogs: 4.2, ship: 11.92, fees: 3, vat: 21 }).be_roas, 'the launch card’s margin');
   const roas = (unit) => bySlot(card({ s1: sup({ unit, ship_eu: 0, ddp: true }) }, { price: 30, vat: 0, fees: 0 }), 1);
   assert.deepStrictEqual([11, 15, 18, 20, 21, 30, 31].map((u) => roas(u).parts.cost.v), [5, 4, 3, 2, 1, 0, 0], 'ROAS 1.58, 2, 2.5, 3, 3.33, a loss, a loss');
   // Without a price: against the cheapest (5 × cheapest / its landed cost, at least 1)
@@ -199,16 +237,17 @@ test('ties: the same score goes to the better quality, then the faster delivery,
   assert.deepStrictEqual(summaryOf(p).rows.map((r) => r.rank), [1, 2, 3]);
 });
 
-test('landed cost: units × unit cost + shipping, + the EU duty and fees (€5) on an order from outside the EU unless the price is DDP; from an EU warehouse none', () => {
+test('landed cost: units × unit cost + shipping, + the EU duty and fee (€3 + €2 + VAT on the €2 = €5.42) on an order from outside the EU unless the price is DDP; from an EU warehouse none', () => {
   const set = setupOf({ units: 2 });
-  assert.deepStrictEqual(landedOf({ unit: 2, ship_eu: 6, from: 'cn' }, set, 'eu'), { cogs: 4, ship: 11, duty: 5, total: 15 });
-  assert.strictEqual(landedOf({ unit: 2, ship_eu: 6 }, set, 'eu').duty, 5, 'where it ships from not filled in: counted as outside the EU');
+  assert.deepStrictEqual(landedOf({ unit: 2, ship_eu: 6, from: 'cn' }, set, 'eu'), { cogs: 4, ship: 11.42, duty: 5.42, total: 15.42 });
+  assert.strictEqual(landedOf({ unit: 2, ship_eu: 6 }, set, 'eu').duty, 5.42, 'where it ships from not filled in: counted as outside the EU');
   assert.strictEqual(landedOf({ unit: 2, ship_eu: 6, from: 'cn', ddp: true }, set, 'eu').total, 10);
   assert.strictEqual(landedOf({ unit: 2, ship_eu: 6, from: 'eu' }, set, 'eu').total, 10);
   assert.strictEqual(landedOf({ unit: 2, ship_us: 6, from: 'cn' }, set, 'us').total, 10, 'the US duty is not worked out (a flag says so)');
   assert.strictEqual(landedOf({ unit: 2, ship_eu: 6 }, setupOf({ duty_eu: 0 }), 'eu').total, 8, 'the duty is a setting');
   assert.strictEqual(landedOf({ unit: 2 }, set, 'eu'), null);
-  assert.strictEqual(KIT.EU_PARCEL, 5);
+  assert.strictEqual(KIT.EU_PARCEL, 5.42);
+  assert.strictEqual(landedOf({ unit: 2, ship_eu: 6 }, setupOf({ duty_eu: 10.84 }), 'eu').total, 18.84, 'two kinds of item in the parcel: €10.84');
   const both = bySlot(card({ s1: sup({ ship_eu: 6, ship_us: 12, days_us: 7 }) }, { market: 'both' }), 1);
   assert.strictEqual(both.landed, 14, 'both markets: the dearer one (2 + 12)');
 });
@@ -276,7 +315,7 @@ test('the decision record: the supplier as it is now, a backup, why, the date an
   assert.deepStrictEqual(Object.keys(d), ['current', 'past']);
   const c = d.current;
   assert.deepStrictEqual([c.slot, c.name, c.link, c.unit, c.ship_eu, c.days_eu, c.lead, c.moq, c.score, c.status, c.landed, c.market, c.max_days, c.note, c.at, c.next],
-    [1, 'A', 'https://detail.1688.com/offer/1.html', 2, 6, 9, 15, 50, bySlot(p, 1).score, 'pass', 13, 'eu', 12, 'Best sample\nfast answers', at, iso(NOW + 90 * DAY)]);
+    [1, 'A', 'https://detail.1688.com/offer/1.html', 2, 6, 9, 15, 50, bySlot(p, 1).score, 'pass', 13.42, 'eu', 12, 'Best sample\nfast answers', at, iso(NOW + 90 * DAY)]);
   assert.deepStrictEqual(c.backup, { slot: 2, name: 'B', score: bySlot(p, 2).score, link: '' }, 'the next best that fails no gate');
   assert.deepStrictEqual(c.parts, { quality: 5, delivery: 2, reliability: 4, cost: 5, compliance: 4, returns: 3, scale: 3 });
   assert.strictEqual(decide(p, { slot: 1, backup: 0 }, at).choice.current.backup, null, 'no backup');
@@ -432,4 +471,63 @@ test('/api/supplier: two suppliers saved at the same moment both stay; other sit
   assert.strictEqual((await api(s, { key: `eu|x'; DROP TABLE sourcing; --`, remove: true })).status, 404);
   assert.strictEqual(env.db.prepare('SELECT COUNT(*) AS n FROM sourcing').get().n, 1);
   assert.ok(!env.DB.log.some((l) => /DROP|DELETE FROM sourcing;|Yuyao/.test(l.sql)), 'user text never in the SQL');
+});
+
+test('/api/supplier with 🔎 Sourcing (a launch card’s product): its candidates come in with one tap, in euros; Choose chooses it there too, so the shared numbers and the launch card follow; taking it back clears only a choice the scorecard made', async () => {
+  const env = await seededEnv();
+  const s = await session(env);
+  const KEY = 'eu|shop1.test/products/item-1';
+  assert.strictEqual((await s.post('/api/hide', { ad_id: '9001', status: 'seen' })).status, 200);
+  assert.strictEqual((await s.post('/api/launch', { start: KEY })).status, 200);
+  const sx = async (body) => {
+    const r = await s.post('/api/sourcing', { key: KEY, ...body });
+    return { status: r.status, ...(await r.json()) };
+  };
+  const picked = () => env.db.prepare('SELECT supplier_id FROM product_sourcing WHERE product_key = ?').get(KEY).supplier_id;
+  // A candidate in 🔎 Sourcing, priced in yuan: in the scorecard it shows in euros at 🔎's rate (8.3 a euro by default)
+  const a = await sx({ add: { url: 'https://detail.1688.com/offer/6543210.html', title: 'Yuyao Nuhu', unit_price: 15, currency: 'CNY', ship_price: 41.5, moq: 50, lead_days: 9, kind: 'factory', rating: 4.8 } });
+  assert.strictEqual(a.status, 200);
+  const idA = a.added;
+  const st = await api(s, { start: KEY });
+  const candidate = { src: idA, name: 'Yuyao Nuhu', link: 'https://detail.1688.com/offer/6543210.html', route: '1688', unit: 1.81, ship_eu: 5, moq: 50, days_eu: 9, note: 'Factory · Rated 4.8/5' };
+  assert.deepStrictEqual(st.product.linked, { chosen: null, list: [candidate] });
+  // Into a free slot, once
+  const f = await api(s, { key: KEY, slot: 1, from: idA });
+  const { src, ...facts } = candidate;
+  assert.deepStrictEqual(f.product.suppliers.s1, { ...facts, src, gates: {}, scores: {}, tests: {} });
+  assert.deepStrictEqual(await api(s, { key: KEY, slot: 2, from: idA }), { status: 409, error: 'It is in this scorecard already' });
+  assert.deepStrictEqual(await api(s, { key: KEY, slot: 1, from: idA }), { status: 409, error: 'That slot is taken: add it to a free one' });
+  assert.deepStrictEqual(await api(s, { key: KEY, slot: 2, from: 99999 }), { status: 404, error: 'No such supplier in 🔎 Sourcing for this product' });
+  assert.strictEqual((await api(s, { key: KEY, slot: 1, supplier: { ...f.product.suppliers.s1, gates: { samples: 'yes' } } })).product.suppliers.s1.src, idA, 'an edit keeps where it came from');
+  // Choose: chosen in 🔎 Sourcing too; its shared numbers (the € view) and the launch card's Sourcing step follow
+  const ch = await api(s, { key: KEY, choose: { slot: 1, note: 'best' } });
+  assert.deepStrictEqual([ch.product.choice.current.linked, ch.product.linked.chosen], [{ id: idA }, idA]);
+  const shared = env.db.prepare('SELECT supplier_id, supplier_cost, supplier_url, ship_cost, moq, lead_days FROM product_sourcing WHERE product_key = ?').get(KEY);
+  assert.deepStrictEqual({ ...shared }, { supplier_id: idA, supplier_cost: 1.81, supplier_url: 'https://detail.1688.com/offer/6543210.html', ship_cost: 5, moq: 50, lead_days: 9 });
+  const step = JSON.parse(env.db.prepare('SELECT steps FROM launches WHERE product_key = ?').get(KEY).steps).sourcing.v;
+  assert.deepStrictEqual([step.supplier, step.unit, step.ship, step.moq, step.lead], ['https://detail.1688.com/offer/6543210.html', 1.81, 5, 50, 9]);
+  // Taken back: 🔎's choice goes too, because the scorecard made it
+  assert.strictEqual((await api(s, { key: KEY, choose: null })).product.linked.chosen, null);
+  assert.strictEqual(picked(), null);
+  // A supplier typed in here, with a link 🔎 doesn't have: added there with its numbers, then chosen there
+  await api(s, { key: KEY, slot: 2, supplier: { name: 'EU stock C', link: 'shop.example.com/products/c', unit: '6', ship_eu: 4.5, days_eu: 3, from: 'eu', gates: { samples: 'yes' } } });
+  const id2 = (await api(s, { key: KEY, choose: { slot: 2 } })).product.choice.current.linked.id;
+  assert.ok(id2 > idA);
+  assert.deepStrictEqual({ ...env.db.prepare('SELECT title, url, unit_price, currency, origin, notes FROM product_suppliers WHERE id = ?').get(id2) },
+    { title: 'EU stock C', url: 'https://shop.example.com/products/c', unit_price: 6, currency: 'EUR', origin: 'eu', notes: 'Chosen in 🏭 Suppliers' });
+  assert.strictEqual(picked(), id2);
+  // The same link typed in again elsewhere: found by its link, not added twice
+  await api(s, { key: KEY, slot: 4, supplier: { name: 'C again', link: 'https://shop.example.com/products/c', unit: 6, days_eu: 3, gates: { samples: 'yes' } } });
+  assert.strictEqual((await api(s, { key: KEY, choose: { slot: 4 } })).product.choice.current.linked.id, id2);
+  assert.strictEqual(env.db.prepare('SELECT COUNT(*) AS n FROM product_suppliers WHERE product_key = ?').get(KEY).n, 2);
+  // No unit cost: decided here but not there, and the choice this scorecard made there goes (the € view must not count it)
+  await api(s, { key: KEY, slot: 3, supplier: { name: 'No price D', days_eu: 4, gates: { samples: 'yes' } } });
+  assert.deepStrictEqual((await api(s, { key: KEY, choose: { slot: 3 } })).product.choice.current.linked, { why: 'No unit cost: 🔎 Sourcing needs a price to count it' });
+  assert.strictEqual(picked(), null);
+  // A choice made in 🔎 itself stays when the scorecard's decision is taken back
+  assert.strictEqual((await sx({ choose: idA })).status, 200);
+  await api(s, { key: KEY, choose: null });
+  assert.strictEqual(picked(), idA);
+  // A product added by name has no 🔎 Sourcing: nothing linked, nothing chosen there
+  assert.strictEqual((await s.get(`/api/supplier?key=${encodeURIComponent(SEED)}`)).product.linked, null);
 });

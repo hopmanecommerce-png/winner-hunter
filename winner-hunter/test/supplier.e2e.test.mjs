@@ -53,6 +53,10 @@ test('🏭 Suppliers on an iPhone: the seeded showerhead, 3 suppliers side by si
   // An approved product with a launch card: its Sourcing step opens a scorecard of its own.
   assert.strictEqual((await api('/api/hide', { ad_id: '9001', status: 'seen' })).status, 200);
   assert.strictEqual((await api('/api/launch', { start: LAUNCH })).status, 200);
+  // A supplier already in its 🔎 Sourcing panel, priced in yuan
+  const sxRes = await api('/api/sourcing', { key: LAUNCH, add: { url: 'https://detail.1688.com/offer/42424242.html', title: 'Factory P', unit_price: 3.4, currency: 'CNY', moq: 100, lead_days: 8 } });
+  assert.strictEqual(sxRes.status, 200);
+  const sxId = (await sxRes.json()).added;
   const tests = JSON.parse(env.db.prepare('SELECT setup FROM sourcing WHERE product_key = ?').get(SEED).setup).tests;
   const testKey = (re) => tests.find((x) => re.test(x.label)).k;
   const row = (k = SEED) => {
@@ -220,29 +224,41 @@ test('🏭 Suppliers on an iPhone: the seeded showerhead, 3 suppliers side by si
     }
     await page.setViewportSize({ width: 390, height: 844 });
 
-    // From a launch card's Sourcing step: its own scorecard, under its key, with its facts
+    // From a launch card's 🔎 Sourcing panel: its own scorecard, under its key, with its facts and 🔎's candidates
     await page.click('#spbox [data-tab=launch]');
     await page.waitForSelector('#lnbox .lncard');
     assert.strictEqual(await page.locator('#spbox').innerHTML(), '');
-    await page.click('#lnbox [data-step=sourcing] summary');
-    await page.click('#lnbox [data-spopen]');
+    await page.click('#sxbox > summary');
+    await page.waitForSelector('#sxpanel [data-sx=score]');
+    await page.click('#sxpanel [data-sx=score]');
     await page.waitForFunction(() => document.querySelector('#spbox .lncard h3') && document.querySelector('#spbox .lncard h3').textContent === 'Posture Corrector Pro');
     assert.deepStrictEqual([row(LAUNCH).suppliers, JSON.parse(env.db.prepare('SELECT facts FROM sourcing WHERE product_key = ?').get(LAUNCH).facts).launch], [{}, LAUNCH]);
     assert.strictEqual(await page.getAttribute('#spbox [data-tab=supplier]', 'aria-pressed'), 'true');
     await page.waitForFunction(() => document.querySelector('#spbox [data-nsup]').textContent === '2');
+    assert.deepStrictEqual(await page.locator('#spbox .spfromrow b').allInnerTexts(), ['Factory P'], 'the candidate already in 🔎 Sourcing, one tap away');
+    assert.match(await page.locator('#spbox .spfromrow small').innerText(), /^€0\.41 a unit · 8 days/, '¥3.40 at 8.3 to the euro');
     await noSideScroll('from a launch card');
     await shot('5-from-launch');
-    // Its choice goes into the launch card's Sourcing step: link, unit cost, shipping, MOQ, lead time
-    await addSupplier(1, { fields: { name: 'Factory P', link: 'detail.1688.com/offer/42.html', unit: '3,40', ship_eu: '5.10', days_eu: '8', lead: '12', moq: '100' }, gates: { samples: 'yes' } });
+    // Added with one tap, then chosen: 🔎 Sourcing chooses it too, so its shared numbers and the launch card follow
+    await page.click('#spbox [data-spfrom]');
+    await page.waitForSelector('#spbox [data-sps=s1] [data-sk=name]');
+    assert.strictEqual(await page.inputValue('#spbox [data-sps=s1] [data-sk=name]'), 'Factory P');
+    assert.strictEqual(await page.locator('#spbox .spfromrow').count(), 0, 'in the scorecard now: no longer offered');
+    await page.locator('#spbox [data-sps=s1] [data-sg=samples]').selectOption('yes');
+    await page.locator('#spbox [data-sps=s1] [data-sk=lead]').fill('12');
+    await saved();
+    assert.strictEqual(row(LAUNCH).suppliers.s1.src, sxId, 'an edit keeps where it came from');
     await page.locator('#spbox [data-spchoose="1"]').click();
     await page.waitForSelector('#spwhy');
     assert.deepStrictEqual(await page.locator('#spbackup option').allInnerTexts(), ['No backup'], 'nobody else to fall back on');
     await page.click('#spbox [data-sp=decide]');
     await page.waitForFunction(() => document.querySelector('#spbox .spvt').textContent === 'Your choice: Factory P');
-    await page.click('#spbox [data-sp=tolaunch]');
-    await page.waitForFunction(() => document.querySelector('#toastMsg').textContent === 'The launch card’s Sourcing step has the chosen supplier');
+    assert.match(await page.textContent('#toastMsg'), /^Chosen: Factory P, in 🔎 Sourcing too\./);
+    assert.match(await page.locator('#spbox [data-spf=decision] .lnout').innerText(), /🔎 Sourcing\s+Chosen there too: the € view and the launch card count it/);
+    assert.deepStrictEqual({ ...env.db.prepare('SELECT supplier_id, supplier_cost, supplier_url, lead_days FROM product_sourcing WHERE product_key = ?').get(LAUNCH) },
+      { supplier_id: sxId, supplier_cost: 0.41, supplier_url: 'https://detail.1688.com/offer/42424242.html', lead_days: 8 });
     const steps = JSON.parse(env.db.prepare('SELECT steps FROM launches WHERE product_key = ?').get(LAUNCH).steps);
-    assert.deepStrictEqual(steps.sourcing.v, { supplier: 'https://detail.1688.com/offer/42.html', unit: 3.4, ship: 5.1, moq: 100, lead: 12 });
+    assert.deepStrictEqual([steps.sourcing.v.supplier, steps.sourcing.v.unit, steps.sourcing.v.moq], ['https://detail.1688.com/offer/42424242.html', 0.41, 100]);
     // Another view: the Suppliers tab steps aside with the launch view
     await page.click('[data-view=all]');
     await page.waitForFunction(() => !document.body.classList.contains('lnv') && document.querySelectorAll('#grid .card').length > 0);

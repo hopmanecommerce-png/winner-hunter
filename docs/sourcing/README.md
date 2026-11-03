@@ -9,12 +9,16 @@ How to choose a supplier for a product, with evidence, and the products already 
 
 ## On the board
 
-**🚀 Launch → 🏭 Suppliers**: one scorecard per product, saved in D1 (table `sourcing`, migration `0060_sourcing.sql`). Start one from a launch card's Sourcing step, or for any product by name. A scorecard compares up to 5 suppliers side by side and shows the weighted score and the gates. **Choose** records the decision with its numbers and a backup. The showerhead's scorecard is seeded with its sample tests and questions, and no suppliers: those come from your own shortlist.
+**🚀 Launch → 🏭 Suppliers**: one scorecard per product, saved in D1 (table `sourcing`, migrations `0060_sourcing.sql` and `0061_sourcing_showerhead_update.sql`). Start one from a launch card's Sourcing step, or for any product by name. A scorecard compares up to 5 suppliers side by side and shows the weighted score and the gates. **Choose** records the decision with its numbers and a backup. The showerhead's scorecard is seeded with its sample tests and questions, and no suppliers: those come from your own shortlist.
 
 Code: `winner-hunter/worker/src/supplier.mjs` (the scoring, also run by the board as `/supplier.js`). Tests: `winner-hunter/test/supplier.test.mjs` and `supplier.e2e.test.mjs`.
 
 ## Related
 
 - [../learnings/sourcing-and-shipping.md](../learnings/sourcing-and-shipping.md): the earlier research on routes, EU customs and VAT, and the 7-day plan from an approved product to the first shipped order.
-- The 🚀 Launch view's Sourcing and Margin steps take the chosen supplier's numbers (**Fill the launch card's Sourcing step** in the decision record).
-- **🔎 Sourcing** on a launch card (`worker/src/sourcing.mjs`, tables `product_suppliers` and `product_sourcing`) compares the 1688 links, and its **Choose** feeds the 💶 € view. A choice made in 🏭 Suppliers fills the launch card's Sourcing step but not `product_sourcing`. Until the two are joined, choose the same supplier in 🔎 Sourcing too, so the € view counts it.
+- The 🚀 Launch view's Sourcing and Margin steps take the chosen supplier's numbers through 🔎 Sourcing, below.
+- **🔎 Sourcing** on a launch card (`worker/src/sourcing.mjs`, tables `product_suppliers` and `product_sourcing`) is where the 1688 links are pasted and compared on landed cost. The two work as one:
+  - 🔎's **🏭 Score them side by side** opens the product's scorecard.
+  - Its candidates show in the scorecard under "In 🔎 Sourcing, not here yet", one tap each, with prices in euros.
+  - **Choose** in 🏭 chooses the same supplier in 🔎 (it adds it there first when 🔎 doesn't have it). Its numbers then reach `product_sourcing`, the 💶 € view and the launch card's Sourcing step.
+  - Taking the decision back in 🏭 clears 🔎's choice only when 🏭 made it.

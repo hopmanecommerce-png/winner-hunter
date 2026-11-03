@@ -153,7 +153,7 @@ Facts from public pages, checked on 1 Nov 2026; the product-specific comparison 
 
 A new decision replaces the old one, and **Take the decision back** undoes it. Both keep the old record in the history (the last 10). The board won't remove a supplier while it is your choice or its backup.
 
-From a product with a launch card, **Fill the launch card's Sourcing step** copies the chosen supplier's link, unit cost, shipping, MOQ and lead time into the launch card, and its margin follows.
+On a product with a launch card, **Choose** also makes it the supplier chosen in 🔎 Sourcing. Its link, unit cost, shipping, MOQ and lead time go into the launch card's Sourcing step, and its margin follows. The record says whether that worked: a supplier without a unit cost, or priced in £, can't be chosen there.
 
 ## Re-checking
 
@@ -170,7 +170,15 @@ Tap **Re-checked today** with a note. The board keeps the line and sets the next
 
 ## In the board
 
-**🚀 Launch → 🏭 Suppliers.** The tab lists every scorecard. Start one from a launch card (the **🏭 Compare suppliers** button in its Sourcing step, or **Start** in the list), or for any product by name and link.
+**🚀 Launch → 🏭 Suppliers.** The tab lists every scorecard. Start one from a launch card (**🏭 Score them side by side** in its 🔎 Sourcing panel, **🏭 Compare suppliers** in its Sourcing step, or **Start** in the list), or for any product by name and link.
+
+On a launch card's product the scorecard works with 🔎 Sourcing:
+
+- The links pasted there show up here, one tap each.
+- **Choose** here chooses the same supplier there, so the 💶 € view and the launch card's margin use it.
+- After that, 🔎 works with its own numbers for that supplier: edit a price there, and the € view follows.
+- 🔎 converts ¥ at its "¥ for €1" rate. It defaults to 8.3, but the ECB rate was 7.46 on 2 Nov 2026, so set today's rate in 🔎 or ¥ costs come out about 10% low.
+- The launch card counts the EU fees as €3 + €2 per order, without the VAT on the €2. Its margin can differ from the scorecard's by €0.42 an order.
 
 A scorecard has:
 

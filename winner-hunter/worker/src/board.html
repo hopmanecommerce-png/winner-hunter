@@ -742,6 +742,10 @@
   .sphist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
   .spadd { display: grid; gap: 12px; padding-top: 8px; min-width: 0; }
   .spback { justify-self: start; }
+  .spfrom { display: grid; gap: 8px; min-width: 0; }
+  .spfromrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 56px; padding: 8px 12px; border: 1px dashed var(--line2); border-radius: 12px; }
+  .spfromrow b { font-weight: 500; overflow-wrap: anywhere; }
+  .spfromrow small { display: block; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
   @media (pointer: coarse) { .lnpin, .lnuse, .lnremove { min-height: 44px; } }
   @media (min-width: 760px) {
     .lnfields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -3262,7 +3266,11 @@ function spSupsHtml(p, s) {
   SP.html.sups = JSON.stringify([s.setup.tests, s.setup.certs_needed]); // what the boxes are made for
   const slots = [1, 2, 3, 4, 5].filter((n) => p.suppliers && p.suppliers['s' + n]);
   const free = [1, 2, 3, 4, 5].find((n) => !(p.suppliers && p.suppliers['s' + n]));
-  return `<section class="lnsteps" aria-label="Suppliers" id="spsups"><h3 class="sph">Suppliers</h3>${slots.map((n) => spSupHtml(p, s, n)).join('')}
+  // A launch card's product: the candidates in 🔎 Sourcing that are not here yet, one tap each (prices in €)
+  const here = Object.values(p.suppliers || {}).filter(Boolean);
+  const fromSx = p.linked ? p.linked.list.filter((c) => !here.some((x) => x.src === c.src || (c.link && x.link === c.link))) : [];
+  const sx = free && fromSx.length ? `<div class="spfrom"><p class="spsub">In 🔎 Sourcing, not here yet</p>${fromSx.map((c) => `<div class="spfromrow"><span><b>${esc(c.name || c.link || 'Supplier')}</b><small>${esc([c.unit != null ? money(c.unit, 'EUR') + ' a unit' : 'no price yet', c.days_eu != null ? c.days_eu + ' days' : '', c.note].filter(Boolean).join(' · '))}</small></span><button class="lnbtn" data-spfrom="${esc(c.src)}" data-slot="${free}">Add</button></div>`).join('')}</div>` : '';
+  return `<section class="lnsteps" aria-label="Suppliers" id="spsups"><h3 class="sph">Suppliers</h3>${slots.map((n) => spSupHtml(p, s, n)).join('')}${sx}
     ${free ? `<button class="lnstart" data-sp="addsup" data-slot="${free}">+ Add a supplier (${slots.length} of ${K.MAX_SUPPLIERS})</button>` : `<p class="lnmuted">${K.MAX_SUPPLIERS} suppliers: the most to compare. Remove one to add another.</p>`}</section>`;
 }
 function spSupHtml(p, s, slot) {
@@ -3336,13 +3344,13 @@ function spDecisionHtml(p, s) {
   if (!c) return `<p class="lnmuted">No decision yet. Tap Choose next to a supplier in the ranking on top: its numbers are kept here with your reason, and a re-check comes up every ${K.RECHECK_DAYS} days.</p>${hist}`;
   const row = (label, v) => (v == null || v === '' ? '' : `<div><dt>${esc(label)}</dt><dd>${esc(v)}</dd></div>`);
   const cur = (v) => (v == null ? null : money(v, set.cur));
-  const launch = (LN.list || []).find((l) => l.key === p.key);
   const re = Array.isArray(c.rechecks) ? c.rechecks : [];
+  const sx = c.linked ? (c.linked.id ? 'Chosen there too: the € view and the launch card count it' : 'Not chosen there: ' + c.linked.why) : '';
   return `<dl class="lnout">${row('Chosen', `${c.name}, ${spDate(c.at)}`)}${row('Score then', `${c.score}/100`)}${row('Unit cost', cur(c.unit))}${row('Shipping to NL/DE', cur(c.ship_eu))}${row('Shipping to the US', cur(c.ship_us))}
       ${row('Landed per order', cur(c.landed))}${row('Days to the customer', c.days)}${row('Lead time', c.lead != null ? c.lead + ' days' : null)}${row('MOQ', c.moq)}
-      ${row('Still to confirm then', (c.open || []).join(', '))}${row('Backup', c.backup ? `${c.backup.name} (${c.backup.score}/100)` : 'none')}${row('Why', c.note)}${row('Next re-check', spDate(c.next) + (s.chosen && s.chosen.overdue ? ' (overdue)' : ''))}</dl>
+      ${row('Still to confirm then', (c.open || []).join(', '))}${row('Backup', c.backup ? `${c.backup.name} (${c.backup.score}/100)` : 'none')}${row('Why', c.note)}${row('🔎 Sourcing', sx)}${row('Next re-check', spDate(c.next) + (s.chosen && s.chosen.overdue ? ' (overdue)' : ''))}</dl>
     <label class="lnf wide"><span>Re-check: the price now, new complaints, the delivery days (before every reorder, and every ${K.RECHECK_DAYS} days)</span><textarea id="sprecheck" rows="2" maxlength="1000" placeholder="Same price, no new complaints, 8 days to NL"></textarea></label>
-    <div class="spbtns"><button class="lnbtn" data-sp="recheck">Re-checked today</button>${launch ? '<button class="lnuse" data-sp="tolaunch">Fill the launch card’s Sourcing step</button>' : ''}<button class="lnuse" data-sp="undecide">Take the decision back</button></div>
+    <div class="spbtns"><button class="lnbtn" data-sp="recheck">Re-checked today</button><button class="lnuse" data-sp="undecide">Take the decision back</button></div>
     ${re.length ? `<p class="spsub">Re-checks</p><ul class="sphist">${re.map((x) => `<li>${esc(spDate(x.at))}: ${esc([x.note, x.score != null ? x.score + '/100' : '', x.unit != null ? money(x.unit, set.cur) : '', x.days != null ? x.days + ' days' : ''].filter(Boolean).join(' · '))}</li>`).join('')}</ul>` : ''}${hist}`;
 }
 
@@ -3394,7 +3402,7 @@ function spEdit(el, changed) {
   const sup = el.closest('#spbox [data-sps]');
   if (sup && el.matches('[data-sk], [data-sg], [data-st], [data-sc]')) {
     const id = sup.dataset.sps;
-    const raw = { gates: {}, scores: {}, tests: {} };
+    const raw = { src: (p.suppliers[id] || {}).src, gates: {}, scores: {}, tests: {} }; // where it came from stays
     for (const x of sup.querySelectorAll('[data-sk]')) raw[x.dataset.sk] = x.type === 'checkbox' ? x.checked : x.value;
     for (const x of sup.querySelectorAll('[data-sg]')) if (x.value) raw.gates[x.dataset.sg] = x.value;
     for (const x of sup.querySelectorAll('[data-st]')) if (x.value) raw.tests[x.dataset.st] = x.value;
@@ -3522,6 +3530,16 @@ async function spAddSup(slot) {
   const el = document.querySelector(`#spbox [data-sps="s${slot}"] [data-sk="name"]`);
   if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); }
 }
+// A 🔎 Sourcing candidate into a free slot: its link, price, days and notes come along; you add the gates and scores.
+async function spFromSx(id, slot) {
+  spFlush();
+  let j;
+  try { j = await spPost({ key: SP.prod.key, slot, from: id }); } catch (e) { return; }
+  SP.prod = j.product;
+  SP.open.add('s' + slot);
+  spRender();
+  toast('Added from 🔎 Sourcing: now its gates and scores', '');
+}
 // A second tap, so a slip never wipes a supplier or a scorecard.
 function spSure(b, again, label) {
   if (b.dataset.sure) return true;
@@ -3549,6 +3567,7 @@ async function spAct(body, done) {
   try { j = await spPost(Object.assign({ key: SP.prod.key }, body)); } catch (e) { return null; }
   SP.prod = j.product;
   SP.list = null; // its line in the list changed
+  if (typeof SX !== 'undefined' && SX.cache) SX.cache.delete(SP.prod.key); // 🔎 Sourcing's choice may have changed with it
   spRender();
   spLoadList().then(spCount, () => {});
   toast(done(j.product), '');
@@ -3560,7 +3579,7 @@ function spDecide() {
   const slot = SP.choosing;
   SP.choosing = 0;
   SP.open.add('decision');
-  spAct({ choose: { slot, backup, note } }, (p) => `Chosen: ${p.choice.current.name}. Re-check by ${spDate(p.choice.current.next)}`).then((j) => { if (!j) SP.choosing = slot; });
+  spAct({ choose: { slot, backup, note } }, (p) => `Chosen: ${p.choice.current.name}${p.choice.current.linked && p.choice.current.linked.id ? ', in 🔎 Sourcing too' : ''}. Re-check by ${spDate(p.choice.current.next)}`).then((j) => { if (!j) SP.choosing = slot; });
 }
 async function spRemove(b) {
   if (!spSure(b, 'Tap again to remove the scorecard', 'Remove this scorecard')) return;
@@ -3572,19 +3591,6 @@ async function spRemove(b) {
   spRender();
   spCount();
   toast('Scorecard removed', '');
-}
-async function spToLaunch() {
-  const p = SP.prod;
-  const c = p && p.choice && p.choice.current;
-  const l = c && (LN.list || []).find((x) => x.key === p.key);
-  if (!l) return;
-  const market = spK().summaryOf(p, Date.now()).setup.market;
-  const cur = (l.steps && l.steps.sourcing) || { done: false, note: '', v: {} };
-  const ship = market === 'us' ? c.ship_us : c.ship_eu;
-  const v = Object.assign({}, cur.v, c.link ? { supplier: c.link } : {}, c.unit != null ? { unit: c.unit } : {}, ship != null ? { ship } : {}, c.moq != null ? { moq: c.moq } : {}, c.lead != null ? { lead: c.lead } : {});
-  try { await lnPost({ key: l.key, step: 'sourcing', done: cur.done === true, note: cur.note || '', v }); } catch (e) { return; }
-  l.steps = Object.assign({}, l.steps, { sourcing: { done: cur.done === true, note: cur.note || '', v } });
-  toast('The launch card’s Sourcing step has the chosen supplier', '');
 }
 function spCopy(lang) {
   const el = $('spmsg-' + lang);
@@ -3606,6 +3612,7 @@ $('spbox').addEventListener('click', (e) => {
   else if (b.dataset.spstart) spStart({ start: b.dataset.spstart }, b);
   else if (b.dataset.spchoose) { SP.choosing = Number(b.dataset.spchoose); $('spchoose').innerHTML = spChooseHtml(spK().summaryOf(SP.prod, Date.now())); if ($('spwhy')) { $('spwhy').scrollIntoView({ block: 'center' }); $('spwhy').focus(); } }
   else if (b.dataset.spcopy) spCopy(b.dataset.spcopy);
+  else if (b.dataset.spfrom) spFromSx(Number(b.dataset.spfrom), Number(b.dataset.slot));
   else if (b.dataset.sp === 'add') spAddProduct(b);
   else if (b.dataset.sp === 'back') { spFlush(); Object.assign(SP, { focus: '', prod: null, choosing: 0 }); spRender(); window.scrollTo({ top: 0 }); spLoadList().then(() => { if (spOn() && !SP.focus) spRender(); }, () => {}); }
   else if (b.dataset.sp === 'addsup') spAddSup(Number(b.dataset.slot));
@@ -3614,7 +3621,6 @@ $('spbox').addEventListener('click', (e) => {
   else if (b.dataset.sp === 'cancel') { SP.choosing = 0; $('spchoose').innerHTML = ''; }
   else if (b.dataset.sp === 'undecide') spAct({ choose: null }, () => 'Decision taken back: it stays in the history');
   else if (b.dataset.sp === 'recheck') spAct({ recheck: { note: $('sprecheck') ? $('sprecheck').value : '' } }, (p) => `Re-checked. Next re-check by ${spDate(p.choice.current.next)}`);
-  else if (b.dataset.sp === 'tolaunch') spToLaunch();
   else if (b.dataset.sp === 'defweights') spDefWeights();
   else if (b.dataset.sp === 'remove') spRemove(b);
 });
@@ -4925,7 +4931,8 @@ function sxRenderAll() {
       <div id="sxcj"></div></div>
     <div class="sxsec"><h4>Suppliers <small>cheapest at the customer's door first</small></h4>
       <div class="sxadd"><textarea id="sxpaste" rows="2" maxlength="2000" aria-label="A supplier link, or the text an app shares" placeholder="Paste a supplier link, or what the 1688 / AliExpress app shares"></textarea><button class="sxbtn sxgo" data-sx="add">Add</button></div>
-      <ol class="sxlist" id="sxlist"></ol></div>
+      <ol class="sxlist" id="sxlist"></ol>
+      <button class="sxbtn" data-sx="score" title="Up to 5 side by side: quality and delivery first, the hard gates, the sample tests, the decision record">🏭 Score them side by side</button></div>
     ${list('vet', 'Vet the supplier')}${list('sample', 'Sample order')}
     <details class="sxfold" data-sx-fold="msg"${SX.folds.has('msg') ? ' open' : ''}><summary><span>First message</span><small>English · 中文</small></summary><div class="sxmsg">
       <div class="sxsegs"><div class="sxseg" role="group" aria-label="Message to"><button data-sx-to="agent">Agent</button><button data-sx-to="supplier">Supplier</button></div>
@@ -5058,6 +5065,7 @@ async function sxClick(e) {
   const act = b.dataset.sx;
   if (!act) return;
   const key = SX.key;
+  if (act === 'score') { spFromLaunch(key); return; } // 🏭 Suppliers: this product's scorecard, its candidates one tap away
   const li = b.closest('[data-sx-id]');
   const id = li ? Number(li.dataset.sxId) : 0;
   if (act === 'edit' || act === 'cancel') { SX.edit = act === 'edit' && SX.edit !== id ? id : 0; sxRenderList(); return; }
