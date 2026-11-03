@@ -121,7 +121,7 @@ Each of these means: ask again, test harder, or drop the supplier.
 - **Many recent complaints about the same fault** in its reviews (leaks, cracks, "not as described").
 - **Delivery quoted in "working days" from dispatch, not from the order**: add the handling time and weekends before you compare.
 - **No written defect policy.**
-- **Claims you can't use**: "removes 99.9% of heavy metals", "cures dandruff", "NSF certified" without a listing you can find. If you copy them into your ads without proof, the risk is yours.
+- **Claims you can't use**: "removes 99.9% of heavy metals", "cures dandruff", "NSF certified" without a listing you can find. If you copy them into your ads without proof, the risk is yours. What an ad may say in NL and DE, claim by claim: [the showerhead's rules](showerhead-muravai.md#what-an-ad-may-say-in-nl-and-de).
 - **A borrowed certificate**: a certificate for a material or a part, shown as if it covered the whole product. For example, "KDF certified to NSF/ANSI 42" covers the raw filter media, not the cartridge ([Kymera](https://kymerainternational.com/product/kdf-55/)). Look the exact model up in the certifier's own listing on the day you check: listings change ([NSF/ANSI 177 listing](https://info.nsf.org/Certified/DWTU/Listings.asp?Standard=177)).
 - **Certificate icons on Alibaba cards**: the supplier declares them, and Alibaba doesn't check them against a certificate. Ask for the report itself.
 - **"Stages" or "layers" that are mostly filler**, or the same ingredient counted twice. One retail "15-stage" shower filter lists vitamin C twice, next to "magnetic energy" and "far infrared" balls ([B&Q listing](https://DIY.com/departments/spares2go-universal-shower-head-15-stage-filter-hard-water-purifier-softener-chrome-effect-/5057817439344_BQ.prd)).
@@ -153,7 +153,7 @@ Facts from public pages, checked on 1 Nov 2026; the product-specific comparison 
 
 A new decision replaces the old one, and **Take the decision back** undoes it. Both keep the old record in the history (the last 10). The board won't remove a supplier while it is your choice or its backup.
 
-From a product with a launch card, **Fill the launch card's Sourcing step** copies the chosen supplier's link, unit cost, shipping, MOQ and lead time into the launch card, and its margin follows.
+On a product with a launch card, **Choose** also makes it the supplier chosen in 🔎 Sourcing. Its link, unit cost, shipping, MOQ and lead time go into the launch card's Sourcing step, and its margin follows. The record says whether that worked: a supplier without a unit cost, or priced in £, can't be chosen there.
 
 ## Re-checking
 
@@ -170,7 +170,15 @@ Tap **Re-checked today** with a note. The board keeps the line and sets the next
 
 ## In the board
 
-**🚀 Launch → 🏭 Suppliers.** The tab lists every scorecard. Start one from a launch card (the **🏭 Compare suppliers** button in its Sourcing step, or **Start** in the list), or for any product by name and link.
+**🚀 Launch → 🏭 Suppliers.** The tab lists every scorecard. Start one from a launch card (**🏭 Score them side by side** in its 🔎 Sourcing panel, **🏭 Compare suppliers** in its Sourcing step, or **Start** in the list), or for any product by name and link.
+
+On a launch card's product the scorecard works with 🔎 Sourcing:
+
+- The links pasted there show up here, one tap each.
+- **Choose** here chooses the same supplier there, so the 💶 € view and the launch card's margin use it.
+- After that, 🔎 works with its own numbers for that supplier: edit a price there, and the € view follows.
+- 🔎 converts ¥ at its "¥ for €1" rate. It defaults to 8.3, but the ECB rate was 7.46 on 2 Nov 2026, so set today's rate in 🔎 or ¥ costs come out about 10% low.
+- The launch card counts the EU fees as €3 + €2 per order, without the VAT on the €2. Its margin can differ from the scorecard's by €0.42 an order.
 
 A scorecard has:
 

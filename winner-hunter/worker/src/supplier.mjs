@@ -10,9 +10,13 @@
  *   POST /api/supplier {key, setup}                    the setup, saved as a whole
  *   POST /api/supplier {key, checks}                   the checklist's ticks
  *   POST /api/supplier {key, slot, supplier}           one supplier (slot 1 to 5), saved as a whole
+ *   POST /api/supplier {key, slot, from: id}           a 🔎 Sourcing candidate of a launch card's product into a free slot
  *   POST /api/supplier {key, slot, drop: true}         that supplier out (not your choice or its backup)
- *   POST /api/supplier {key, choose: {slot, backup, note}}  your decision: the supplier as it is now, kept as a record
- *   POST /api/supplier {key, choose: null}             the decision taken back (it stays in the history)
+ *   POST /api/supplier {key, choose: {slot, backup, note}}  your decision: the supplier as it is now, kept as a record.
+ *                                                      On a launch card's product it is chosen in 🔎 Sourcing too
+ *                                                      (sourcing.mjs), so the € view and the launch card follow it
+ *   POST /api/supplier {key, choose: null}             the decision taken back (it stays in the history; 🔎 Sourcing's
+ *                                                      choice goes too when this scorecard made it)
  *   POST /api/supplier {key, recheck: {note}}          a re-check done today: the next one is due in 90 days
  *   POST /api/supplier {key, remove: true}             the scorecard deleted
  *   GET  /supplier.js                                  the kit as a script (window.SUPPLIER): the board scores as you type
@@ -20,6 +24,7 @@
  * The method behind it, for every product: docs/sourcing/supplier-selection.md.
  */
 import { launchKit } from './launch.mjs';
+import { sourcingPost, cleanUrl as sourcingUrl, fxOf, toEur } from './sourcing.mjs';
 
 /**
  * Everything a scorecard works out, in one function that uses nothing from outside itself but the launch kit it is
@@ -29,10 +34,12 @@ import { launchKit } from './launch.mjs';
 export function supplierKit(L) {
   const MAX_SUPPLIERS = 5;
   const RECHECK_DAYS = 90; // and before every reorder
-  // Duties and fees on one order shipped to an EU customer from outside the EU, when the supplier's price is not DDP:
-  // the EU's €3 customs duty on a parcel under €150 (from 1 July 2026; per item category in the parcel, one here) and
-  // the €2 handling fee on such parcels (from 1 November 2026). docs/sourcing/supplier-selection.md has the sources.
-  const EU_PARCEL = 5;
+  // Duties and fees on one order shipped to an EU customer from outside the EU, when the supplier's price is not DDP,
+  // for one kind of item: the EU's €3 customs duty per item category on parcels up to €150 (1 July 2026 to 1 July 2028)
+  // + the €2 Union handling fee per declaration line (from 1 November 2026) + 21% VAT on that fee. A second kind of item
+  // in the parcel (a showerhead and spare cartridges) counts twice. Goods already in an EU warehouse pay neither.
+  // Sources: docs/sourcing/showerhead-muravai.md (European Commission, Dutch customs, TARIC).
+  const EU_PARCEL = 5.42;
 
   // The 7 criteria, weighted for quality and delivery first (the weights are yours to change per product).
   // levels: what each score from 0 to 5 means. auto: how the board scores it when you leave it on Auto.
@@ -287,6 +294,9 @@ export function supplierKit(L) {
     const tests = {};
     const known = new Set(setupOf(setup).tests.map((t) => t.k));
     for (const [k, x] of Object.entries(obj(i.tests))) if (known.has(k) && (x === 'pass' || x === 'fail')) tests[k] = x;
+    // src: the 🔎 Sourcing candidate it came from (product_suppliers.id), so choosing it here chooses that one there.
+    const src = Number(i.src);
+    if (Number.isSafeInteger(src) && src > 0) out.src = src;
     return Object.assign(out, { gates, scores, tests });
   }
 
@@ -534,7 +544,7 @@ export function supplierKit(L) {
     const s = suppliersOf(p).find((x) => x.slot === slot).s;
     const keep = (o, keys) => Object.fromEntries(keys.filter((k) => o[k] !== undefined).map((k) => [k, o[k]]));
     const record = {
-      slot, ...keep(s, ['name', 'link', 'route', 'from', 'place', 'unit', 'ship_eu', 'ship_us', 'ddp', 'days_eu', 'days_us', 'measured', 'lead', 'moq']),
+      slot, ...keep(s, ['name', 'link', 'route', 'from', 'place', 'unit', 'ship_eu', 'ship_us', 'ddp', 'days_eu', 'days_us', 'measured', 'lead', 'moq', 'src']),
       name: row.name, score: row.score, parts: Object.fromEntries(CRITERIA.map((c) => [c.k, row.parts[c.k].v])), status: row.status, open: row.open,
       landed: row.landed, days: row.days, market: sum.setup.market, max_days: sum.setup.max_days, weights: sum.setup.weights,
       backup: b ? { slot: b.slot, name: b.name, score: b.score, link: b.link } : null,
@@ -593,8 +603,10 @@ const LAUNCH_SQL = 'SELECT product_key, title, facts FROM launches WHERE product
 const SUPPLIER_SQL = "UPDATE sourcing SET suppliers = json_set(CASE WHEN json_valid(suppliers) THEN suppliers ELSE '{}' END, ?, json(?)), updated_at = ? WHERE product_key = ?";
 const DROP_SQL = "UPDATE sourcing SET suppliers = json_remove(CASE WHEN json_valid(suppliers) THEN suppliers ELSE '{}' END, ?), updated_at = ? WHERE product_key = ?";
 
-// A key: a launch card's ('eu|…', 'world|…', 'tiktok|…', as launch.mjs saves it) or a product added by name ('own|slug').
-const keyIn = (k) => (typeof k === 'string' && k.length <= 1000 && (/^(eu|world|tiktok)\|./s.test(k) || /^own\|[a-z0-9-]{1,80}$/.test(k)) ? k : '');
+// A key: a launch card's ('eu|…', 'world|…', 'google|…', 'tiktok|…', as launch.mjs saves it) or a product added by name
+// ('own|slug').
+const LINKED = /^(eu|world|google|tiktok)\|./s; // the keys of launch cards: these have 🔎 Sourcing as well
+const keyIn = (k) => (typeof k === 'string' && k.length <= 1000 && (LINKED.test(k) || /^own\|[a-z0-9-]{1,80}$/.test(k)) ? k : '');
 const parse = (s, or) => {
   try {
     const v = JSON.parse(s || '');
@@ -605,6 +617,75 @@ const parse = (s, or) => {
 };
 const https = (u) => (typeof u === 'string' && /^https:\/\//i.test(u) ? u.slice(0, 500) : '');
 const bad = (error, status = 400) => ({ status, body: { error } });
+
+// ---------------------------------------------------------------------------
+// 🔎 Sourcing (sourcing.mjs): a launch card's product has its supplier candidates there (product_suppliers), and its
+// chosen supplier's numbers (product_sourcing) are what the € view and the launch card read. A scorecard here takes
+// those candidates in with one tap, and a decision here is chosen there too, through sourcing.mjs's own code.
+// ---------------------------------------------------------------------------
+const CANDIDATES_SQL = 'SELECT id, platform, url, title, unit_price, currency, moq, rating, kind, repeat_rate, ship_price, lead_days, origin, notes FROM product_suppliers WHERE product_key = ? ORDER BY id';
+const PICKED_SQL = 'SELECT supplier_id, eur_cny, eur_usd FROM product_sourcing WHERE product_key = ?';
+const ROUTE_OF = { 1688: '1688', alibaba: 'alibaba', cj: 'platform' };
+
+/** One 🔎 Sourcing candidate as a supplier here: its facts, prices in euros at the product's own rates, src (its id). */
+export function candidateOf(r, fx) {
+  const note = [r.kind === 'factory' ? 'Factory' : r.kind === 'trader' ? 'Trader' : '', r.rating != null ? `Rated ${r.rating}/5` : '', r.notes || ''].filter(Boolean).join(' · ');
+  const v = {
+    src: Number(r.id), name: r.title || '', link: r.url || '', route: ROUTE_OF[r.platform] || 'other', from: r.origin === 'eu' || r.origin === 'cn' ? r.origin : null,
+    unit: toEur(r.unit_price, r.currency, fx), ship_eu: toEur(r.ship_price, r.currency, fx), moq: r.moq, days_eu: r.lead_days, repeat: r.repeat_rate, note,
+  };
+  return Object.fromEntries(Object.entries(v).filter(([, x]) => x != null && x !== ''));
+}
+
+/** 🔎 Sourcing's side of a launch card's product: { chosen: its supplier id or null, list: [candidate] }; null for others. */
+async function linkedOf(env, key) {
+  if (!LINKED.test(key)) return null;
+  try {
+    const [c, sx] = await Promise.all([env.DB.prepare(CANDIDATES_SQL).bind(key).all(), env.DB.prepare(PICKED_SQL).bind(key).first()]);
+    const fx = fxOf(sx || {});
+    return { chosen: sx && sx.supplier_id != null ? Number(sx.supplier_id) : null, list: (c.results || []).map((r) => candidateOf(r, fx)) };
+  } catch (e) {
+    if (/no such table/i.test(String(e && e.message))) return null; // an older database: no 🔎 Sourcing yet
+    throw e;
+  }
+}
+
+/**
+ * A decision here, chosen in 🔎 Sourcing too, so the € view and the launch card's Sourcing step count it: the candidate
+ * the supplier came from, else the one with the same link, else a new one made from its numbers (in € or $). 🔎 then
+ * works with that candidate's own numbers. Returns { id } (chosen there), { why } (not), or null (no launch card here).
+ */
+async function linkChoice(env, key, rec, cur, now) {
+  if (!LINKED.test(key)) return null;
+  if (rec.unit == null) return { why: 'No unit cost: 🔎 Sourcing needs a price to count it' };
+  if (cur !== 'EUR' && cur !== 'USD') return { why: `🔎 Sourcing takes € or $, not ${cur}` };
+  const linked = await linkedOf(env, key);
+  if (!linked) return { why: '🔎 Sourcing is not in this database yet' };
+  const url = rec.link ? sourcingUrl(rec.link) : '';
+  let id = rec.src && linked.list.some((c) => c.src === rec.src) ? rec.src : 0;
+  if (!id && url) id = (linked.list.find((c) => c.link === url) || {}).src || 0;
+  if (!id) {
+    const add = { title: String(rec.name || '').slice(0, 200), unit_price: rec.unit, currency: cur, notes: 'Chosen in 🏭 Suppliers' };
+    if (url) add.url = url;
+    if (rec.ship_eu != null) add.ship_price = rec.ship_eu;
+    if (rec.moq != null) add.moq = rec.moq;
+    if (rec.days_eu != null) add.lead_days = rec.days_eu;
+    if (rec.from === 'eu' || rec.from === 'cn') add.origin = rec.from;
+    const out = await sourcingPost(env, { key, add }, now);
+    if (out.status !== 200 || !out.body.added) return { why: (out.body && out.body.error) || 'Not added in 🔎 Sourcing' };
+    id = out.body.added;
+  }
+  const ch = await sourcingPost(env, { key, choose: id }, now);
+  return ch.status === 200 ? { id } : { why: (ch.body && ch.body.error) || 'Not chosen in 🔎 Sourcing' };
+}
+
+/** A decision taken back here: 🔎 Sourcing's choice goes too, when it is still the one this scorecard made there. */
+async function unlinkChoice(env, key, prev, now) {
+  const id = prev && prev.linked && prev.linked.id;
+  if (!id || !LINKED.test(key)) return;
+  const linked = await linkedOf(env, key);
+  if (linked && linked.chosen === id) await sourcingPost(env, { key, choose: null }, now);
+}
 
 /** A sourcing row for the board: the scorecard with its summary. */
 export function productOut(row, now = Date.now()) {
@@ -635,7 +716,8 @@ export async function supplierGet(env, params, now = Date.now()) {
   const key = keyIn(want);
   if (!key) return bad('Bad key');
   const row = await env.DB.prepare(ROW_SQL).bind(key).first();
-  return row ? { status: 200, body: { product: productOut(row, now) } } : bad('No scorecard for this product', 404);
+  if (!row) return bad('No scorecard for this product', 404);
+  return { status: 200, body: { product: Object.assign(productOut(row, now), { linked: await linkedOf(env, key) }) } };
 }
 
 /** The key of a product added by name: 'own|' + its title in lower case, letters and digits only (else a short hash). */
@@ -656,13 +738,14 @@ export async function supplierPost(env, j, now = Date.now()) {
   const at = new Date(now).toISOString();
   const card = async (key) => {
     const row = await env.DB.prepare(ROW_SQL).bind(key).first();
-    return row ? { status: 200, body: { ok: true, product: productOut(row, now) } } : bad('No scorecard for this product', 404);
+    if (!row) return bad('No scorecard for this product', 404);
+    return { status: 200, body: { ok: true, product: Object.assign(productOut(row, now), { linked: await linkedOf(env, key) }) } };
   };
   if (j.start != null) {
     const key = keyIn(j.start);
     if (!key || key.startsWith('own|')) return bad('Bad product');
     const have = await env.DB.prepare(ROW_SQL).bind(key).first();
-    if (have) return { status: 200, body: { ok: true, product: productOut(have, now) } };
+    if (have) return card(key);
     const l = await env.DB.prepare(LAUNCH_SQL).bind(key).first();
     if (!l) return bad('No launch card for this product: start one in Launch first', 404);
     const f = parse(l.facts, {});
@@ -699,10 +782,26 @@ export async function supplierPost(env, j, now = Date.now()) {
     } else if (j.supplier !== undefined) {
       if (!j.supplier || typeof j.supplier !== 'object' || Array.isArray(j.supplier)) return bad('Bad supplier');
       await env.DB.prepare(SUPPLIER_SQL).bind('$.s' + slot, JSON.stringify(cleanSupplier(j.supplier, p.setup)), at, key).run();
+    } else if (j.from != null) {
+      // A 🔎 Sourcing candidate into a free slot: its facts in euros, and where it came from (src)
+      if (p.suppliers['s' + slot]) return bad('That slot is taken: add it to a free one', 409);
+      const linked = await linkedOf(env, key);
+      const c = linked && linked.list.find((x) => x.src === Number(j.from));
+      if (!c) return bad('No such supplier in 🔎 Sourcing for this product', 404);
+      if (Object.values(p.suppliers).some((x) => x && x.src === c.src)) return bad('It is in this scorecard already', 409);
+      await env.DB.prepare(SUPPLIER_SQL).bind('$.s' + slot, JSON.stringify(cleanSupplier(c, p.setup)), at, key).run();
     } else return bad('Nothing to save');
   } else if (j.choose !== undefined) {
+    const prev = p.choice && p.choice.current;
     const out = j.choose === null ? undecide(p, at) : decide(p, j.choose, at);
     if (out.error) return bad(out.error, out.status);
+    // A launch card's product: chosen in 🔎 Sourcing too (or no longer, when this scorecard made that choice)
+    if (j.choose === null) await unlinkChoice(env, key, prev, now);
+    else {
+      const linked = await linkChoice(env, key, out.choice.current, setupOf(p.setup).cur, now);
+      if (linked) out.choice.current.linked = linked;
+      if (!linked || linked.why) await unlinkChoice(env, key, prev, now); // not chosen there: the old choice made from here goes
+    }
     await env.DB.prepare('UPDATE sourcing SET choice = ?, updated_at = ? WHERE product_key = ?').bind(JSON.stringify(out.choice), at, key).run();
   } else if (j.recheck !== undefined) {
     const out = recheck(p, j.recheck, at);

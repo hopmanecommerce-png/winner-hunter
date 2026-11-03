@@ -80,7 +80,9 @@ rejected. Per product: what it is (a plain name), niche, the ads' hook, the buye
   the lead time, a backup) with a re-check every 90 days and before every reorder. D1 table `sourcing`
   (`worker/src/supplier.mjs`). The method, for every product: `docs/sourcing/supplier-selection.md`. The filtered
   showerhead is seeded as the first scorecard (its tests and questions, no suppliers): `docs/sourcing/showerhead-muravai.md`,
-  with its refill economics and the EU and US rules.
+  with its refill economics and the EU and US rules. On a launch card's product it works with **🔎 Sourcing**: its
+  candidates come in with one tap (prices in €), and **Choose** chooses the same supplier there, so the 💶 € view and
+  the launch card's margin use it.
 - **Browse**: everything that passes, most reach per day first, with search, sort and filters. **★**: your kept products.
   **✓**: every product you approved, the last one first, with the day you approved it (also after it ages out of
   the rules). The ✓ count jumps each time you tap **✓ Approved**.
