@@ -127,11 +127,14 @@ test('/ai.js is the board\'s AI read code (logged in only); the board page loads
 // ---------------------------------------------------------------------------
 const WF = (name) => fs.readFileSync(new URL(`../../.github/workflows/${name}`, import.meta.url), 'utf8');
 
-test('ai-check.yml: by hand and twice a day, a spend cap per run and per month, the D1-only token, the SDK pinned to one version in both workflows', () => {
+test('ai-check.yml: by hand only (the Anthropic API is not for automated steps), a spend cap per run and per month, the D1-only token, the SDK pinned to one version in both workflows', () => {
   const wf = WF('ai-check.yml');
   assert.match(wf, /^on:\n {2}workflow_dispatch:\n/m);
   assert.match(wf, /^ {6}max_usd:\n(?: {8}.*\n)* {8}default: '0\.50'$/m, 'a spend cap you can set by hand');
-  assert.match(wf, /^ {2}schedule:\n(?: {4}#.*\n)?(?: {4}- cron: '\d+ \d+ \* \* \*'\n){2}/m, 'twice a day');
+  assert.doesNotMatch(wf, /^ {2}(?:schedule|workflow_run|push|pull_request):/m, 'nothing starts it on its own: no schedule, no other workflow, no push');
+  for (const f of fs.readdirSync(new URL('../../.github/workflows/', import.meta.url)).filter((x) => /\.ya?ml$/.test(x) && x !== 'ai-check.yml')) {
+    assert.doesNotMatch(WF(f), /ai-check\.mjs|ANTHROPIC_API_KEY|workflows: \[AI check\]/, `${f} never runs the AI check`);
+  }
   assert.match(wf, /^permissions:\n {2}contents: read$/m);
   assert.match(wf, /^concurrency:\n {2}group: ai-check\n {2}cancel-in-progress: false$/m, 'one run at a time: a batch is never sent twice');
   assert.match(wf, /^ {6}CF_API_TOKEN: \$\{\{ secrets\.CF_D1_TOKEN \|\| secrets\.CF_API_TOKEN \}\}$/m, 'the D1-only token when there is one');
