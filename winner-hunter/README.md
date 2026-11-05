@@ -51,7 +51,8 @@ After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, o
 
 ## AI read (experimental)
 
-Twice a day `ai-check.mjs` (workflow **AI check**) asks a cheap Claude model (Claude Haiku 5.5) about each board product it has
+**Manual only since 5 Nov 2026:** it uses the Anthropic API, and automated steps use TypeSafe's Jev, so nothing starts it on a
+schedule or from another job (Actions → AI check → Run workflow). When run, `ai-check.mjs` (workflow **AI check**) asks a cheap Claude model (Claude Haiku 5.5) about each board product it has
 not read yet: the products outside the EU that still run, the EU's still on the board, and every product you approved or
 rejected. Per product: what it is (a plain name), niche, the ads' hook, the buyer, wow factor, saturation, claims risk, and a
 0-100 **fit** with reasons for and against and how sure it is. It is saved in D1 table `ai_checks`.
