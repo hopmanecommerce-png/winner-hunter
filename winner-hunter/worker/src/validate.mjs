@@ -138,12 +138,21 @@ export function validateKit(R, S) {
   // A weight for a product with none yet, from words in its name (packed, grams): rough guesses from the quotes above and
   // the earlier runs, each said on the sheet as a guess. The first that matches counts.
   const WEIGHTS = [
-    [/\b(weighted blanket|duvet|comforter|quilt|mattress topper|body pillow|pregnancy pillow|u[- ]shaped pillow)\b/i, 1500],
-    [/\b(pillow|cushion|blanket|throw|sleeping bag|mattress|bedding set|sheet set)\b/i, 900],
-    [/\b(pillowcase|pillow case|eye mask|sleep mask|mouth tape|nose strip|ear ?plugs?|socks?|scrunchie|patch(es)?)\b/i, 120],
-    [/\b(lamp|light|speaker|humidifier|diffuser|fan|heater|massager|projector|alarm)\b/i, 600],
-    [/\b(bottle|tumbler|mug|cup|jar)\b/i, 450],
+    [/\b(luggage|suitcases?|carry[- ]on)\b/i, 4000],
+    [/\b(toilet|chairs?|stool|table|desk|cabinet|bookshelf|bed frame)\b/i, 5000],
+    [/\b(air fryer|blender|kettle|coffee (?:machine|maker)|vacuum cleaner|microwave|oven)\b/i, 4500],
+    [/\b(chain ?saw|drill|saw|garden hose|hose)\b/i, 2500],
+    [/\b(salt lamp|weighted blanket|duvet|comforter|quilt|mattress topper|body pillow|pregnancy pillow|u[- ]shaped pillow)\b/i, 1500],
+    [/\b(car seat covers?|seat covers?|projector)\b/i, 1300],
+    [/\b(pillow|kissen|cushion|blanket|throw|sleeping bag|mattress|bedding set|sheet set|muscle roller|motion roller|foam roller)\b/i, 900],
+    [/\b(backpack|rucksack|shoes|sneakers|boots|step-ins|hoodie|sweater|jacket|blinds?|curtains?)\b/i, 800],
+    [/\b(lamp|light|speaker|humidifier|diffuser|fan|heater|massager|alarm|dryer|bento|lunch ?box|puzzle)\b/i, 600],
+    [/\b(bottle|tumbler|mug|cup|jar|towel|tuning fork)\b/i, 450],
+    [/\b(scarf|bra|leggings|t-shirt|tee)\b/i, 200],
+    [/\b(pillowcase|pillow case|eye mask|sleep mask|mouth tape|nose strip|ear ?plugs?|socks?|scrunchie|patch(es)?|earrings?|necklace|bracelet|ring|kette|ohrringe)\b/i, 100],
   ];
+  const HEAVY_G = 2000; // past this a post line prices it per kilo: the sheet asks for a freight quote
+  const FIT_MAX_G = 1500; // the quotes behind the fits go up to about 1.2 kg: past this the fit is a guess
 
   const round = (x, d = 2) => {
     const f = 10 ** d;
@@ -214,16 +223,17 @@ export function validateKit(R, S) {
     const g = Math.max(Number(grams) || 0, 1);
     const n = Math.max(1, Math.round(units) || 1);
     const fit = (L, status, basis) => ({ eur: round(Math.max(0, L.parcel + n * (L.per_kg * (g / 1000) + L.per_item))), line: 'fit', status, basis });
+    const beyond = g * n > FIT_MAX_G; // heavier than anything the quotes and list prices were taken at
     if (LINES[cc]) {
       const L = LINES[cc];
-      return fit(L, 'estimate', `fit of ${L.n} Kungfubuy quotes to ${market.name} (${L.from} to ${L.to}; within about €${L.rmse})`);
+      return fit(L, beyond ? 'guess' : 'estimate', `fit of ${L.n} Kungfubuy quotes to ${market.name} (${L.from} to ${L.to}; within about €${L.rmse})${beyond ? `, stretched past the 1.2 kg they go up to` : ''}`);
     }
     if (LIST[cc]) {
       const [p3, p5] = LIST[cc];
       const kg = (g * n) / 1000;
       const cny = p3 + ((p5 - p3) / 0.2) * (kg - 0.3);
-      return { eur: round(cny / FX.per_eur.CNY + LIST_AT.premium), line: 'list', status: 'estimate',
-        basis: `YunExpress list price to ${market.name} (${LIST_AT.day}) + €${LIST_AT.premium} that Kungfubuy charges over it on its Australia quotes` };
+      return { eur: round(cny / FX.per_eur.CNY + LIST_AT.premium), line: 'list', status: beyond ? 'guess' : 'estimate',
+        basis: `YunExpress list price to ${market.name} (${LIST_AT.day}) + €${LIST_AT.premium} that Kungfubuy charges over it on its Australia quotes${beyond ? ', stretched past the 500 g it was read at' : ''}` };
     }
     const near = market.eu ? 'NL' : 'AU';
     return fit(LINES[near], 'guess', `no quote or list price for ${market.name}: modelled on the ${near === 'NL' ? 'Netherlands' : 'Australia'} quotes (${LINES[near].from} to ${LINES[near].to})`);
@@ -293,7 +303,7 @@ export function validateKit(R, S) {
       cc: m.cc, units, price: round(price), local: local == null ? null : round(local), cur: m.cur, vat: round(vat), vat_pct: t.pct, vat_how: t.how, net: round(net),
       fees: round(fees), fee_text: `${card.pct}%${conv ? ` + ${conv}% conversion` : ''} + €${card.fixed}`, refunds: round(refunds), refund_pct,
       product: round(product), ship: ship.eur, ship_status: ship.status, ship_basis: ship.basis, customs: cu.eur, customs_parts: cu.parts, ddp_tax: round(ddpTax),
-      over: cu.over, landed: round(landed), contribution: round(c), margin_pct: price > 0 ? round((c / price) * 100, 1) : null,
+      over: cu.over, grams: Math.round(grams * units), landed: round(landed), contribution: round(c), margin_pct: price > 0 ? round((c / price) * 100, 1) : null,
       be_cpa: round(Math.max(c, 0)), be_roas: c > 0 ? round(price / c) : null, profit_at_target: null,
     };
   }
@@ -307,6 +317,7 @@ export function validateKit(R, S) {
     else reasons.push({ level: 'green', text: `Break-even ROAS ${times(o.be_roas)}: room for ads` });
     if (o.contribution > 0 && o.contribution < s.min_profit) reasons.push({ level: 'amber', text: `${eur(o.contribution)} per order for ads (amber under ${eur(s.min_profit)})` });
     if (o.over) reasons.push({ level: 'red', text: 'Above the low-value limit: the buyer pays import tax at the door' });
+    if (o.grams >= HEAVY_G) reasons.push({ level: 'amber', text: `${(o.grams / 1000).toFixed(1)} kg a parcel: a post line prices it per kilo; get a freight quote (counted as ${eur(o.ship)})` });
     const level = reasons.some((r) => r.level === 'red') ? 'red' : reasons.some((r) => r.level === 'amber') ? 'amber' : 'green';
     return { level, reasons };
   }
@@ -369,8 +380,10 @@ export function validateKit(R, S) {
   const QUOTE_CC = { australia: 'AU', holland: 'NL', netherlands: 'NL', poland: 'PL', germany: 'DE', france: 'FR', belgium: 'BE', 'new zealand': 'NZ', 'united states': 'US', usa: 'US', 'united kingdom': 'GB', uk: 'GB', canada: 'CA' };
   const quoteCc = (q) => QUOTE_CC[String((q && q.country) || '').trim().toLowerCase()] || '';
 
-  function economicsOf(pick, s, day, quote, returnsSizes) {
+  function economicsOf(pick, s, day, quote, returnsSizes, bulky) {
     const inp = inputsOf(pick, s, quote);
+    // The radar says big or heavy, and the weight is only a guess: at least 5 kg, so a post line never looks cheap.
+    if (bulky && inp.grams && inp.grams.status === 'guess' && inp.grams.g < 5000) inp.grams = { g: 5000, status: 'guess', basis: 'no weight yet, and the risk radar says bulky: 5,000 g at least' };
     const refund = returnsSizes ? s.refund_sizes_pct : s.refund_pct;
     const markets = [];
     for (const cc of marketsOf(pick, s.home)) {
@@ -724,8 +737,9 @@ export function validateKit(R, S) {
     const quote = quoteFor(p, opts.quotes);
     const markets = marketsOf(p);
     const comp = complianceOf(p, markets);
-    const sizes = comp.items.some((i) => i.k === 'returns' && (i.hits || []).includes('sizing'));
-    const econ = economicsOf(p, s, day, quote, sizes);
+    const ret = comp.items.find((i) => i.k === 'returns');
+    const sizes = !!(ret && (ret.hits || []).includes('sizing'));
+    const econ = economicsOf(p, s, day, quote, sizes, !!(ret && (ret.hits || []).includes('bulky')));
     const supplier = supplierOf(p, econ, comp, quote, s);
     const plan = testPlanOf(econ, comp, p, s, day);
     const id = clean(p.id, 120) || slug(p.name);

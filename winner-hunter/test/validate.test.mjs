@@ -146,8 +146,14 @@ test('no supplier price and no weight: 15% of the price and a weight from its na
   const s = sheetOf({ id: 'w', name: 'Weighted blanket 7kg', price: 79.95, cur: 'EUR', source: 'eu' }, { day: DAY, settings: { home: 'NL' } });
   assert.strictEqual(s.economics.inputs.cost.status, 'guess');
   near(s.economics.inputs.cost.eur, 79.95 * 0.15);
-  assert.strictEqual(s.economics.inputs.grams.g, 1500);
+  assert.strictEqual(s.economics.inputs.grams.g, 5000, 'the radar calls a 7 kg blanket bulky: 5 kg at least');
   assert.strictEqual(s.economics.inputs.grams.status, 'guess');
+  assert.strictEqual(sheetOf({ id: 'c', name: 'Cooling pillow', price: 49, cur: 'EUR' }, { day: DAY }).economics.inputs.grams.g, 900);
+  const lug = sheetOf({ id: 'l', name: 'Miusse 3-Piece Luggage Set carry-on', price: 149.99, cur: 'USD' }, { day: DAY });
+  assert.strictEqual(lug.economics.inputs.grams.g, 4000);
+  const nz = lug.economics.markets[0];
+  assert.strictEqual(nz.offers[0].ship_status, 'guess', 'past the weights the quotes were taken at');
+  assert.ok(nz.reasons.some((r) => r.level === 'amber' && /4\.0 kg a parcel: .*freight quote/.test(r.text)));
   assert.ok(s.assumptions.some((a) => /Supplier cost/.test(a) && /guess/.test(a)));
   assert.match(digestOf(s).line, /est\. supplier price/);
   const plain = sheetOf({ id: 'p', name: 'Thing', price: 20, cur: 'EUR' }, { day: DAY });

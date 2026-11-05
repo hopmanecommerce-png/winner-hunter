@@ -173,7 +173,8 @@ export function indexOf(sheets, day) {
     const m = s.economics.markets[0];
     const o = m && m.offers[0];
     const t = s.test_plan;
-    L.push(`| [${s.name.replace(/\|/g, '\\|')}](${safeName(s.id)}.md) | ${d.market || '–'} | ${o ? '€' + o.price.toFixed(2) : '–'} | ${d.margin_eur != null ? '€' + d.margin_eur.toFixed(2) : '–'}${d.cost_status && d.cost_status !== 'fact' ? ' est.' : ''} | ${d.be_cpa_eur != null ? '€' + d.be_cpa_eur.toFixed(2) : '–'} | ${d.be_roas != null ? d.be_roas + '×' : '–'} | ${s.level} | ${d.main_blocker.replace(/\|/g, '\\|')} | ${t.go ? `€${t.budget} (${t.mode})` : 'no'} |`);
+    const name = s.name.length > 70 ? s.name.slice(0, 68).replace(/\s+\S*$/, '') + '…' : s.name;
+    L.push(`| [${name.replace(/\|/g, '\\|')}](${safeName(s.id)}.md) | ${d.market || '–'} | ${o ? '€' + o.price.toFixed(2) : '–'} | ${d.margin_eur != null ? '€' + d.margin_eur.toFixed(2) : '–'}${d.cost_status && d.cost_status !== 'fact' ? ' est.' : ''} | ${d.be_cpa_eur != null ? '€' + d.be_cpa_eur.toFixed(2) : '–'} | ${d.be_roas != null ? d.be_roas + '×' : '–'} | ${s.level} | ${d.main_blocker.replace(/\|/g, '\\|')} | ${t.go ? `€${t.budget} (${t.mode})` : 'no'} |`);
   }
   return L.join('\n') + '\n';
 }
