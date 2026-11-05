@@ -65,7 +65,7 @@ export const STATUS_QUO = [
   [/\b(?:sleep mask|eye mask)(?:e?s)?\b/, 'pillow over the face'], [/\b(?:shapewear)(?:e?s)?\b/, 'shapewear that rolls down'], [/\b(?:bra)(?:e?s)?\b/, 'underwire bra'], [/\b(?:tights)(?:e?s)?\b/, 'thin tights'], [/\b(?:slippers|socks)(?:e?s)?\b/, 'cold floor'],
   [/\b(?:shoes)(?:e?s)?\b/, 'stiff old pair'], [/\b(?:wallet|card)(?:e?s)?\b/, 'bulky wallet'], [/\b(?:bag|backpack)(?:e?s)?\b/, 'overstuffed bag'], [/\b(?:towel)(?:e?s)?\b/, 'old towel'], [/\b(?:organi[sz]er|drawer|storage)(?:e?s)?\b/, 'junk drawer'],
   [/\b(?:ornament)(?:e?s)?\b/, 'shop-bought bauble'], [/\b(?:watch band|band\b)(?:e?s)?\b/, 'stock band'], [/\b(?:paint by numbers)(?:e?s)?\b/, 'blank canvas'], [/\b(?:necklace|bracelet|earrings|jewel\w*)(?:e?s)?\b/, 'generic jewellery'], [/\b(?:strap)(?:e?s)?\b/, 'stock strap'], [/\b(?:bottle)(?:e?s)?\b/, 'plastic bottle'],
-  [/\b(?:gutter)(?:e?s)?\b/, 'ladder and bucket'], [/\b(?:threader)(?:e?s)?\b/, 'squinting at the needle'], [/\b(?:vacuum storage)(?:e?s)?\b/, 'overflowing wardrobe'], [/\b(?:bread bag)(?:e?s)?\b/, 'plastic bread bag'],
+  [/\b(?:gutter)(?:e?s)?\b/, 'ladder and bucket'], [/\b(?:seat cover|seat protector)(?:e?s)?\b/, 'back seat'], [/\b(?:threader)(?:e?s)?\b/, 'squinting at the needle'], [/\b(?:vacuum storage)(?:e?s)?\b/, 'overflowing wardrobe'], [/\b(?:bread bag)(?:e?s)?\b/, 'plastic bread bag'],
 ];
 const objectOf = (phrase) => {
   for (const [re, o] of STATUS_QUO) if (re.test(phrase)) return o;
@@ -557,12 +557,15 @@ function gapsOf(card, collected, jev) {
 export function shortLine(card) {
   const p = card.personas && card.personas[0];
   const bits = [];
-  if (p) bits.push(p.label.charAt(0).toLowerCase() + p.label.slice(1));
-  const fromSplit = p && /^(Women|Men)\b/.test(p.label);
-  if (card.reach && fromSplit) {
+  // A persona named by the reach split ("Women 35-64") carries its share; any qualifier follows after a comma.
+  const fromSplit = p && card.reach && card.reach.skew && new RegExp(`^${card.reach.skew === 'women' ? 'Women' : 'Men'}\\b`).test(p.label);
+  const low = (t) => t.charAt(0).toLowerCase() + t.slice(1);
+  if (p && fromSplit) {
+    const [, base, qual] = /^([^(]*?)\s*(?:\((.*)\))?$/.exec(p.label) || [null, p.label, ''];
     const share = card.reach.skew === 'women' ? card.reach.women : card.reach.men;
-    bits[bits.length - 1] += ` (${share}% of reach)`;
-  } else if (card.reach) {
+    bits.push(`${low(base)} (${share}% of reach)${qual ? `, ${qual}` : ''}`);
+  } else if (p) bits.push(low(p.label));
+  if (card.reach && !fromSplit) {
     const sex = card.reach.skew === 'women' ? `${card.reach.women}% women` : card.reach.skew === 'men' ? `${card.reach.men}% men` : '';
     const age = card.reach.span ? card.reach.span.label : '';
     const x = [sex, age].filter(Boolean).join(' ');
