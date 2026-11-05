@@ -24,6 +24,7 @@ import { GOOGLE_SQL, TIKTOK_SHOPS_SQL, GOOGLE_CSV_COLS, googleRow, crossLink, go
 import { ECON_JS, econContext, econAd, econBoard, econSorts, econGet, econPost, decisionsGet, decisionsPost, decisionLogged, tiktokLogged } from './econ.mjs';
 import { RISK_JS, riskChecks, riskHide, riskOut, riskList, riskPost } from './risk.mjs';
 import { AUDIENCE_JS } from './audience.mjs';
+import { VALIDATE_JS } from './validate.mjs';
 import { LASSO_JS, readLasso, readLassoNew, attachLasso, lassoBoard, lassoView, lassoCard } from './lasso.mjs';
 import { PIPELINE_JS, pipelineGet, pipelinePost, pipelineImage } from './pipeline.mjs';
 import { todayGet, todayPost, todayDigest } from './today.mjs';
@@ -1604,6 +1605,12 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       // The products in memory and only what was decided (hidden): no stars or feedback read for the panel.
       const lean = async () => products(await snapshot(env.DB, now), (await env.DB.prepare('SELECT ad_id, status, at FROM hidden').all()).results, [], now);
       return json(await momentumApi(env, scope, { board: lean, toAd }));
+    }
+    // ---- Validate-first product sheets (validate.mjs): /validate.js is the sheet kit the board runs (after /risk.js and
+    // /sourcing.js), so a sheet can be made or redone in the browser, as the daily job makes it.
+    if (path === '/validate.js') {
+      if (!ok) return json({ error: 'Log in first' }, 401);
+      return method === 'GET' ? text(VALIDATE_JS, 200, { 'Content-Type': 'text/javascript; charset=utf-8' }) : json({ error: 'Method not allowed' }, 405);
     }
     // ---- Compliance and risk radar (risk.mjs): Block / Docs / OK per product, and your trademark and documents checks. A
     // block of its own, like the Launch view. /risk.js: the radar's rules, which the board runs as well.
