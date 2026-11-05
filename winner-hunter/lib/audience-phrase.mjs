@@ -52,7 +52,8 @@ export const DICT = [
   ['duvet cover|bettwasche|housse de couette|dekbedovertrek', 'duvet cover'],
   ['fitted sheet|spannbettlaken|drap housse|hoeslaken', 'fitted sheet'],
   ['(?:bed )?sheets?|bettlaken|draps?|lakens?', 'bed sheets'],
-  ['pillow|kissen|oreiller|kussen|almohada|cuscino', 'pillow'],
+  ['orthopadisch\\w* (?:\\S+ ){0,2}(?:kopf|nacken)?kissen|orthopedic pillow|oreiller orthopedique|orthopedisch (?:hoofd)?kussen|ergonomic pillow|ergonomisch kussen|ergonomisches kissen', 'orthopedic pillow'],
+  ['pillow|kissen|kopfkissen|oreiller|kussen|hoofdkussen|almohada|cuscino', 'pillow'],
   ['blanket|throw|plaid|kuscheldecke|couverture|deken|manta', 'throw blanket'],
   ['blackout (?:blind|curtain|shade)s?|verdunkelung|occultant|verduisterend', 'blackout blinds'],
   ['white noise|sound machine|einschlafhilfe|bruit blanc', 'white noise machine'],
@@ -93,6 +94,7 @@ export const DICT = [
   ['needle threader|einfadler|enfile aiguille|draadinsteker', 'needle threader'],
   ['drying towel|trockentuch|serviette de sechage|droogdoek|microfib(?:er|re) towel|twist (?:car )?(?:wash )?towel', 'car drying towel'],
   ['car (?:seat )?organi[sz]er|auto ?organizer|rangement voiture|auto organizer', 'car seat organizer'],
+  ['back ?seat .{0,24}seat cover|car seat covers?|seat covers?|autositzbezug|sitzbezuge?|housse de siege|autostoelhoes', 'car seat cover'],
   ['sofa ?cover|sofabezug|housse de canape|bankhoes', 'stretch sofa cover'],
   ['water bottle|trinkflasche|gourde|waterfles', 'water bottle'],
   ['copper (?:water )?bottle|kupferflasche|koperen fles', 'copper water bottle'],
@@ -134,13 +136,25 @@ const FLUFF = new Set(('new neu nouveau nieuw original premium luxury luxe editi
   'free gratis 2025 2026 2027 black white grey gray pink blue red green beige brown navy cream gold silver rose women men womens mens unisex for the and with your my our a an of in on ' +
   'by to from size one two three 1 2 3 4 5 pcs pieces stuck stuk teilig stueck').split(/\s+/));
 
-/** English-looking: mostly ASCII words and some common English words. */
-const englishish = (t) => {
-  const w = fold(t).split(' ').filter(Boolean);
-  if (w.length < 2) return false;
-  const en = new Set(['the', 'for', 'and', 'with', 'your', 'dog', 'cat', 'pillow', 'bed', 'bag', 'set', 'kids', 'baby', 'women', 'men', 'car', 'home', 'water', 'sleep', 'travel', 'cover', 'blanket', 'shoes', 'necklace', 'bracelet', 'harness', 'towel']);
-  return w.some((x) => en.has(x));
+// Function words that give a German, French, Dutch, Spanish or Italian title away.
+const FOREIGN = new Set(('mit und der die das den dem fur fuer ohne aus von zum zur ein eine einen avec pour les des une sans aux sur dans het een voor met van zonder ' +
+  'con para los las una del sin per il lo gli della').split(' '));
+/** English-looking: at least two words, plain a-z only (after folding), and none of the foreign function words. */
+export const englishish = (t) => {
+  const raw = String(t || '').toLowerCase();
+  if (/[äöüßéèêëàâçñìíîïóôúùûåæø]/i.test(raw)) return false; // German, French, Dutch, Nordic letters
+  if (/[^\x00-\x7f™®©–—’‘“”…]/.test(raw.normalize('NFKD').replace(/[\u0300-\u036f]/g, ''))) return false; // Japanese, Cyrillic…
+  const w = fold(t).split(' ').filter((x) => /^[a-z]{2,}$/.test(x));
+  return w.length >= 2 && !w.some((x) => FOREIGN.has(x));
 };
+/** An ad headline, not a product name: "PLEASE do not use a water bowl!", "Your dog will love this", "-50% today". */
+export const headline = (t) => /[!?%]|(?:^|\s)(?:you|your|you'?re|please|stop|don'?t|do not|never|why|how|this|today|now|finally|meet)(?=\s|$)/i.test(String(t || ''));
+/** An English title or handle as search words: the part before "with", " - ", "|" or a comma, no fluff or model codes, the last 3 words. */
+export function cleanEnglish(t) {
+  const seg = String(t || '').split(/\s(?:-|–|—|\||with|w\/|featuring|for|incl\.?|including)\s|[,(:|/]|\s-\s/i)[0];
+  const words = fold(seg).split(' ').filter((w) => w && !FLUFF.has(w) && !/\d/.test(w) && w.length > 1);
+  return words.slice(-3).join(' ');
+}
 const handleOf = (url) => {
   const m = /\/products\/([^/?#]+)/.exec(String(url || ''));
   return m ? decodeURIComponent(m[1]).replace(/-/g, ' ') : '';
@@ -158,21 +172,21 @@ export function candidates(p) {
   };
   if (p.phrase) add(p.phrase, 'given');
   const hay = [p.handle || handleOf(p.url), p.name, p.title, String(p.ad || '').slice(0, 400)].map(fold).filter(Boolean);
+  // The most specific dictionary match wins, whichever field it is in (DICT runs from specific to general).
+  const hits = [];
   for (const h of hay) {
-    for (const [re, phrase] of DICT_RE) {
-      if (re.test(` ${h} `)) {
-        add(phrase, 'dictionary');
-        break;
-      }
-    }
+    const i = DICT_RE.findIndex(([re]) => re.test(` ${h} `));
+    if (i >= 0) hits.push(i);
+  }
+  for (const i of [...new Set(hits)].sort((a, b) => a - b)) add(DICT_RE[i][1], 'dictionary');
+  // An English handle or title says what the product is better than a category does ("dog-hair-dryer-l200").
+  for (const [t, how] of [[p.handle || handleOf(p.url), 'handle'], [p.name, 'title'], [p.title, 'title']]) {
+    if (!t || !englishish(t) || (how === 'title' && headline(t))) continue;
+    const c = cleanEnglish(t);
+    if (c.split(' ').length >= 2) add(c, how);
   }
   const sub = p.sub && p.sub.includes(' > ') ? p.sub : p.main && p.sub ? `${p.main} > ${p.sub}` : '';
   if (sub && SUBCAT_QUERY[sub]) add(SUBCAT_QUERY[sub], 'category');
-  for (const t of [p.name, p.title]) {
-    if (!t || !englishish(t)) continue;
-    const words = fold(t).split(' ').filter((w) => w && !FLUFF.has(w) && !/^\d+$/.test(w) && w.length > 1);
-    if (words.length >= 2) add(words.slice(0, 4).join(' '), 'title');
-  }
   return out;
 }
 

@@ -11,7 +11,7 @@
  * quotes in ads until real reviews exist), never a claim, never "you" with health, age, money or body (Meta's personal-
  * attributes rule), never a competitor's name, never an em dash.
  */
-import { THEMES, KINDS, tagStatement, isEnglish, themesOf, situationsOf, phrasesOf, claimsIn, hookOf, angleOf, ANGLES, pickQuotes } from './audience-text.mjs';
+import { THEMES, KINDS, tagStatement, isEnglish, themesOf, situationsOf, phrasesOf, claimsIn, hookOf, angleOf, ANGLES, pickQuotes, PERSONA } from './audience-text.mjs';
 import { demographics, demoLine } from './audience-meta.mjs';
 import { ownWords } from './audience-phrase.mjs';
 
@@ -120,7 +120,7 @@ export const TEMPLATES = {
   outcome: {
     finally: ['Finally, a {thing} that does the job.'],
     easy: ['Less time on the {object}, more time for the good stuff.'],
-    comfort: ['The comfiest spot in the house just moved.'],
+    comfort: ['Comfortable from the very first day.'],
     pet: ['The {who} found a new favourite spot.'],
     sooner: ['The {thing} we wish we had bought years ago.'],
     any: ['What a week with a {thing} looks like.'],
@@ -217,7 +217,13 @@ function fill(tpl, v) {
  */
 export function buildCard(input) {
   const { pick = {}, phrase = {}, collected = {}, baseline = null, jev = {}, now = Date.now() } = input;
-  const markets = (pick.markets && pick.markets.length ? pick.markets : input.markets && input.markets.length ? input.markets : DEFAULT_MARKETS).map((m) => String(m).toUpperCase());
+  // Launch markets: the ones the pick names that this card knows (currency, tax, CPM); else the run's, else NZ and AU.
+  // The pick's other markets are where the competitor already runs: shown, not targeted.
+  const up = (l) => [].concat(l || []).map((m) => String(m).toUpperCase()).filter(Boolean);
+  const named = up(pick.launch && pick.launch.length ? pick.launch : pick.markets);
+  const known = named.filter((m) => MARKETS[m]);
+  const markets = known.length ? known : up(input.markets).length ? up(input.markets) : DEFAULT_MARKETS;
+  const competitorMarkets = up(pick.markets).filter((m) => !markets.includes(m));
   const name = clip(pick.name || pick.title || phrase.phrase || pick.id, 120);
   const ph = phrase.phrase || '';
 
@@ -230,7 +236,8 @@ export function buildCard(input) {
     const k = v.text.toLowerCase().replace(/\W+/g, ' ').trim().slice(0, 120);
     if (seen.has(k)) continue;
     seen.add(k);
-    const tags = tagStatement(v.text);
+    // "Pull" is a dog on a lead only for pet products; elsewhere it is a drawer or a card being pulled out.
+    const tags = tagStatement(v.text, { skip: pick.main === 'Pets' ? [] : ['pull', 'newpet'] });
     if (v.jev !== undefined) {
       if (v.jev === '') continue; // Jev: off topic
       for (const kind of KINDS) if (kind !== v.jev && kind !== 'question') delete tags[kind];
@@ -239,7 +246,9 @@ export function buildCard(input) {
     voice.push({ ...v, tags });
   }
   const themes = themesOf(voice);
-  const situations = situationsOf(voice);
+  // Pet owners call their pet "baby" and "my boy": in the Pets category those are no baby trigger and no parents.
+  if (pick.main === 'Pets') themes.trigger = themes.trigger.filter((t) => t.key !== 'baby');
+  const situations = situationsOf(voice).filter((s) => !(pick.main === 'Pets' && ['parent', 'grandparent'].includes(s.key)));
   const words = phrasesOf(voice, { ignore: [...own] });
   const ads = collected.ads || [];
   const reach = demographics(ads, baseline);
@@ -278,6 +287,7 @@ export function buildCard(input) {
 
   const objections = themes.objection.slice(0, 5).map((t) => ({ ...t, answer: ANSWERS[t.key] || 'Answer it in the first 5 seconds of an ad or on the product page.' }));
   const targeting = buildTargeting({ reach, situations, jevAud, markets, main: pick.main });
+  if (competitorMarkets.length) targeting.competitor_markets = competitorMarkets;
 
   const card = {
     version: CARD_VERSION, id: pick.id || '', key: pick.key || '', name, url: pick.url || '', store: pick.store || '', phrase: ph, phrase_how: phrase.how || 'none',
@@ -336,7 +346,8 @@ function dataSummary(collected, voice, rawN, reach, jev) {
 function buildPersonas({ reach, situations, themes, jevAud, markets, gift, voiceN }) {
   const out = [];
   const sits = situations.filter((s) => !['partner', 'house', 'giftgiver'].includes(s.key));
-  const base = jevAud && !['Everyone', 'Women', 'Men'].includes(jevAud) ? jevAud : sits[0] ? sits[0].label + 's' : jevAud === 'Women' ? 'Women' : jevAud === 'Men' ? 'Men' : 'Broad buyers';
+  const bySplit = reach && reach.skew ? `${reach.skew === 'women' ? 'Women' : 'Men'}${reach.span ? ` ${reach.span.label}` : ''}` : '';
+  const base = jevAud && !['Everyone', 'Women', 'Men'].includes(jevAud) ? jevAud : sits[0] && sits[0].n >= 3 ? PERSONA[sits[0].key] || sits[0].label : bySplit || (jevAud === 'Women' ? 'Women' : jevAud === 'Men' ? 'Men' : 'Broad buyers');
   const qualifier = sits.filter((s) => ['bigdog', 'olddog', 'puppy', 'multipet', 'caravan', 'smallhome', 'hotsleeper', 'traveller', 'parent', 'worker', 'outdoors'].includes(s.key) && !base.toLowerCase().includes(s.label.toLowerCase().split(' ')[0]))
     .slice(0, 2).map((s) => s.label.toLowerCase());
   const label = qualifier.length ? `${base} (${qualifier.join(', ')})` : base;
@@ -414,6 +425,9 @@ function draftAngles({ themes, vars, usedAngles, summerSoon, words }) {
   // 4. Outcomes.
   for (const t of themes.outcome.slice(0, 2)) push('outcome', `The result: ${t.label.toLowerCase()}`, t.key, TEMPLATES.outcome[t.key] || TEMPLATES.outcome.any, { proof: PROOF.outcome, based_on: t.quotes.slice(0, 2), needs_proof: true, theme: t.label });
   push('outcome', 'The result', 'any', TEMPLATES.outcome.any, { proof: PROOF.outcome, based_on: [], needs_proof: false, theme: 'generic' });
+  // A phrase people repeat (not the product's own name, no claim) as a curiosity hook: "Front clip? Watch this first."
+  const rep = (words || []).find((w) => w.n >= 3 && w.phrase.split(' ').length <= 3 && !claimsIn(w.phrase).length && !painWord.some((re) => re.test(w.phrase)));
+  if (rep) push('open', 'Open angle: their own words as the question', 'phrase', [`${cap1(rep.phrase)}? Watch this first.`], { proof: PROOF.question, based_on: [rep.example].filter(Boolean), needs_proof: false, theme: `"${rep.phrase}" (${rep.n} statements)` });
   // 5. Open angles: kinds no competitor ad uses yet.
   for (const k of ['comparison', 'demo', 'question', 'gift', 'story']) {
     if (usedAngles.has(k)) continue;
@@ -470,7 +484,8 @@ function buildTargeting({ reach, situations, jevAud, markets, main }) {
     audience: 'Advantage+ audience on, no interests (let Meta find the buyers)',
     placements: 'Advantage+ placements',
     why: reach ? (reach.targeting.broadAge && reach.targeting.broadSex ? `The ${reach.ads} competitor ad(s) with reach data target all genders and broad ages too, and still reach a clear audience: Meta finds it.` :
-      `Some competitors narrow their targeting (gender: ${reach.targeting.gender.join(', ') || 'all'}); broad stays the control.`) : 'Same as the launch kit (all of the market, 25-65+, Advantage+ audience, no interests): no data says otherwise.',
+      `Some competitor ads narrow ${[!reach.targeting.broadAge && `the ages (${reach.targeting.ages.map((a) => `${a.min || 18}-${a.max || '65+'}`).join(', ')})`, !reach.targeting.broadSex && `the gender (${reach.targeting.gender.join(', ')})`].filter(Boolean).join(' and ')}; broad stays the control, the split above says who Meta found.`) :
+      'Same as the launch kit (all of the market, 25-65+, Advantage+ audience, no interests): no data says otherwise.',
   };
   if (minAge === 18) control.why += ` 18-24 hold ${young.share}% of the competitors' reach (index ${young.index}), so the age floor is 18.`;
   const suggestions = {};
@@ -531,7 +546,11 @@ export function shortLine(card) {
   const p = card.personas && card.personas[0];
   const bits = [];
   if (p) bits.push(p.label.charAt(0).toLowerCase() + p.label.slice(1));
-  if (card.reach) {
+  const fromSplit = p && /^(Women|Men)\b/.test(p.label);
+  if (card.reach && fromSplit) {
+    const share = card.reach.skew === 'women' ? card.reach.women : card.reach.men;
+    bits[bits.length - 1] += ` (${share}% of reach)`;
+  } else if (card.reach) {
     const sex = card.reach.skew === 'women' ? `${card.reach.women}% women` : card.reach.skew === 'men' ? `${card.reach.men}% men` : '';
     const age = card.reach.span ? card.reach.span.label : '';
     const x = [sex, age].filter(Boolean).join(' ');
@@ -655,6 +674,7 @@ export function cardMarkdown(c) {
   for (const x of t.countries) L.push(`| ${x.name} | ${x.currency} | ${x.tax} | ${x.cpm_usd ?? 'n/a'} | ${x.cpc_usd || 'n/a'} |`);
   L.push('', `Benchmarks: ${t.bench_source}`, '');
   if (t.proven_eu.length) L.push(`- Competitors already reach (EU, share of reach): ${t.proven_eu.join(', ')}`);
+  if (t.competitor_markets && t.competitor_markets.length) L.push(`- The product's own ads run in: ${t.competitor_markets.join(', ')} (not a launch market here: no tax and CPM data on file, or not named)`);
   for (const n of t.notes) L.push(`- ${n}`);
   L.push('- Budget, kill and scale rules: the wh-validate test plan for this product.', '');
 

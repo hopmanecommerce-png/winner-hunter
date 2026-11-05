@@ -37,7 +37,8 @@ export const THEMES = {
     ['falls', 'Slips, falls off or does not fit', any(['slips? off', 'slipping', 'falls? off', 'keeps falling', 'comes? off', 'pops? off', 'rides? up', "doesn'?t fit", "won'?t fit", 'never fits?', 'too short', 'too small', 'too big', 'wrong size', 'escape(?:s|d)?', 'backs? out'])],
     ['pull', 'Pulling, chewing or behaviour', any(['pull(?:s|ing)?', 'lunge(?:s|ing)?', 'chew(?:s|ed|ing)?', 'bark(?:s|ing)?', 'jump(?:s|ing)? on', 'destroy(?:s|ed)?', 'scratch(?:es|ing)? the'])],
     ['broke', 'Breaks or stops working', any(['broke(?:n)?', 'breaks', 'stopped working', 'died', 'dies', 'falls? apart', 'fell apart', 'cracked', 'ripped', 'torn', 'wore out', 'worn out', 'lasted (?:only )?\\d+'])],
-    ['time', 'Takes time or effort', any(['takes forever', 'every (?:single )?(?:day|night|morning|week|time)', 'constantly', 'all the time', 'time[- ]consuming', 'hassle', 'a pain to', 'chore', 'struggle', 'struggling', 'hard to', 'difficult to'])],
+    ['time', 'Takes time or effort', any(['takes forever', 'time[- ]consuming', 'hassle', 'a pain to', 'such a pain', 'chore', 'struggle', 'struggling', 'constantly (?:have|having|need|cleaning|washing|fixing|adjusting|refilling)',
+      '(?:hard|difficult|impossible|annoying) to (?:clean|wash|find|get|put|take|use|fit|open|close|carry|keep|remove|install|adjust|fold|store)'])],
     ['money', 'Costs money over time', any(['waste of money', 'keep buying', 'replace(?:d)? (?:it|them) every', 'expensive to', 'costs? (?:me )?a fortune', 'vet bills?'])],
     ['worry', 'Worry or stress', any(['worr(?:y|ied|ies|ying)', 'scared', 'afraid', 'anxious', 'stress(?:ed|ful)?', 'panic', 'nervous', 'paranoid', 'terrified'])],
     ['annoy', 'Plain frustration', any(['hate', 'annoying', 'annoyed', 'frustrat(?:ing|ed|ion)', 'sick of', 'tired of', 'fed up', 'nightmare', 'drives? me (?:crazy|nuts)', 'ugh', 'the worst'])],
@@ -47,7 +48,7 @@ export const THEMES = {
     ['baby', 'A baby or small child', any(['new ?born', 'baby', 'babies', 'toddler', 'pregnan(?:t|cy)', 'expecting', 'nursery', 'first child'])],
     ['move', 'A move or new home', any(['moved', 'moving', 'new (?:house|home|apartment|flat|place)', 'just bought a house', 'renovat(?:e|ing|ion)'])],
     ['season', 'Weather or season', any(['summer', 'heat ?wave', 'hot weather', 'winter', 'cold weather', 'cold snap', 'autumn', 'fall season', 'spring', 'rainy season', 'aircon', 'air con'])],
-    ['travel', 'A trip', any(['trip', 'travel(?:l?ing)?', 'vacation', 'holiday', 'flight', 'road ?trip', 'camping', 'caravan(?:ning)?', 'roadtrip', 'long drive', 'airport'])],
+    ['travel', 'A trip', any(['trip', 'travel(?:l?ing)?', 'vacation', 'flight', 'road ?trip', 'camping', 'caravan(?:ning)?', 'roadtrip', 'long drive', 'airport'])],
     ['gift', 'A gift moment', any(['gift', 'present', 'christmas', 'xmas', 'birthday', 'anniversary', "valentine(?:'?s)?", "mother'?s day", "mum'?s day", "mom'?s day", "father'?s day", 'secret santa', 'stocking stuffer', 'wedding'])],
     ['health', 'A health scare or vet visit', any(['vet (?:said|told|visit|bill|recommended)', 'the vet', 'doctor (?:said|told)', 'after (?:surgery|the surgery|an operation)', 'diagnos(?:ed|is)', 'hospital'])],
     ['age', 'Getting older', any(['getting older', 'senior', 'elderly', 'old age', 'retire(?:d|ment)?', 'arthritis'])],
@@ -83,12 +84,13 @@ export const THEMES = {
 };
 const QUESTION = /(?:^|[.!?]\s+)(?:does|do|is|are|can|will|would|how|what|which|why|where|has|have|should|any)\b[^.!?]*\?|\?\s*$/i;
 
-/** The kinds a statement is (a statement can be several), and the theme per kind. */
-export function tagStatement(text) {
+/** The kinds a statement is (a statement can be several), and the theme per kind. skip: theme keys that do not apply. */
+export function tagStatement(text, { skip = [] } = {}) {
   const t = String(text || '');
   const tags = {};
   for (const kind of Object.keys(THEMES)) {
     for (const [key, , re] of THEMES[kind]) {
+      if (skip.includes(key)) continue;
       if (re.test(t)) {
         tags[kind] = key;
         break;
@@ -172,14 +174,20 @@ export const SITUATIONS = [
   ['caravan', 'Caravan, RV or van owner', any(['caravan', 'rv', 'motorhome', 'motor home', 'camper ?van', 'camper', 'van ?life', 'travel trailer', 'fifth wheel', '5th wheel', 'pop[- ]top', 'jayco'])],
   ['traveller', 'Traveller', any(['travel(?:l?ing)?', 'flights?', 'airport', 'road ?trips?', 'backpack(?:ing)?', 'carry[- ]on', 'hotel'])],
   ['outdoors', 'Outdoors and camping', any(['camping', 'hiking', 'hike', 'beach', 'fishing', '4wd', '4x4', 'off[- ]?road', 'tent'])],
-  ['smallhome', 'Small home or apartment', any(['apartment', 'flat', 'condo', 'small space', 'studio', 'dorm', 'tiny house'])],
+  ['smallhome', 'Small home or apartment', any(['apartment', 'condo', 'small space', 'studio apartment', 'dorm', 'tiny house', 'tiny flat', 'my flat'])],
   ['house', 'House with a garden', any(['backyard', 'back yard', 'garden', 'yard', 'house'])],
   ['hotsleeper', 'Sleeps hot', any(['hot sleeper', 'night sweats', 'sleep hot', 'wake up sweating', 'sweaty at night'])],
   ['worker', 'Long shifts or on their feet', any(['nurse', 'night shift', 'shift work', '12[- ]hour shifts?', 'on my feet', 'truck driver', 'teacher', 'warehouse'])],
   ['driver', 'Drives a lot or cares for a car', any(['my car', 'my truck', 'detailing', 'car wash', 'wash my car', 'commute'])],
-  ['student', 'Student', any(['college', 'uni', 'university', 'student', 'campus'])],
+  ['student', 'Student', any(['college', 'university', 'student', 'campus', 'dorm room'])],
   ['wfh', 'Works from home or a desk', any(['work from home', 'wfh', 'home office', 'desk job', 'at my desk', 'office chair'])],
 ];
+
+/** A persona name per situation (plural, plain English). */
+export const PERSONA = { dog: 'Dog owners', bigdog: 'Owners of big dogs', olddog: 'Owners of older dogs', puppy: 'New puppy owners', cat: 'Cat owners', multipet: 'Homes with several pets',
+  parent: 'Parents', grandparent: 'Grandparents', partner: 'People buying with a partner in mind', giftgiver: 'Gift buyers', olderadult: 'Older adults', caravan: 'Caravan, RV and van owners',
+  traveller: 'Travellers', outdoors: 'Campers and hikers', smallhome: 'People in small homes', house: 'Home owners with a garden', hotsleeper: 'Hot sleepers', worker: 'Shift workers',
+  driver: 'Car owners', student: 'Students', wfh: 'Desk workers' };
 
 /** Situations with counts (one per statement) and a quote each, most mentioned first; only those said 2+ times. */
 export function situationsOf(items, { min = 2 } = {}) {

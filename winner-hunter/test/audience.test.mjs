@@ -160,6 +160,21 @@ test('collect: no ad with EU reach numbers: the Ad Library in Ireland finds the 
   assert.match(r.ads[0].found, /Ireland|IE/);
 });
 
+test('collect: an empty Ireland search for three or more words is tried once more with the last two', async () => {
+  const calls = [];
+  const fetch = async (url) => {
+    const u = new URL(url);
+    calls.push(u);
+    if (u.pathname === KINDS.fb_search.path) return json(u.searchParams.get('query') === 'muscle scraper' ? { success: true, credits_charged: 1, searchResults: [{ ad_archive_id: '999888777666', is_active: true, snapshot: { link_url: 'https://other.example/p' } }] } : { success: true, credits_charged: 1, searchResults: [] });
+    if (u.pathname === KINDS.fb_ad.path) return json(FB_AD_MEN);
+    return json({ success: true, credits_charged: 1, comments: [], search_item_list: [], videos: [], posts: [] });
+  };
+  const r = await collect({ id: 'p', phrase: 'eclipse muscle scraper' }, { api: await apiWith(fetch), cache: memoryCache(), now: NOW, perPick: 14, threads: 0 });
+  assert.deepEqual(calls.filter((u) => u.pathname === KINDS.fb_search.path).map((u) => u.searchParams.get('query')), ['eclipse muscle scraper', 'muscle scraper']);
+  assert.equal(r.ads.length, 1);
+  assert.match(r.ads[0].found, /"muscle scraper"/);
+});
+
 test('ctxCache: the daily job cache (get, put with days) keeps the shape and the TTL in days', async () => {
   const store = new Map();
   const puts = [];
@@ -399,7 +414,7 @@ test('audienceCard: end to end on fake vendors, under the day\'s budget, with th
   const jv = jevFetch({ pick: (q, opts) => (/slimy|gross|scrubbing/i.test(q.instructions) ? opts[0] : /scared|stopped working|loud/.test(q.instructions) ? opts[2] : opts[4]) });
   const fetch = (url, init) => (String(url).startsWith('https://api.typesafe.ai') ? jv(url, init) : sc(url, init));
   const pick = { id: 'p1', key: 'research|p1', name: 'Dog water fountain', phrase: 'dog water fountain', markets: ['AU'], category: { main: 'Pets', sub: 'Fountains and feeders' }, ad_ids: ['111222333444'] };
-  const r = await audienceCard(pick, { now: '2026-11-05T06:00:00Z', cache, env: { SCRAPECREATORS_API_KEY: 'k', TYPESAFE_API_KEY: 't' }, budget: { credits: 9, jevUsd: 1 }, fetch, sleep: noSleep });
+  const r = await audienceCard(pick, { now: '2026-11-05T06:00:00Z', cache, env: { SCRAPECREATORS_API_KEY: 'k', TYPESAFE_API_KEY: 't' }, budget: { credits: 9, jevUsd: 1 }, fetch, sleep: noSleep, seedBaseline: null });
   assert.ok(r.card, r.missing.join('; '));
   assert.ok(r.credits_used > 0 && r.credits_used <= 9);
   assert.match(r.card.data.labelled_by, /^Jev/);
@@ -407,7 +422,7 @@ test('audienceCard: end to end on fake vendors, under the day\'s budget, with th
   assert.ok(store.has(BASELINE_KEY) && store.get(BASELINE_KEY).data.n === 1);
   assert.ok(r.one_line && Array.from(r.one_line).length <= 110);
   assert.ok(r.markdown.includes('# Audience card: Dog water fountain'));
-  const again = await audienceCard(pick, { now: '2026-11-05T07:00:00Z', cache, env: { SCRAPECREATORS_API_KEY: 'k' }, budget: { credits: 9 }, fetch: sc, sleep: noSleep });
+  const again = await audienceCard(pick, { now: '2026-11-05T07:00:00Z', cache, env: { SCRAPECREATORS_API_KEY: 'k' }, budget: { credits: 9 }, fetch: sc, sleep: noSleep, seedBaseline: null });
   assert.equal(again.credits_used, 0, 'the next day reads the cache');
   assert.equal(store.get(BASELINE_KEY).data.n, 1, 'an ad counts once in the baseline');
   assert.ok(again.missing.some((m) => /Jev off/.test(m)));
@@ -445,6 +460,14 @@ test('enrich: the board\'s own facts by primary key; subOf matches shortened sub
   assert.equal(subOf('', ''), '');
   const broken = await enrich({ key: 'k', ad_ids: ['1'] }, async () => { throw new Error('no such table'); });
   assert.equal(broken.title, '');
+});
+
+test('the day-1 seed: used when the cache has no baseline, ignored when it has one', async () => {
+  const seed = addToBaseline(null, [readFbAd(FB_AD_MEN)]).state;
+  const store = new Map();
+  const cache = { get: async (k) => store.get(k) ?? null, put: async (k, v) => void store.set(k, v) };
+  await audienceCard({ id: 'p', name: 'P', phrase: 'dog water fountain', ad_ids: ['111222333444'] }, { cache, env: { SCRAPECREATORS_API_KEY: 'k' }, budget: { credits: 5 }, fetch: scFetch(), sleep: noSleep, seedBaseline: seed });
+  assert.equal(store.get(BASELINE_KEY).data.n, 2, 'seed ad + the new one');
 });
 
 test('addToBaseline counts each ad once and averages per ad', () => {

@@ -362,10 +362,17 @@ export async function collect(pick, o) {
   // an EU country that reads English, finds who advertises the same thing there. Its top ads give the reach split.
   if (!res.ads.some((a) => a.reach && a.reach.total > 0) && (o.euSearch ?? 'IE')) {
     const cc = o.euSearch || 'IE';
-    const found = await pull(`fbsearch:${cc}:${q}`, TTL.voice, 'fb_search', { query: phrase, country: cc, status: 'ACTIVE', trim: 'true' }, (j) => readFbSearch(j).slice(0, 10));
+    let used = phrase;
+    let found = await pull(`fbsearch:${cc}:${q}`, TTL.voice, 'fb_search', { query: phrase, country: cc, status: 'ACTIVE', trim: 'true' }, (j) => readFbSearch(j).slice(0, 10));
+    // Nothing for three or more words (often a brand word first: "eclipse muscle scraper"): once more with the last two.
+    const words = phrase.split(/\s+/);
+    if (found && !found.some((x) => x.active) && words.length >= 3) {
+      used = words.slice(-2).join(' ');
+      found = await pull(`fbsearch:${cc}:${queryKey(used)}`, TTL.voice, 'fb_search', { query: used, country: cc, status: 'ACTIVE', trim: 'true' }, (j) => readFbSearch(j).slice(0, 10));
+    }
     for (const f of (found || []).filter((x) => x.active).slice(0, o.searchAds ?? 2)) {
       const ad = await pull(`fbad:${f.id}`, TTL.ad, 'fb_ad', { id: f.id, cache_max_age: '30d', trim: 'true' }, readFbAd);
-      if (ad && ad.id) res.ads.push({ ...ad, found: `Ad Library search "${phrase}" in ${cc}` });
+      if (ad && ad.id) res.ads.push({ ...ad, found: `Ad Library search "${used}" in ${cc}` });
     }
   }
 
@@ -399,8 +406,12 @@ export async function collect(pick, o) {
     }
   }
 
-  // 6. (optional) US buyers' reviews of the best-selling TikTok Shop listing.
-  if (pick.shop ?? o.shop) {
+  // 6. A TikTok Shop product: its own buyers' reviews (US). Else (optional) the best-selling listing for the phrase.
+  if (pick.tiktok) {
+    const id = (/\/(\d{8,})(?:[/?#]|$)/.exec(pick.tiktok) || [])[1] || queryKey(pick.tiktok);
+    const rv = await pull(`shop:p:${id}`, TTL.voice, 'shop_product', { url: pick.tiktok, region: 'US' }, (j) => readShopReviews(j, phrase, pick.tiktok));
+    if (rv) res.voice.push(...rv);
+  } else if (pick.shop ?? o.shop) {
     const sp = await pull(`shop:s:${q}`, TTL.voice, 'shop_search', { query: phrase, region: 'US' }, (j) => readShopProducts(j).slice(0, 10));
     const best = (sp || [])[0];
     if (best) {

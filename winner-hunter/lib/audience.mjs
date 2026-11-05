@@ -17,6 +17,16 @@ import { jevClient, labelStatements, choosePhrase, rankHooks } from './audience-
 import { buildCard, cardMarkdown, CARD_VERSION } from './audience-card.mjs';
 import { sharesOf } from './audience-meta.mjs';
 import { CATEGORIES, SEP } from '../worker/src/jev-questions.mjs';
+import fs from 'node:fs';
+
+/** The reach baseline on day 1, before the cache has its own: aggregate shares of the competitor ads read on 5 Nov 2026. */
+export const SEED = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(new URL('./audience-baseline.json', import.meta.url), 'utf8'));
+  } catch (e) {
+    return null;
+  }
+})();
 
 export const VERSION = `card ${CARD_VERSION} / collect ${COLLECT_VERSION}`;
 export const DEFAULTS = { perPick: 14, jevCalls: 10, statements: 120, ads: 3 };
@@ -54,8 +64,10 @@ export async function enrich(pick, db) {
   const p = {
     id: pick.id || pick.key || '', key: pick.key || '', name: pick.name || pick.title || '', title: pick.title || '', phrase: pick.phrase || '',
     url: pick.product_url || links.product_url || pick.url || '', store: (pick.stores && pick.stores[0]) || pick.store || '',
-    ad: pick.ad_copy || '', ad_ids: [...new Set([...(pick.ad_ids || []), ...(links.ad_library || []).map((u) => (/[?&]id=(\d+)/.exec(u) || [])[1])].filter(Boolean).map(String))],
-    markets: pick.markets || [], main: (pick.category && pick.category.main) || (typeof pick.category === 'string' ? pick.category : '') || pick.main || '',
+    ad: pick.ad_copy || '', ad_ids: [...new Set([...[].concat(pick.ad_ids || []), ...[].concat(links.ad_library || []).map((u) => (/[?&]id=(\d+)/.exec(String(u)) || [])[1])]
+      .map((x) => String(x || '').replace(/\D/g, '')).filter((x) => x.length >= 6))],
+    tiktok: /^https:\/\/www\.tiktok\.com\/shop\/pdp\//.test(String(links.tiktok || '')) ? String(links.tiktok) : String(pick.key || '').startsWith('tiktok|') ? `https://www.tiktok.com/shop/pdp/${String(pick.key).slice(7).replace(/\D/g, '')}` : '',
+    markets: [].concat(pick.markets || []), launch: [].concat(pick.launch_markets || []), main: (pick.category && pick.category.main) || (typeof pick.category === 'string' ? pick.category : '') || pick.main || '',
     sub: '', jev: pick.jev && (pick.jev.audience || pick.jev.problemtype) ? pick.jev : {},
   };
   p.sub = subOf(p.main, (pick.category && pick.category.sub) || pick.sub);
@@ -82,20 +94,29 @@ export async function enrich(pick, db) {
       p.store = p.store || (w.store_url ? new URL(w.store_url).hostname : '');
     }
   }
+  // Outside-EU products are stored without the 'world|' prefix in the world tables.
+  const bare = p.key.startsWith('world|') ? p.key.slice(6) : '';
   if (p.key && !p.jev.audience) {
-    const [c] = await q('SELECT main, sub, answers FROM world_checks WHERE product_key = ?', [p.key]);
-    if (c) {
+    for (const k of [p.key, bare].filter(Boolean)) {
+      const [c] = await q('SELECT main, sub, answers FROM world_checks WHERE product_key = ?', [k]);
+      if (!c) continue;
       p.jev = readJevAnswers(c);
       if (!p.sub && c.main && c.sub) p.sub = subOf(c.main, c.sub);
       if (!p.main) p.main = c.main || '';
+      break;
     }
   }
-  if (p.key && p.key.startsWith('world|') && !p.ad) {
-    const [w] = await q('SELECT body, title FROM world_ads WHERE product_key = ? LIMIT 1', [p.key]);
-    if (w) {
-      p.ad = w.body || '';
-      p.title = p.title || w.title || '';
+  if (bare && !p.ad) {
+    // world_ads has no index on product_key: go through world_products (its key) and world_ads (its ad id), never a scan.
+    const [wp] = await q('SELECT ad_id, product_title FROM world_products WHERE product_key = ?', [bare]);
+    if (wp && wp.ad_id) {
+      const [w] = await q('SELECT body, title FROM world_ads WHERE ad_id = ? LIMIT 1', [wp.ad_id]);
+      if (w) {
+        p.ad = w.body || '';
+        p.title = p.title || w.title || '';
+      }
     }
+    if (wp && !p.title) p.title = wp.product_title || '';
   }
   return p;
 }
@@ -173,13 +194,13 @@ export async function audienceCard(pick, ctx = {}) {
     if (!phrase.phrase) missing.push('no English search phrase: no customer statements pulled');
 
     // 3. Collect.
-    const collected = await collect({ id: p.id, phrase: phrase.phrase, ad_ids: p.ad_ids, shop: ctx.shop }, { api, cache, now, perPick, signal: ctx.signal, log, ads: DEFAULTS.ads, threads: ctx.threads ?? 1 });
+    const collected = await collect({ id: p.id, phrase: phrase.phrase, ad_ids: p.ad_ids, shop: ctx.shop, tiktok: p.tiktok }, { api, cache, now, perPick, signal: ctx.signal, log, ads: DEFAULTS.ads, threads: ctx.threads ?? 1 });
     credits = collected.credits;
     if (collected.stopped && collected.stopped !== 'no API key (cache only)') missing.push(`data pull stopped: ${collected.stopped}`);
     for (const e of collected.errors.slice(0, 3)) missing.push(e);
 
     // The baseline: every ad read so far, this pick's ads included.
-    const state = await loadBaseline(cache, ctx.seedBaseline);
+    const state = await loadBaseline(cache, ctx.seedBaseline === undefined ? SEED : ctx.seedBaseline);
     const { state: next, baseline } = addToBaseline(state, collected.ads);
     if (next.n !== state.n) await cache.put(BASELINE_KEY, { at: new Date(now).toISOString(), data: next }).catch(() => {});
 
