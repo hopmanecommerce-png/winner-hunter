@@ -904,7 +904,9 @@ button:hover{background:#fff}
 </style></head><body>
 <form method="post" action="/login"><span class="k">Products already selling, with proof</span><h1>Winner Hunter</h1><p>Enter your PIN to open the board.</p>
 <input name="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="64" required autofocus aria-label="PIN">
-${msg ? `<p class="err" role="alert">${esc(msg)}</p>` : ''}<button type="submit">Open</button></form></body></html>`;
+<input name="to" type="hidden" value="">
+${msg ? `<p class="err" role="alert">${esc(msg)}</p>` : ''}<button type="submit">Open</button></form>
+<script nonce="${nonce}">document.forms[0].to.value = location.hash.slice(0, 100);</script></body></html>`;
   return secure(new Response(html, { status, headers: { 'Content-Type': 'text/html; charset=utf-8' } }), { nonce, html: true });
 }
 
@@ -1162,7 +1164,10 @@ async function login(req, env, now) {
     console.error(e);
   }
   if (!key) return pinPage(nonce, 'The board cannot sign you in right now. Try again in a minute.', 503);
-  return redirect('/', `${COOKIE}=${await makeToken(env.BOARD_PIN, now, key)}; Path=/; Max-Age=${MAX_AGE}; HttpOnly; Secure; SameSite=Lax`);
+  // A link to one of Today's cards (the digest's #today/<id>) keeps its card through the PIN page; nothing else is followed.
+  const to = String((form && form.get('to')) || '');
+  const back = /^#today\/[a-z0-9-]{1,80}$/.test(to) ? to : '';
+  return redirect('/' + back, `${COOKIE}=${await makeToken(env.BOARD_PIN, now, key)}; Path=/; Max-Age=${MAX_AGE}; HttpOnly; Secure; SameSite=Lax`);
 }
 
 async function ads(url, env, now, viewer) {

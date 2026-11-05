@@ -72,7 +72,8 @@ export async function todayGet(env, url, now = Date.now()) {
   const summary = run ? jsonOf(run.summary, {}) : {};
   return { ready: true, day, days, banner: bannerOf(days, now), reasons: REASONS, picks,
     run: run ? { day: run.day, status: run.status, picks: run.picks, pool: run.pool, started_at: run.started_at, finished_at: run.finished_at, error: run.error || null,
-      passed_over: summary.passed_over || {}, prepare: summary.prepare || null, backtest: summary.backtest || null, stages: (summary.stages || []).map((s) => ({ stage: s.stage, ok: s.ok, ms: s.ms })) } : null };
+      counts: summary.counts || null, passed_over: summary.passed_over || {}, prepare: summary.prepare || null, backtest: summary.backtest || null,
+      stages: (summary.stages || []).map((s) => ({ stage: s.stage, ok: s.ok, ms: s.ms })) } : null };
 }
 
 /** POST /api/today: { day, key, decision, reason }: { status, body }. decision null takes the tap back. */
