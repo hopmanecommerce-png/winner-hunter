@@ -25,6 +25,7 @@ import { ECON_JS, econContext, econAd, econBoard, econSorts, econGet, econPost, 
 import { RISK_JS, riskChecks, riskHide, riskOut, riskList, riskPost } from './risk.mjs';
 import { LASSO_JS, readLasso, readLassoNew, attachLasso, lassoBoard, lassoView, lassoCard } from './lasso.mjs';
 import { PIPELINE_JS, pipelineGet, pipelinePost, pipelineImage } from './pipeline.mjs';
+import { todayGet, todayPost, todayDigest } from './today.mjs';
 
 const COOKIE = '__Host-wh';
 const MAX_AGE = 90 * 864e2; // seconds
@@ -1455,6 +1456,21 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       if (path === '/api/note' && (method === 'GET' || method === 'POST')) return await note(req, url, env, now);
       if (path === '/export.csv' && method === 'GET') return await csv(url, env, now);
       return json({ error: 'Method not allowed' }, 405);
+    }
+    // ---- Today's winners (today.mjs): the daily picks of daily.mjs, the board's first screen, and the digest as a file.
+    if (path === '/api/today' || path === '/api/today/digest') {
+      if (!ok) return path === '/api/today/digest' ? text('Log in first.', 401) : json({ error: 'Log in first' }, 401);
+      if (path === '/api/today/digest') {
+        if (method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+        const d = await todayDigest(env, url);
+        return text(d.body, d.status, { 'Content-Type': d.type, ...(d.name ? { 'Content-Disposition': `attachment; filename="${d.name}"` } : {}) });
+      }
+      if (method === 'GET') return json(await todayGet(env, url, now));
+      if (method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+      const { j, err } = await readJson(req, url);
+      if (err) return err;
+      const out = await todayPost(env, j, now);
+      return json(out.body, out.status);
     }
     if (path === '/api/tiktok') {
       if (!ok) return json({ error: 'Log in first' }, 401);
