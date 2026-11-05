@@ -34,6 +34,7 @@ const MIN = 60e3;
 // What each stage may take before the run moves on (collect, score and select fail the run; the others only their part).
 export const LIMITS = { collect: 8 * MIN, score: 4 * MIN, select: 1 * MIN, prepare: 12 * MIN, step: 90e3, publish: 3 * MIN, learn: 4 * MIN };
 export const HISTORY_TOP = 1500; // products whose score is kept per day (plus every pick)
+export const CANDIDATES = 25; // candidates prepared in order until 10 picks pass their product sheet
 const DAY_MS = 864e5;
 
 const RUN_SQL = 'SELECT day, status, finished_at FROM daily_runs WHERE day = ?1';
@@ -177,49 +178,71 @@ export async function runDaily({ db, env = {}, now = Date.now(), day = null, for
   const yesterday = new Set();
   for (const r of shownRows) if (r.day < today) { shown.set(r.product_key, r.day); lastDay = r.day > lastDay ? r.day : lastDay; }
   for (const r of shownRows) if (r.day === lastDay) { const d = jsonOf(r.data, {}); if (d.category) yesterday.add(d.category); }
-  const sel = await stage('select', LIMITS.select, async () => selectDaily(ranked, { day: today, decided, shown, yesterday }), log);
+  // Candidates: the day's rules with room for more than 10, so a pick the product sheet turns red is replaced, not padded.
+  const sel = await stage('select', LIMITS.select, async () => selectDaily(ranked, { day: today, decided, shown, yesterday, rules: { ...RULES, max: CANDIDATES } }), log);
   if (!sel.ok) return finish(db, rec, { failed: { stage: 'select', error: String(sel.error.message || sel.error) }, save, out, board, now });
   const chosen = sel.value;
   rec.counts.passed = chosen.passed;
+  rec.counts.candidates = chosen.picks.length;
   rec.passed_over = chosen.skipped;
 
-  // ---- 4. Prepare: the audience card and the product sheet per pick, each step on its own clock.
+  // ---- 4. Prepare. First the product sheet of each candidate in order (cheap, no credits): its margin per market with real
+  // weights and shipping is the last gate (red, or a break-even CPA under the bar, is out). Then the audience card of the
+  // picks that stay (the step that spends credits), each step on its own clock.
   const st = steps || (await loadSteps());
-  const prep = { audience: 0, sheet: 0, failed: 0, missing: [] };
+  const prep = { audience: 0, sheet: 0, failed: 0, dropped: [], missing: [] };
   if (!st.audience) prep.missing.push('audience step not installed');
   if (!st.sheet) prep.missing.push('product sheet step not installed');
+  const kept = [];
   await stage('prepare', LIMITS.prepare, async (signal) => {
     const cache = cacheOf(db, now);
+    // ctx.db: read-only lookups, called as db(sql, params) or db.query(sql, params) (both work).
+    const read = (q, a) => (/^\s*(SELECT|WITH)\b/i.test(String(q)) ? db.query(q, a) : Promise.reject(new Error('ctx.db is read-only')));
+    read.query = read;
+    const ctx = { now: iso, day: today, budget, cache, env, fetch: globalThis.fetch, db: read };
+    const run = async (k, fn, p) => {
+      const r = await stage(`${k}:${p.key}`, LIMITS.step, (sig) => fn(p, { ...ctx, signal: sig }), []);
+      if (r.ok && r.value) { p[k] = r.value; prep[k]++; return r.value; }
+      prep.failed++;
+      return null;
+    };
     for (const p of chosen.picks) {
-      if (signal.aborted) break;
-      // ctx.db: read-only lookups, called as db(sql, params) or db.query(sql, params) (both work).
-      const read = (q, a) => (/^\s*(SELECT|WITH)\b/i.test(String(q)) ? db.query(q, a) : Promise.reject(new Error('ctx.db is read-only')));
-      read.query = read;
-      const ctx = { now: iso, day: today, budget, cache, env, fetch: globalThis.fetch, db: read };
-      for (const [k, fn] of [['audience', st.audience], ['sheet', st.sheet]]) {
-        if (!fn) continue;
-        const r = await stage(`${k}:${p.pick}`, LIMITS.step, (sig) => fn(p, { ...ctx, signal: sig }), []);
-        if (r.ok && r.value) {
-          p[k] = r.value;
-          prep[k]++;
-          if (k === 'audience' && Number.isFinite(Number(r.value.credits_used))) budget.spent.credits += Number(r.value.credits_used);
-          budget.credits = Math.max(0, Number(env.DAILY_CREDITS || 200) - budget.spent.credits);
-        } else prep.failed++;
+      if (signal.aborted || kept.length >= RULES.max) break;
+      const sh = st.sheet ? await run('sheet', st.sheet, p) : null;
+      const cpa = sh && Number.isFinite(Number(sh.breakeven_cpa_eur)) ? Number(sh.breakeven_cpa_eur) : null;
+      if (sh && (sh.level === 'red' || (cpa != null && cpa < RULES.minCpa))) {
+        prep.dropped.push({ key: p.key, why: sh.level === 'red' ? 'product sheet: red' : `product sheet: break-even CPA €${Math.round(cpa)}` });
+        continue;
       }
+      kept.push(p);
+    }
+    for (const p of kept) {
+      if (signal.aborted) break;
+      if (!st.audience) break;
+      const a = await run('audience', st.audience, p);
+      if (a && Number.isFinite(Number(a.credits_used))) budget.spent.credits += Number(a.credits_used);
+      budget.credits = Math.max(0, Number(env.DAILY_CREDITS || 200) - budget.spent.credits);
     }
   }, log);
+  // A prepare stage that ran out of time keeps the candidates it had not reached yet, in order, up to 10.
+  for (const p of chosen.picks) if (kept.length < RULES.max && !kept.includes(p) && !prep.dropped.some((d) => d.key === p.key) && !p.sheet) kept.push(p);
+  kept.sort((a, b) => b.score - a.score || b.level - a.level || (a.key < b.key ? -1 : 1));
+  kept.forEach((p, i) => { p.pick = i + 1; });
   rec.prepare = prep;
   rec.budget = budget.spent;
+  const shortfall = kept.length < RULES.min;
+  const message = kept.length === 0 ? 'No product passed the quality bar today.'
+    : shortfall ? `Only ${kept.length} product${kept.length === 1 ? '' : 's'} passed the quality bar today (the bar is never lowered to fill the list).` : '';
 
   // ---- 5. Publish.
-  const picks = chosen.picks.map(pickOut);
+  const picks = kept.map(pickOut);
   const pub = await stage('publish', LIMITS.publish, async () => {
     if (save) {
       const rows = picks.map((p) => ({ key: p.key, rank: p.pick, id: p.id, score: p.score, level: p.level, title: p.name, data: JSON.stringify(p) }));
       for (const row of rows) await db.query(PICKS_SQL, [today, JSON.stringify([row])]); // one pick a query: a card and a sheet can be 60 KB
       await db.query(STALE_PICKS_SQL, [today, JSON.stringify(picks.map((p) => p.key))]);
       const hist = new Map(ranked.slice(0, HISTORY_TOP).map((x) => [x.key, histRow(x)]));
-      for (const p of chosen.picks) hist.set(p.key, histRow(p));
+      for (const p of kept) hist.set(p.key, histRow(p));
       const parts = splitMap(hist, 400000).map((body, i) => ({ part: i, body: JSON.stringify(body) }));
       for (const part of parts) await db.query(SCORES_SQL, [today, iso, JSON.stringify([part])]);
       await db.query(SCORES_STALE_SQL, [today, parts.length]);
@@ -239,7 +262,7 @@ export async function runDaily({ db, env = {}, now = Date.now(), day = null, for
     }
   }, log);
 
-  return finish(db, rec, { picks, message: chosen.message, shortfall: chosen.shortfall, save, out, board, now, pool: ranked.length + gated.length });
+  return finish(db, rec, { picks, message, shortfall, save, out, board, now, pool: ranked.length + gated.length });
 }
 
 /** The end of a run: its record and digest in D1 (and on disk with --out). */

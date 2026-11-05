@@ -127,6 +127,25 @@ test('a step that throws or hangs leaves that part "not prepared"; the run still
   }
 });
 
+test('the product sheet is the last gate: a red sheet drops that pick and the next candidate takes its place', async () => {
+  const db = memoryDb();
+  seed(db, 14);
+  const red = new Set();
+  const sheet = async (p) => {
+    if (red.size < 2 && !red.has(p.key)) { red.add(p.key); return { level: 'red', margin_eur: -3, breakeven_cpa_eur: 0, main_blocker: 'heavy', one_line: 'Loses money in NZ' }; }
+    return { level: 'green', margin_eur: 30, breakeven_cpa_eur: 30, main_blocker: 'none', one_line: 'Margin €30' };
+  };
+  let cards = 0;
+  const rec = await runDaily({ db: client(db), now: NOW, steps: { sheet, audience: async () => { cards++; return { one_line: 'x', credits_used: 1 }; } } });
+  assert.strictEqual(rec.prepare.dropped.length, 2);
+  assert.match(rec.prepare.dropped[0].why, /product sheet: red/);
+  const keys = db.prepare('SELECT product_key FROM daily_picks WHERE day = ?').all(DAY).map((r) => r.product_key);
+  assert.strictEqual(keys.length, rec.picks);
+  for (const k of red) assert.ok(!keys.includes(k), 'a red sheet is never a pick');
+  assert.ok(rec.picks >= 5);
+  assert.strictEqual(cards, rec.picks, 'audience credits are only spent on the picks that stay');
+});
+
 test('the database failing during collect: a failed run that says where', async () => {
   const db = memoryDb();
   seed(db, 5);
