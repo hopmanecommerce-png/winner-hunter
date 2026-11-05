@@ -13,6 +13,8 @@ import { VALIDATE, VALIDATE_JS, sheetOf, renderSheet, digestOf, csvRow, CSV_COLS
 import { RISK_JS } from '../worker/src/risk.mjs';
 import { cleanStep, marginOf, marginInputs, summaryOf, STEPS } from '../worker/src/launch.mjs';
 import { SOURCING_JS } from '../worker/src/sourcing.mjs';
+import { handle, tokenFor } from '../worker/src/app.mjs';
+import { seededEnv, NOW } from './helpers/seed.mjs';
 import { runSheets, quotesFrom, checkLinks, pasteInto, picksFrom, indexOf, argsOf, productSheet, pickFromScored, oneLineOf, missingOf, linksOf } from '../lib/validate.mjs';
 
 const DAY = '2026-11-05';
@@ -557,4 +559,18 @@ test('launchStepsOf: the sheet fills the 🚀 launch card (every field valid for
   assert.strictEqual(guess.margin.v.cogs, undefined, 'a guessed supplier price is not put on the card');
   assert.strictEqual(guess.sourcing.v.unit, undefined);
   assert.strictEqual(STEPS.length, 7);
+});
+
+test('GET /validate.js needs the PIN and serves the kit as a script; nothing else on that path', async () => {
+  const ORIGIN = 'https://winner-hunter.example.workers.dev';
+  const env = await seededEnv();
+  const anon = await handle(new Request(ORIGIN + '/validate.js'), env, { now: NOW });
+  assert.strictEqual(anon.status, 401);
+  const cookie = `__Host-wh=${await tokenFor(env, NOW)}`;
+  const call = (init = {}) => handle(new Request(ORIGIN + '/validate.js', { ...init, headers: { cookie, ...init.headers } }), env, { now: NOW });
+  const js = await call();
+  assert.strictEqual(js.status, 200);
+  assert.strictEqual(js.headers.get('content-type'), 'text/javascript; charset=utf-8');
+  assert.strictEqual(await js.text(), VALIDATE_JS);
+  assert.strictEqual((await call({ method: 'POST' })).status, 405);
 });
