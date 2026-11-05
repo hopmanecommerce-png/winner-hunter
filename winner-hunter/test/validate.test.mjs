@@ -321,7 +321,8 @@ test('the sheet has every section CLAUDE.md asks for, links with their check, an
   assert.match(md, /1\. Hook A 2\. Hook B 3\. Hook C/);
   assert.ok(s.facts.length >= 3 && s.assumptions.length >= 2);
   assert.ok(s.assumptions.some((a) => /Store did not open/.test(a)));
-  assert.ok(md.split('\n').length < 140, 'one page: under 140 lines');
+  assert.ok(md.split('\n').length < 135, `one page: under 135 lines (${md.split('\n').length})`);
+  assert.match(md, /Clear \(nothing found in its name, link or Jev's answers\): CE, WEEE, Battery/);
 });
 
 test('the digest fields: test market, margin and break-even CPA in euros, the main blocker, one line', () => {

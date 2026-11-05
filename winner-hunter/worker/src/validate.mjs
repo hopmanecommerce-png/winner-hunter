@@ -362,14 +362,14 @@ export function validateKit(R, S) {
 
   /**
    * The markets to work out, the test market first: `home` (the market the store sells in now: snuggro's primary Shopify
-   * market is New Zealand, Admin API 5 Nov 2026), then the pick's own (where its ads run), then the main ones. At most 8.
+   * market is New Zealand, Admin API 5 Nov 2026), then the pick's own (where its ads run), then the main ones. At most 6.
    */
   function marketsOf(pick, home = 'NZ') {
     const own = (Array.isArray(pick && pick.markets) ? pick.markets : []).map((c) => String(c).toUpperCase()).filter((c) => Object.hasOwn(MKT, c));
     const first = Object.hasOwn(MKT, String(home || '').toUpperCase()) ? [String(home).toUpperCase()] : [];
     const src = pick && pick.source;
     const base = src === 'eu' ? ['NL', 'DE', 'BE', 'FR', 'AU', 'US'] : ['AU', 'US', 'GB', 'CA', 'NL', 'DE'];
-    return [...new Set([...first, ...own, ...base])].slice(0, 8);
+    return [...new Set([...first, ...own, ...base])].slice(0, 6);
   }
 
   /**
@@ -944,10 +944,12 @@ export function validateKit(R, S) {
     L.push('', '## Compliance and IP', '');
     L.push(`Risk radar: **${sh.compliance.level === 'block' ? 'Block' : sh.compliance.level === 'docs' ? 'Docs' : 'OK'}**${sh.compliance.pay ? ` (Shopify Payments: ${sh.compliance.pay})` : ''}${sh.compliance.radar && !sh.compliance.radar.jev ? '. Jev has not read it: words in its name and link only' : ''}`, '');
     L.push('| Check | Status | Why |', '|---|---|---|');
-    for (const i of sh.compliance.items) L.push(`| ${mdText(i.label)} | ${STATUS[i.status] || i.status} | ${i.source ? mdLink(i.text, i.source) : mdText(i.text)} |`);
+    for (const i of sh.compliance.items.filter((x) => x.status !== 'clear' && x.status !== 'n/a')) L.push(`| ${mdText(i.label)} | ${STATUS[i.status] || i.status} | ${i.source ? mdLink(i.text, i.source) : mdText(i.text)} |`);
     for (const x of sh.compliance.excluded) L.push(`| Board exclusion | Block | ${mdText(x.text)} |`);
     for (const x of sh.compliance.undecided) L.push(`| Undecided category | Flag | ${mdText(x.text)} |`);
     for (const x of sh.compliance.stops) L.push(`| ${x.cc} market | Block | ${mdLink(x.text, x.source)} |`);
+    const clear = sh.compliance.items.filter((x) => x.status === 'clear' || x.status === 'n/a').map((x) => mdText((CHECKS.find((c) => c.k === x.k) || {}).short || x.label));
+    if (clear.length) L.push('', `Clear (nothing found in its name, link or Jev's answers): ${clear.join(', ')}.`);
     if (sh.compliance.ask && sh.compliance.ask.length) L.push('', `Ask the supplier for: ${sh.compliance.ask.map((a) => mdText(a[0])).join('; ')}.`);
     L.push('', '## Supplier path', '');
     const sp = sh.supplier;
