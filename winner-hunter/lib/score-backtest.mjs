@@ -84,7 +84,7 @@ export function labelled(facts, decisions) {
       missing++;
       continue;
     }
-    out.push({ key: d.key, y: d.y, at: d.at, from: d.from, f, cat: (f.jev && f.jev.main) || f.category || 'Other', src: f.src });
+    out.push({ key: d.key, y: d.y, at: d.at, from: d.from, test: !!d.test, f, cat: (f.jev && f.jev.main) || f.category || 'Other', src: f.src });
   }
   return { rows: out, missing };
 }
@@ -214,6 +214,9 @@ export function backtest(facts, decisions, { day = null, cutoff = null, ctx = {}
     const pairs = pairsBy(prior, fn);
     return { name, n: pairs.length, pos: pairs.filter((p) => p.y === 1).length, auc: r3(auc(pairs)), ci: (aucCi(pairs, { n: bootstrap, seed }) || []).map(r3) };
   });
+  // Real tests (🧭 Pipeline: scale or kill) on their own: the number that matters once there are some.
+  const tests = inSample.filter((p) => rows.find((r) => r.key === p.key && r.test));
+  const testsOut = { n: tests.length, scale: tests.filter((p) => p.y === 1).length, auc: r3(auc(tests)) };
   const bySrc = {};
   for (const src of [...new Set(rows.map((r) => r.src))]) {
     const pairs = inSample.filter((p) => p.src === src);
@@ -229,7 +232,7 @@ export function backtest(facts, decisions, { day = null, cutoff = null, ctx = {}
     auc_in_sample: r3(auc(inSample)), cv, cv_policy: cvPolicy, holdout,
     policy: { removed: gatedApproved.length, approvals_now_out: gatedApproved, n: policyRows.length, auc_prior: r3(auc(pairsBy(prior.filter(({ r }) => policyRows.includes(r)), score))) },
     precision: { base_rate: r3(pos / Math.max(rows.length, 1)), at10: top(10), at20: top(20), at30: top(30) },
-    baselines, by_source: bySrc, weights, ranks,
+    baselines, by_source: bySrc, tests: testsOut, weights, ranks,
   };
 }
 
@@ -247,6 +250,7 @@ export function backtestMd(b, { title = 'Winner Score backtest' } = {}) {
   lines.push('', `Precision: of the top 10 by score ${f(b.precision.at10)} were approved, top 20 ${f(b.precision.at20)}, top 30 ${f(b.precision.at30)}; the base rate is ${f(b.precision.base_rate)}.`, '',
     '| Baseline or part (snuggro prior) | n | Approved | AUC |', '|---|---:|---:|---|',
     ...b.baselines.map((x) => `| ${x.name} | ${x.n} | ${x.pos} | ${f(x.auc)}${ci(x.ci)} |`), '',
+    b.tests && b.tests.n ? `Real tests (🧭 Pipeline): ${b.tests.n} (${b.tests.scale} scaled), AUC ${f(b.tests.auc)}. A real test outranks a tap on the same product.` : 'Real tests (🧭 Pipeline: scale or kill): none yet. The first ones become the main label.', '',
     `Weights the decisions suggest (cross-validated, pulled to the spec): ${Object.entries(b.weights.weights).map(([k, v]) => `${k} ${v}`).join(', ')}; AUC ${f(b.weights.auc)} against ${f(b.weights.prior_auc)} with the spec's weights (${b.weights.adopt ? 'adopted' : 'not adopted: the gain is under 0.02 or there are fewer than 50 decisions'}).`,
     '', 'Decisions are Connor\'s taste, not sales. An AUC near 0.5 means the score does not follow his choices; 0.7 or more means it mostly does.');
   if (b.policy.approvals_now_out.length) lines.push('', `Approvals the current rules forbid (scored 0 on purpose): ${b.policy.approvals_now_out.map((x) => `${x.title || x.key} (${x.why})`).join('; ')}.`);

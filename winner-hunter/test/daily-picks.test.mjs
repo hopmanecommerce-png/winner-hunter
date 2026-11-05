@@ -131,6 +131,8 @@ test("Connor's decisions: one per product, the newest wins; undone ones do not c
     tiktok: [{ id: '5', decision: 'approved', decided_at: '2026-11-01T09:00:00Z' }],
   }, byAd);
   const by = Object.fromEntries(d.map((x) => [x.key, x.y]));
+  const tested = decisionsOf({ hidden: [{ ad_id: '1', status: 'seen', at: '2026-11-03T10:00:00Z' }], pipeline: [{ product_key: 'eu|shopa.test/products/neck', stage: 'launched', outcome: 'kill', updated_at: '2026-11-02T10:00:00Z' }] }, byAd);
+  assert.deepStrictEqual(tested.map((x) => [x.y, x.from]), [[0, 'test:kill']], "a real test's result outranks a later tap: it is the only label that is sales");
   assert.strictEqual(by['eu|shopa.test/products/neck'], 1, 'the ✓ a day later wins over the ✗ (same product page)');
   assert.strictEqual(by['world|s.test/products/x'], 1, 'the undone rejection does not count');
   assert.strictEqual(by['tiktok|5'], 1);

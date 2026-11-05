@@ -181,7 +181,7 @@ export function tiktokFacts(rows) {
  * Connor's decisions, one per product (the newest wins): y 1 = approved, kept or made an ad, 0 = rejected. From the board's
  * hidden table (seen = ✓, rejected = ✗), stars (★) and the decision log when it is there. byAd: ad id → product key.
  */
-export function decisionsOf({ hidden = [], stars = [], log = [], tiktok = [] }, byAd = new Map()) {
+export function decisionsOf({ hidden = [], stars = [], log = [], tiktok = [], pipeline = [] }, byAd = new Map()) {
   const out = new Map();
   const put = (key, y, at, from) => {
     if (!key) return;
@@ -199,6 +199,11 @@ export function decisionsOf({ hidden = [], stars = [], log = [], tiktok = [] }, 
   for (const t of tiktok) {
     const y = t.decision === 'approved' ? 1 : t.decision === 'rejected' ? 0 : null;
     if (y != null) put('tiktok|' + t.id, y, t.decided_at || t.updated_at, 'tiktok:' + t.decision);
+  }
+  // A real test's result (🧭 Pipeline, at Launched: scale or kill) outranks every tap: it is the only label that is sales.
+  for (const it of pipeline) {
+    if (it.outcome !== 'scale' && it.outcome !== 'kill' || !it.product_key) continue;
+    out.set(it.product_key, { key: it.product_key, y: it.outcome === 'scale' ? 1 : 0, at: String(it.updated_at || it.stage_at || ''), from: 'test:' + it.outcome, test: true });
   }
   return [...out.values()];
 }
@@ -249,7 +254,7 @@ export async function tablesFrom(db, { tiktok = true } = {}) {
     one('SELECT ad_id, status, at FROM hidden'), one('SELECT ad_id, at FROM stars'), one('SELECT product_key, ad_id, decision, at, undone_at FROM decision_log'),
     one("SELECT key, body FROM momentum WHERE (key >= 'board:' AND key < 'board;') OR (key >= 'tiktok:' AND key < 'tiktok;')"),
     one('SELECT product_key, cost, cost_text, weight_g, price FROM econ_inputs'), one('SELECT product_key, supplier_cost, weight_g, ship_cost FROM product_sourcing'),
-    one('SELECT product_key, decision, updated_at FROM launches'), one('SELECT product_key, stage, outcome, updated_at FROM pipeline_items'),
+    one('SELECT product_key, decision, updated_at FROM launches'), one('SELECT product_key, stage, stage_at, outcome, updated_at FROM pipeline_items'),
     one("SELECT value FROM econ_settings WHERE key = 'settings'"),
   ]);
   return { winners, bestseller, trust, world, checks, hidden, stars, log, momentum: mom, tiktok: tk, inputs, sourcing, launches, pipeline, econSettings: settings.length ? json(settings[0].value, null) : null };
@@ -307,7 +312,7 @@ export function factsFrom(t, { tiktokRows = null } = {}) {
   const tk = tiktokFacts(tiktokRows || t.tiktok || []);
   withInputs([...eu, ...world, ...tk], t);
   const byAd = adIndex(t.winners || [], t.world || []);
-  const decisions = decisionsOf({ hidden: t.hidden, stars: t.stars, log: t.log, tiktok: t.tiktok }, byAd);
+  const decisions = decisionsOf({ hidden: t.hidden, stars: t.stars, log: t.log, tiktok: t.tiktok, pipeline: t.pipeline }, byAd);
   // Decided in any way: approved, rejected, kept, a launch card, a pipeline item (never a daily pick again).
   const decided = new Set([...decisions.map((d) => d.key), ...(t.launches || []).map((l) => l.product_key), ...(t.pipeline || []).map((p) => p.product_key)]);
   return { facts: [...eu, ...world, ...tk], eu, world, tiktok: tk, decisions, byAd, decided };
