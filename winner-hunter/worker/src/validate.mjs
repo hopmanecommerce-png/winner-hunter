@@ -335,7 +335,7 @@ export function validateKit(R, S) {
     const theirEur = theirs ? toEur(theirs.amount, theirs.cur) : null;
     const mine = p.sell_price != null ? priceOf(p.sell_price, 'EUR') : null;
     const mineEur = mine ? toEur(mine.amount, mine.cur) : null;
-    if (mineEur > 0) out.price = { eur: round(mineEur), status: 'assumption', basis: `your price ${mine.cur === 'EUR' ? eur(mine.amount) : `${mine.amount} ${mine.cur}`}` };
+    if (mineEur > 0) out.price = { eur: round(mineEur), status: 'assumption', basis: `your planned price ${mine.cur === 'EUR' ? eur(mine.amount) : `${mine.amount} ${mine.cur}`}${mine.cur !== 'EUR' ? ` at the ECB rate of ${FX.as_of}` : ''}`, local: mine };
     else if (theirEur > 0) out.price = { eur: round(theirEur), status: 'fact', basis: `their store's price ${theirs.cur === 'EUR' ? eur(theirs.amount) : `${theirs.amount} ${theirs.cur}`} at the ECB rate of ${FX.as_of}`, local: theirs };
     else out.price = null;
     const sup = p.supplier && typeof p.supplier === 'object' ? p.supplier : {};
@@ -394,11 +394,24 @@ export function validateKit(R, S) {
       }
       // A Kungfubuy quote to this very country is the fact for product + shipping of 1 to 5 units: it replaces the fit.
       const quoted = quote && quoteCc(quote) === cc ? quote.eur : null;
+      // A supplier's own shipping quote to this country (CJ's freight, say): it replaces the fit for one unit.
+      const sup = pick && pick.supplier && typeof pick.supplier === 'object' ? pick.supplier : {};
+      const shipQ = sup.ship != null && String(sup.ship_to || '').toUpperCase() === cc ? priceOf(sup.ship, 'EUR') : null;
+      const shipQEur = shipQ ? toEur(shipQ.amount, shipQ.cur) : null;
       const own = inp.price.local && inp.price.local.cur === m.cur ? inp.price.local.amount : null; // their price is in this currency
       const run = (price, units, off = 0, scaled = false) => {
         const local = own != null && !scaled ? round(own * units * (1 - off / 100), 2) : null; // scaled: a price that is not theirs
         const x = orderOf({ market: m, price, units, unit_cost: inp.cost.eur, grams: inp.grams.g, refund_pct: refund, day, local });
         const total = quoted && quoted[units - 1] > 0 ? quoted[units - 1] : null;
+        if (total == null && shipQEur != null && units === 1) {
+          const d = round(shipQEur - x.ship);
+          const dropFee = sup.ship_incl_fees ? round(x.customs_parts.filter((c) => c.k === 'fee').reduce((a, c) => a + c.eur, 0)) : 0;
+          Object.assign(x, { ship: round(shipQEur), ship_status: sup.status === 'fact' ? 'fact' : 'estimate', ship_basis: `${clean(sup.ship_basis || 'the supplier\'s shipping quote', 160)}: ${shipQ.cur === 'EUR' ? eur(shipQ.amount) : `${shipQ.amount} ${shipQ.cur}`}${dropFee ? ' (the border fee included)' : ''}`,
+            customs: round(x.customs - dropFee), customs_parts: dropFee ? x.customs_parts.filter((c) => c.k !== 'fee') : x.customs_parts, landed: round(x.landed + d - dropFee), contribution: round(x.contribution - d + dropFee) });
+          x.margin_pct = price > 0 ? round((x.contribution / price) * 100, 1) : null;
+          x.be_cpa = round(Math.max(x.contribution, 0));
+          x.be_roas = x.contribution > 0 ? round(price / x.contribution) : null;
+        }
         if (total != null) {
           const ship = round(total - x.product);
           const d = ship - x.ship;
@@ -619,6 +632,7 @@ export function validateKit(R, S) {
       paste: { field: '1688 link', how: 'Paste the 1688 link (or what the 1688 app shares) on the board under 🧭 Pipeline → 1688 links, or run: node winner-hunter/validate.mjs paste <picks.json> <id> "<link or share text>"', max_cny: main && main.max_cost_cny != null ? main.max_cost_cny : null },
       search: links, gates,
       ask: 'Draft only (nothing is sent): a Kungfubuy quotation for 1–4 units to the main markets, with the line, days and whether the EU €3 + €2 are included',
+      compare: 'With 2 or more candidates: compare them on the board\'s 🏭 Suppliers scorecard (quality and delivery first, 25% each; hard gates for samples, certificates, delivery days, identity and defects)',
     };
   }
 
@@ -651,7 +665,7 @@ export function validateKit(R, S) {
     const T = s.test;
     const m = econ.markets[0];
     const o = m && m.offers[0];
-    const angles = pick && pick.audience && Array.isArray(pick.audience.angles) ? pick.audience.angles.slice(0, T.creatives).map((a) => clean(typeof a === 'string' ? a : a.hook || a.text || '', 140)).filter(Boolean) : [];
+    const angles = anglesOf(pick && pick.audience).slice(0, T.creatives);
     const fix = m ? [m.min_price != null ? `green from a selling price of ${eur(m.min_price)}${m.min_price_local != null ? ` (${m.min_price_local} ${m.cur})` : ''}` : '', m.max_cost != null ? `or a supplier price up to ${eur(m.max_cost)} (¥${m.max_cost_cny})` : ''].filter(Boolean).join(' ') : '';
     if (!o || !(o.be_cpa > 0) || comp.level === 'block' || m.level === 'red') {
       const why = !o ? 'No price: no break-even CPA to test against' : comp.level === 'block' ? `Blocked: ${comp.main}`
@@ -724,6 +738,18 @@ export function validateKit(R, S) {
     };
   }
 
+  // ---- The audience card (wh-audience: problem { line }, personas [{ label, gender, ages, countries { launch } }], angles
+  // [{ hook, first_test }], targeting { control }, one_line), or a plain one (problem, personas, angles as text).
+  const problemOf = (a) => (!a ? '' : typeof a.problem === 'string' ? a.problem : a.problem && a.problem.line && !/^not enough/i.test(a.problem.line) ? a.problem.line : '');
+  function personaOf(a) {
+    const pe = a && Array.isArray(a.personas) ? a.personas[0] : null;
+    if (!pe) return null;
+    const cc = pe.countries && !Array.isArray(pe.countries) && Array.isArray(pe.countries.launch) ? pe.countries.launch : pe.countries;
+    return { label: clean(pe.label || '', 80), age: clean(pe.ages || pe.age || '', 80), gender: clean(pe.gender || '', 80), countries: Array.isArray(cc) ? cc.slice(0, 6) : cc ? [String(cc)] : [], situation: typeof pe.situation === 'string' ? clean(pe.situation, 120) : '' };
+  }
+  /** The hooks for the test: the card's first-test angles first, then the rest; text or { hook }. */
+  const anglesOf = (a) => (a && Array.isArray(a.angles) ? [...a.angles.filter((x) => x && x.first_test), ...a.angles.filter((x) => !(x && x.first_test))] : []).map((x) => clean(typeof x === 'string' ? x : x.hook || x.text || '', 140)).filter(Boolean);
+
   // ---- The sheet ----------------------------------------------------------------------------------------------------
   /**
    * The sheet of one pick. opts: { day: 'YYYY-MM-DD' (D0, also which customs apply), quotes: Kungfubuy quote rows,
@@ -733,6 +759,8 @@ export function validateKit(R, S) {
   function sheetOf(pick, opts = {}) {
     const p = pick && typeof pick === 'object' ? pick : {};
     const s = Object.assign({}, DEFAULTS, opts.settings || {}, { test: Object.assign({}, DEFAULTS.test, (opts.settings && opts.settings.test) || {}) });
+    // A pick may name its own test market (an earlier run chose it, e.g. AU for the 29 Oct concepts): it wins over home.
+    if (p.test_market && Object.hasOwn(MKT, String(p.test_market).toUpperCase())) s.home = String(p.test_market).toUpperCase();
     const day = isDay(opts.day) ? opts.day : new Date().toISOString().slice(0, 10);
     const quote = quoteFor(p, opts.quotes);
     const markets = marketsOf(p);
@@ -775,8 +803,9 @@ export function validateKit(R, S) {
     if (walled.length) assumptions.push(`Not checkable by script: ${walled.join(', ')}; it opens in a browser`);
     return {
       v: VERSION, id, key: clean(p.key, 1000), name: clean(p.name, 200) || 'Untitled product', day, source: p.source || '', level,
-      product: { name: clean(p.name, 200), problem: clean((p.audience && p.audience.problem) || p.problem || '', 400), category: p.category || null, img: https(p.img), offer_note: clean(p.offer_note, 200), notes: clean(p.notes_for_sheet || p.notes, 400) },
-      score: p.score || null, audience: p.audience ? { problem: clean(p.audience.problem, 300), persona: p.audience.personas && p.audience.personas[0] ? p.audience.personas[0] : null, line: clean(p.audience.line || '', 200) } : null,
+      product: { name: clean(p.name, 200), problem: clean(problemOf(p.audience) || p.problem || '', 400), category: p.category || null, img: https(p.img), offer_note: clean(p.offer_note, 200), notes: clean(p.notes_for_sheet || p.notes, 400) },
+      score: p.score || null, audience: p.audience ? { problem: clean(problemOf(p.audience), 300), persona: personaOf(p.audience), line: clean(p.audience.one_line || p.audience.line || '', 200),
+        targeting: p.audience.targeting && p.audience.targeting.control ? clean(p.audience.targeting.control.audience || '', 200) : '' } : null,
       evidence: evidenceOf(p), links, economics: econ, compliance: comp, supplier, test_plan: plan, facts, assumptions,
       fx: { as_of: FX.as_of, source: FX.source },
     };
@@ -898,9 +927,9 @@ export function validateKit(R, S) {
     L.push(`- Problem it solves: ${mdText(sh.product.problem || (sh.audience && sh.audience.problem) || 'not filled in yet (the audience card adds it)')}`);
     if (sh.product.offer_note) L.push(`- Offer: ${mdText(sh.product.offer_note)}`);
     if (sh.product.notes) L.push(`- Earlier research: ${mdText(sh.product.notes)}`);
-    if (sh.audience && sh.audience.persona) {
-      const pe = sh.audience.persona;
-      L.push(`- Buyer: ${mdText([pe.age, pe.gender, Array.isArray(pe.countries) ? pe.countries.join('/') : pe.countries, pe.situation].filter(Boolean).join(', '))}`);
+    if (sh.audience && (sh.audience.line || sh.audience.persona)) {
+      const pe = sh.audience.persona || {};
+      L.push(`- Buyer: ${mdText(sh.audience.line || [pe.label, pe.age, pe.gender, (pe.countries || []).join('/'), pe.situation].filter(Boolean).join(', '))} (audience card)`);
     }
     L.push('', '## Evidence that it sells', '');
     if (sh.evidence.length) for (const x of sh.evidence) L.push(`- ${mdLink(x.text, x.url)}${x.date ? ` (${x.date})` : ''}${x.status !== 'fact' ? ` *(${x.status})*` : ''}`);
@@ -961,6 +990,7 @@ export function validateKit(R, S) {
     if (search) L.push(`- Search: ${search}`);
     for (const g of sp.gates) L.push(`- ${g.status === 'pass' ? '✓' : g.status === 'fail' ? '✗' : '○'} ${mdText(g.label)}: ${mdText(g.text)}`);
     L.push(`- ${mdText(sp.ask)}`);
+    if (sp.compare) L.push(`- ${mdText(sp.compare)}`);
     L.push('', '## Validation test plan', '');
     const tp = sh.test_plan;
     if (tp.go) {

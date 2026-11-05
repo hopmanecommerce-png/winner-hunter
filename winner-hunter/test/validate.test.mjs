@@ -575,3 +575,50 @@ test('GET /validate.js needs the PIN and serves the kit as a script; nothing els
   assert.strictEqual(await js.text(), VALIDATE_JS);
   assert.strictEqual((await call({ method: 'POST' })).status, 405);
 });
+
+test('the audience card of wh-audience: its problem, buyer line and first-test hooks land on the sheet and in the test plan', () => {
+  const card = {
+    problem: { line: 'Physical discomfort (14 of 99 statements)', themes: [] }, one_line: 'travellers, 61.6% women 35-64, CH; pain: physical discomfort',
+    personas: [{ label: 'Travellers', gender: 'mostly women (61.6% of reach)', ages: '35-64 (71.3% of reach)', countries: { launch: ['CH'], eu_reach: [] }, situation: [{ label: 'Traveller' }] }],
+    angles: [{ hook: 'Packing for the next trip? Add this.' }, { hook: 'The flat old pillow that digs in by the end of the day.', first_test: true }, { hook: 'Side sleeper? Watch this first.', first_test: true }, { hook: 'What the price gets.', first_test: true }],
+    targeting: { control: { audience: 'Advantage+ audience on, no interests (let Meta find the buyers)' } },
+  };
+  const s = sheetOf({ id: 'p', name: '4D pillow', price: 89.95, cur: 'EUR', audience: card }, { day: DAY });
+  assert.strictEqual(s.product.problem, 'Physical discomfort (14 of 99 statements)');
+  assert.strictEqual(s.audience.persona.label, 'Travellers');
+  assert.deepStrictEqual(s.audience.persona.countries, ['CH']);
+  assert.deepStrictEqual(s.test_plan.angles, ['The flat old pillow that digs in by the end of the day.', 'Side sleeper? Watch this first.', 'What the price gets.']);
+  const md = renderSheet(s);
+  assert.match(md, /- Buyer: travellers, 61\.6% women 35-64, CH; pain: physical discomfort \(audience card\)/);
+  assert.match(md, /targeting: see the audience card/);
+  const thin = sheetOf({ id: 'q', name: 'X', price: 30, cur: 'EUR', audience: { problem: { line: 'not enough customer statements to say' }, angles: [] } }, { day: DAY });
+  assert.strictEqual(thin.product.problem, '', 'no problem line when the card says it has too few statements');
+});
+
+test('a pick can name its own test market; it wins over the default NZ', () => {
+  const s = sheetOf({ id: 't', name: 'Caravan sheet', price: 'A$149', markets: ['AU'], test_market: 'AU' }, { day: DAY });
+  assert.strictEqual(s.economics.markets[0].cc, 'AU');
+  assert.strictEqual(s.test_plan.market, 'AU');
+  assert.strictEqual(sheetOf({ id: 'u', name: 'X', price: 30, cur: 'EUR', test_market: 'XX' }, { day: DAY }).economics.markets[0].cc, 'NZ', 'an unknown market: the default');
+});
+
+test('a supplier\'s own shipping quote to a market (CJ freight) replaces the fit there, for one unit', () => {
+  const pick = { id: 'mat', name: 'Dog cooling mat', price: 'NZ$59.95', markets: ['NZ'], supplier: { cost: '$2.28', weight_g: 320, ship: '$8.63', ship_to: 'NZ', ship_incl_fees: true, status: 'fact', ship_basis: 'CJ freight quote, CJPacket Sensitive, 25 Oct 2026' } };
+  const s = sheetOf(pick, { day: DAY });
+  const o = s.economics.markets[0].offers[0];
+  near(o.ship, 8.63 / 1.1267);
+  assert.strictEqual(o.ship_status, 'fact');
+  assert.strictEqual(o.customs, 0, 'the quote includes the clearance fee: no NZ levy on top');
+  assert.match(o.ship_basis, /^CJ freight quote, CJPacket Sensitive, 25 Oct 2026: 8\.63 USD \(the border fee included\)$/);
+  const au = s.economics.markets.find((m) => m.cc === 'AU').offers[0];
+  assert.notStrictEqual(au.ship_status, 'fact', 'only for the market the quote is for');
+});
+
+test('a planned price (sell_price) is an assumption, not a fact, and keeps its own currency on the sheet', () => {
+  const s = sheetOf({ id: 'p', name: 'Caravan sheet', sell_price: 'A$149', markets: ['AU'], test_market: 'AU' }, { day: DAY });
+  assert.strictEqual(s.economics.inputs.price.status, 'assumption');
+  assert.match(s.economics.inputs.price.basis, /^your planned price 149 AUD/);
+  assert.strictEqual(s.economics.markets[0].offers[0].local, 149);
+  assert.ok(s.assumptions.some((a) => /Selling price/.test(a)));
+  assert.ok(!s.facts.some((f) => /Selling price/.test(f)));
+});
