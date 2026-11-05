@@ -99,6 +99,11 @@ test('the ladder: paid, sustained, selling and profitable are true, false or unk
   assert.strictEqual(thin.ladder.sustained, false);
   assert.strictEqual(thin.ladder.selling, false, 'checked and not in the top 50');
   assert.strictEqual(thin.ladder.profitable, false);
+  assert.strictEqual(scoreProduct(base({ active: false, ad_days: 60 }), { day: DAY }).ladder.paid, false, 'the hunt no longer finds its ads');
+  assert.strictEqual(scoreProduct(base({ src: 'eu', key: 'eu|x', as_of: '2026-10-10' }), { day: DAY }).ladder.paid, null, 'an EU row last seen 26 days ago');
+  const young = scoreProduct(base({ ad_days: 9, copies: 5, shop_ads: 200 }), { day: DAY });
+  assert.strictEqual(young.ladder.sustained, false, '5 ads in 9 days is a test being scaled, not sustained');
+  assert.strictEqual(scoreProduct(base({ ad_days: 15, copies: 5, shop_ads: 200 }), { day: DAY }).ladder.sustained, true);
   const tt = scoreProduct(base({ src: 'tiktok', key: 'tiktok|1', sold: 25000, shop_ads: null }), { day: DAY });
   assert.strictEqual(tt.ladder.selling, true);
   assert.strictEqual(tt.ladder.paid, null, 'no Meta ads known for a TikTok listing');

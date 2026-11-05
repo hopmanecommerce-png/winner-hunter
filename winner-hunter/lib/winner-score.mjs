@@ -46,7 +46,9 @@ export const SPEC = {
   pageLevel: 0.5, // ad numbers of a shop's page that no sampled ad ties to this product count at this share (TikTok rows)
   rivals: [[0, 0.9], [1, 0.75], [2, 0.6], [4, 0.45], [5, 0.3], [10, 0.2]],
   storeSize: [[3, 0.75], [20, 0.75], [100, 0.6], [250, 0.5], [1000, 0.35], [5000, 0.25]],
-  ladder: { sustainedDays: 30, sustainedCopies: 5, sustainedShopAds: 75, sellingSold: 10000, sellingRank: 10, sellingRankStore: 10, sellingReviews: 500, profitableCpa: 20, profitableCpaGuess: 25 },
+  // Sustained: an ad 30+ days old, or 5+ copies from a shop with 75+ active ads whose ads are 14+ days old (5 new ads in a
+  // week is a test being scaled, not yet proof that it pays).
+  ladder: { sustainedDays: 30, sustainedCopies: 5, sustainedShopAds: 75, sustainedCopyDays: 14, sellingSold: 10000, sellingRank: 10, sellingRankStore: 10, sellingReviews: 500, profitableCpa: 20, profitableCpaGuess: 25 },
   // The risk multiplier: what makes a launch harder without stopping it.
   // Sizing is a check, not a disqualifier (CLAUDE.md blockers list; Connor approved 12 sized products of 36 by 1 Nov).
   risk: { docs: 0.93, docsFloor: 0.75, sizing: 0.8, fragile: 0.9, bulky: 0.85, ioss: 0.85, hardsource: 0.85, floor: 0.4 },
@@ -406,8 +408,13 @@ export function scoreProduct(f, ctx = {}) {
 
   // ---- The ladder: each rung true, false or null (not known).
   const L = SPEC.ladder;
-  const paid = src === 'tiktok' ? (num(f.shop_ads) > 0 ? true : null) : src === 'research' ? (adDays != null ? true : null) : true;
-  const sustained = adDays == null && copies == null ? null : (adDays != null && adDays >= L.sustainedDays) || (copies != null && copies >= L.sustainedCopies && (shopAds == null || shopAds >= L.sustainedShopAds));
+  // Paid: outside the EU the hunt marks a product whose ads it no longer finds (active 0); an EU row last seen over 14 days
+  // before the day is not known to run any more (the EU hunt runs by hand).
+  const stale = src === 'eu' && day && asOf && (Date.parse(day) - Date.parse(asOf)) / 864e5 > 14;
+  const paid = src === 'tiktok' ? (num(f.shop_ads) > 0 ? true : null) : src === 'research' ? (adDays != null ? true : null)
+    : src === 'world' && f.active === false ? false : stale ? null : true;
+  const sustained = adDays == null && copies == null ? null : (adDays != null && adDays >= L.sustainedDays)
+    || (copies != null && copies >= L.sustainedCopies && (shopAds == null || shopAds >= L.sustainedShopAds) && (adDays == null || adDays >= L.sustainedCopyDays));
   const rankOk = num(f.bs_rank) != null && f.bs_rank <= L.sellingRank && (sp == null || sp >= L.sellingRankStore);
   const sellingKnown = sold != null || num(f.bs_rank) != null || (f.bs_checked && f.bs_ok) || reviews != null;
   const selling = (sold != null && sold >= L.sellingSold) || rankOk || (reviews != null && reviews >= L.sellingReviews) ? true : sellingKnown ? false : null;

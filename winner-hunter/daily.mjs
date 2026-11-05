@@ -210,8 +210,10 @@ export async function runDaily({ db, env = {}, now = Date.now(), day = null, for
       if (signal.aborted || kept.length >= RULES.max) break;
       const sh = st.sheet ? await run('sheet', st.sheet, p) : null;
       const cpa = sh && Number.isFinite(Number(sh.breakeven_cpa_eur)) ? Number(sh.breakeven_cpa_eur) : null;
-      if (sh && (sh.level === 'red' || (cpa != null && cpa < RULES.minCpa))) {
-        prep.dropped.push({ key: p.key, why: sh.level === 'red' ? 'product sheet: red' : `product sheet: break-even CPA €${Math.round(cpa)}` });
+      // The sheet's link check: a product page that does not open (a 404, a closed store) is out; an unknown answer stays.
+      const page = sh && sh.sheet && Array.isArray(sh.sheet.links) ? sh.sheet.links.find((l) => /^product page$/i.test(l.label || '')) : null;
+      if (sh && (sh.level === 'red' || (cpa != null && cpa < RULES.minCpa) || (page && page.ok === false))) {
+        prep.dropped.push({ key: p.key, why: page && page.ok === false ? `product page does not open (${page.status})` : sh.level === 'red' ? 'product sheet: red' : `product sheet: break-even CPA €${Math.round(cpa)}` });
         continue;
       }
       kept.push(p);
