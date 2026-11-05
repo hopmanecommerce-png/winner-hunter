@@ -55,6 +55,13 @@ test('the gates: eaten or taken and gymwear are excluded, a Block is blocked, pe
   assert.strictEqual(g({ title: 'Seamless set', excluded: 'gymwear', jev: null }), 'excluded');
 });
 
+test('another company\'s trademark in the title is a docs reason, not a block', () => {
+  const s = scoreProduct(base({ title: 'Ostand Q3 VegSkin for iPhone Duo', jev: { p: jevP(), main: 'Tech' } }), { day: DAY });
+  assert.strictEqual(s.risk.gate, null);
+  assert.ok(s.risk.flags.includes('Docs: Trademark named (referential use only)'));
+  assert.ok(!scoreProduct(base({ title: 'Cooling pillow' }), { day: DAY }).risk.flags.some((f) => /Trademark/.test(f)));
+});
+
 test('undecided categories are flagged, never gated', () => {
   assert.deepStrictEqual(undecidedOf('Anti-cellulite shaping leggings'), ['shaping or cellulite leggings']);
   assert.deepStrictEqual(undecidedOf('Breathe Right nasal strips 30 pack'), ['nose strips and sprays']);
