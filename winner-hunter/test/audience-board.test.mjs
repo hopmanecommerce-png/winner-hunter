@@ -46,3 +46,19 @@ test('AUDIENCE_JS: the browser runs the same kit and renders the same HTML', () 
   assert.equal(audienceKit().safeUrl('http://x.example'), '');
   assert.ok(!/style=/.test(AUDIENCE_CSS) && AUDIENCE_CSS.includes('.au-hook'));
 });
+
+test('GET /audience.js: behind the PIN, the kit as a script; other methods refused', async () => {
+  const { handle, tokenFor } = await import('../worker/src/app.mjs');
+  const { seededEnv, NOW } = await import('./helpers/seed.mjs');
+  const ORIGIN = 'https://winner-hunter.example.workers.dev';
+  const env = await seededEnv();
+  const anon = await handle(new Request(ORIGIN + '/audience.js'), env, { now: NOW });
+  assert.equal(anon.status, 401);
+  const cookie = `__Host-wh=${await tokenFor(env, NOW)}`;
+  const res = await handle(new Request(ORIGIN + '/audience.js', { headers: { cookie } }), env, { now: NOW });
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type'), /javascript/);
+  assert.equal(await res.text(), AUDIENCE_JS);
+  const post = await handle(new Request(ORIGIN + '/audience.js', { method: 'POST', headers: { cookie, origin: ORIGIN } }), env, { now: NOW });
+  assert.equal(post.status, 405);
+});

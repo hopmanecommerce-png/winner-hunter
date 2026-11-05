@@ -23,6 +23,7 @@ import { SOURCING_JS, sourcingGet, sourcingPost } from './sourcing.mjs';
 import { GOOGLE_SQL, TIKTOK_SHOPS_SQL, GOOGLE_CSV_COLS, googleRow, crossLink, googleProof, googleFacts, googleMarketsOf, googleAlert } from './google.mjs';
 import { ECON_JS, econContext, econAd, econBoard, econSorts, econGet, econPost, decisionsGet, decisionsPost, decisionLogged, tiktokLogged } from './econ.mjs';
 import { RISK_JS, riskChecks, riskHide, riskOut, riskList, riskPost } from './risk.mjs';
+import { AUDIENCE_JS } from './audience.mjs';
 import { LASSO_JS, readLasso, readLassoNew, attachLasso, lassoBoard, lassoView, lassoCard } from './lasso.mjs';
 import { PIPELINE_JS, pipelineGet, pipelinePost, pipelineImage } from './pipeline.mjs';
 
@@ -1599,6 +1600,11 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       if (err) return err;
       const out = await riskPost(env, j, now, { rows: () => snapshot(env.DB, now) });
       return json(out.body, out.status);
+    }
+    // 🎯 /audience.js: the audience card's renderer (worker/src/audience.mjs), which the board runs as window.AUDIENCE.
+    if (path === '/audience.js') {
+      if (!ok) return json({ error: 'Log in first' }, 401);
+      return method === 'GET' ? text(AUDIENCE_JS, 200, { 'Content-Type': 'text/javascript; charset=utf-8' }) : json({ error: 'Method not allowed' }, 405);
     }
     return text('Not found', 404);
   } catch (e) {
