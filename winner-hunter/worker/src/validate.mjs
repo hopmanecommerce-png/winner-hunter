@@ -619,6 +619,7 @@ export function validateKit(R, S) {
       paste: { field: '1688 link', how: 'Paste the 1688 link (or what the 1688 app shares) on the board under 🧭 Pipeline → 1688 links, or run: node winner-hunter/validate.mjs paste <picks.json> <id> "<link or share text>"', max_cny: main && main.max_cost_cny != null ? main.max_cost_cny : null },
       search: links, gates,
       ask: 'Draft only (nothing is sent): a Kungfubuy quotation for 1–4 units to the main markets, with the line, days and whether the EU €3 + €2 are included',
+      compare: 'With 2 or more candidates: compare them on the board\'s 🏭 Suppliers scorecard (quality and delivery first, 25% each; hard gates for samples, certificates, delivery days, identity and defects)',
     };
   }
 
@@ -974,6 +975,7 @@ export function validateKit(R, S) {
     if (search) L.push(`- Search: ${search}`);
     for (const g of sp.gates) L.push(`- ${g.status === 'pass' ? '✓' : g.status === 'fail' ? '✗' : '○'} ${mdText(g.label)}: ${mdText(g.text)}`);
     L.push(`- ${mdText(sp.ask)}`);
+    if (sp.compare) L.push(`- ${mdText(sp.compare)}`);
     L.push('', '## Validation test plan', '');
     const tp = sh.test_plan;
     if (tp.go) {
