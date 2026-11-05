@@ -1165,8 +1165,146 @@
   #crttn:not(:empty) { margin-left: 6px; font: 500 11px var(--num); color: var(--faint); }
   @media (pointer: coarse) { .crbtn, .crseg button { min-height: 40px; } .crb { min-height: 36px; } }
 </style>
+<style nonce="__NONCE__">
+  /* ---- Today's winners (today.mjs): the day's 5 to 10 picks, the board's first screen. The hunt's controls and lists step
+     aside (body.td), as for the TikTok tab. A card: the score and its evidence, the money, the risks, Keep / Reject / Launch test. */
+  body:not(.td) #today { display: none !important; }
+  .td .wrap > .tools, .td .wrap > .rail, .td #runbox, .td #alert, .td #csv, .td #grid, .td #ibox, .td #dock, .td #pnote, .td #learn, .td #zero, .td #empty,
+  .td #loadmore, .td #ttbox, .td #lnbox, .td #spbox, .td #ecbox, .td #plbox { display: none !important; }
+  .tdbox { max-width: 820px; margin: 0 auto; display: grid; gap: 12px; min-width: 0; }
+  .tdvh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .tdhead { display: grid; gap: 4px; min-width: 0; }
+  .tdhead h2 { margin: 0; font-size: 22px; font-weight: 600; line-height: 1.2; }
+  .tdstat { margin: 0; font: 400 13px/1.4 var(--num); color: var(--muted); overflow-wrap: anywhere; }
+  .tdban { margin: 0; }
+  .tddays { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * max(16px, env(safe-area-inset-left))); padding: 0 max(16px, env(safe-area-inset-left)); }
+  .tddays::-webkit-scrollbar { display: none; }
+  .tddays button { flex: none; min-height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card2); color: var(--muted); font: 500 13px var(--sans); display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; }
+  .tddays button small { font: 500 11px var(--num); color: var(--faint); }
+  .tddays button[aria-pressed="true"] { color: var(--ink); border-color: var(--acc); }
+  .tddays button[aria-pressed="true"] small { color: var(--acc); }
+  .tddot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
+  .tddot.ok { background: var(--win); }
+  .tddot.short { background: var(--amb); }
+  .tddot.failed { background: var(--bad); }
+  .tddot.running { background: var(--acc); animation: blink 1.4s ease-in-out infinite; }
+  .tdtools { display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px; font-size: 13px; color: var(--muted); min-width: 0; }
+  .tdtools a { min-height: 44px; display: inline-flex; align-items: center; color: var(--ink); font-weight: 500; text-decoration: none; }
+  .tdtools a:hover { text-decoration: underline; }
+  .tdpo { min-width: 0; }
+  .tdpo summary { list-style: none; cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 8px; color: var(--muted); }
+  .tdpo summary::-webkit-details-marker { display: none; }
+  .tdpo summary::after { content: ''; width: 6px; height: 6px; margin: 0 4px 4px 0; border: solid var(--faint); border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); flex: none; }
+  .tdpo[open] { flex: 1 1 100%; }
+  .tdpo[open] summary::after { transform: rotate(225deg); margin-bottom: 0; }
+  .tdpo ul, .tdempty ul { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  .tdpo li b, .tdempty li b { color: var(--ink); font: 500 13px var(--num); margin-right: 4px; }
+  .tdlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; min-width: 0; }
+  .tdlist > li { min-width: 0; }
+  .tdc { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 12px; min-width: 0; scroll-margin-top: 12px; transition: border-color .16s, box-shadow .16s; }
+  .tdc.hi { border-color: var(--acc); box-shadow: 0 0 0 1px var(--acc), 0 0 0 6px rgba(217, 164, 65, .12); }
+  .tdc.done > :not(.tdst):not(.tdwy) { opacity: .5; }
+  .tdtop { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 12px; align-items: start; min-width: 0; }
+  .tdph { position: relative; width: 72px; height: 72px; border-radius: 8px; overflow: hidden; background: var(--card2); display: grid; place-items: center; color: var(--muted); text-decoration: none; }
+  .tdph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .tdph i { font-style: normal; font-weight: 600; font-size: 22px; }
+  .tdrk { position: absolute; left: 4px; top: 4px; z-index: 1; min-width: 20px; height: 20px; padding: 0 4px; border-radius: 4px; background: rgba(15, 15, 16, .88); color: var(--ink); font: 500 11px/20px var(--num); text-align: center; }
+  .tdnm { min-width: 0; display: grid; gap: 4px; }
+  .tdnm h3 { margin: 0; font-size: 15px; font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .tdnm h3 a { color: inherit; text-decoration: none; }
+  .tdnm h3 a:hover { text-decoration: underline; }
+  .tdnm small { font-size: 12px; line-height: 1.35; color: var(--muted); overflow-wrap: anywhere; }
+  .tdsc { display: grid; justify-items: end; gap: 4px; line-height: 1; }
+  .tdsc b { font: 500 32px/1 var(--num); color: var(--acc); }
+  .tdsc span { font-size: 11px; color: var(--muted); }
+  .tdev2 { display: grid; gap: 12px; min-width: 0; }
+  .tdlad { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+  .tdlad li { display: grid; justify-items: center; gap: 4px; padding: 6px 2px; border-radius: 8px; border: 1px solid var(--line); background: var(--card2); font-size: 11px; line-height: 1.2; color: var(--muted); text-align: center; min-width: 0; overflow-wrap: anywhere; }
+  .tdlad li b { font: 600 14px/1 var(--num); color: var(--faint); }
+  .tdlad li.yes { color: var(--ink); border-color: rgba(76, 195, 138, .35); }
+  .tdlad li.yes b { color: var(--win); }
+  .tdlad li.no b { color: var(--bad); }
+  .tdpil { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .tdpil li { display: grid; grid-template-columns: 88px minmax(0, 1fr) 36px; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); }
+  .tdpil i { display: block; height: 6px; border-radius: 3px; background: var(--line2); overflow: hidden; }
+  .tdpil i::before { content: ''; display: block; height: 100%; width: var(--w, 0%); border-radius: inherit; background: var(--acc); transition: width .5s cubic-bezier(.2, .8, .2, 1); }
+  .tdpil b { font: 500 12px var(--num); color: var(--ink); text-align: right; }
+  .tdwhy { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ink); overflow-wrap: anywhere; }
+  .tdm { padding: 8px 0; }
+  .tdm .m.good b { color: var(--win); }
+  .tdm .m.low b { color: var(--bad); }
+  .tdrisk { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 12px; color: var(--muted); min-width: 0; }
+  .tdrisk > b { font: 500 13px var(--num); color: var(--ink); }
+  .tdrisk span { padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(217, 164, 65, .4); color: var(--ink); overflow-wrap: anywhere; }
+  .tdrisk span.ok { border-color: rgba(76, 195, 138, .4); }
+  .tdund { margin: 0; padding: 8px 12px; border-radius: 8px; border: 1px dashed rgba(217, 164, 65, .75); color: var(--acc); font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+  .tdln { margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }
+  .tdln b { color: var(--ink); font-weight: 500; }
+  .tdln + .tdln { margin-top: -8px; }
+  .tdc details { border-top: 1px solid var(--line); min-width: 0; }
+  .tdc summary { list-style: none; cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--ink); }
+  .tdc summary::-webkit-details-marker { display: none; }
+  .tdc summary small { color: var(--muted); font: 400 12px var(--num); }
+  .tdc summary::after { content: ''; width: 6px; height: 6px; margin: 0 6px 4px auto; border: solid var(--faint); border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); flex: none; }
+  .tdc details[open] > summary::after { transform: rotate(225deg); margin-bottom: 0; }
+  .tddet { display: grid; gap: 12px; padding: 0 0 12px; font-size: 13px; line-height: 1.45; color: var(--muted); min-width: 0; }
+  .tddet h4 { margin: 0 0 4px; font-size: 12px; font-weight: 500; color: var(--ink); }
+  .tddet p { margin: 0; overflow-wrap: anywhere; }
+  .tddet ul { margin: 0; padding: 0 0 0 16px; display: grid; gap: 4px; }
+  .tddet li { overflow-wrap: anywhere; }
+  .tddet li b { color: var(--ink); font-weight: 500; }
+  .tdmd { margin: 0; padding: 12px; border-radius: 8px; background: var(--deep); border: 1px solid var(--line); color: var(--ink); font: 400 12px/1.5 var(--num); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 480px; overflow: auto; }
+  .tdevl { list-style: none; margin: 0; padding: 0 0 12px; display: grid; gap: 8px; }
+  .tdevl li { display: grid; gap: 2px; font-size: 13px; color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
+  .tdevl li b { font-weight: 500; }
+  .tdevl .rt { font-family: var(--sans); }
+  .tdevl small { font-size: 12px; color: var(--muted); }
+  .tdevl a { color: var(--ink); font-weight: 500; }
+  .tdlinks { display: flex; flex-wrap: wrap; gap: 0 16px; min-width: 0; }
+  .tdlinks a, .tdlinks button { min-height: 44px; display: inline-flex; align-items: center; color: var(--ink); font-size: 13px; font-weight: 500; text-decoration: none; }
+  .tdlinks a:hover { text-decoration: underline; }
+  .tdacts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .tdacts button, .tdst button, .tdwy button { min-height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line2); background: var(--card2); color: var(--ink); font: 500 14px var(--sans); cursor: pointer; }
+  .tdacts button { padding: 0 6px; }
+  .tdacts .ok { background: rgba(76, 195, 138, .12); border-color: rgba(76, 195, 138, .4); color: var(--win); }
+  .tdacts .no { color: var(--bad); }
+  .tdacts .go { color: var(--acc); border-color: rgba(217, 164, 65, .45); }
+  .tdacts button:disabled, .tdst button:disabled, .tdwy button:disabled { opacity: .5; cursor: default; }
+  .tdwy { display: grid; gap: 8px; padding: 12px; border-radius: 12px; border: 1px solid var(--line2); background: var(--card2); }
+  .tdwy p { margin: 0; font-size: 14px; font-weight: 500; }
+  .tdwy p small { margin-left: 8px; font-size: 12px; font-weight: 400; color: var(--muted); }
+  .tdrs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tdwy .tdrs button { background: var(--card); font-size: 13px; }
+  .tdwy .tdrs button[aria-pressed="true"] { border-color: var(--acc); background: rgba(217, 164, 65, .16); }
+  .tdwy .tdskip { justify-self: start; background: none; color: var(--muted); }
+  .tdst { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-radius: 8px; background: var(--card2); border: 1px solid var(--line2); }
+  .tdst > span { flex: 1 1 150px; min-width: 0; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+  .tdst > span small { display: block; margin-top: 2px; font: 400 12px var(--sans); color: var(--muted); }
+  .tdst.keep, .tdst.launch { border-color: rgba(76, 195, 138, .45); }
+  .tdst.keep > span b { color: var(--win); font-weight: 500; }
+  .tdst.launch > span b { color: var(--acc); font-weight: 500; }
+  .tdst.reject { border-color: rgba(229, 72, 77, .45); }
+  .tdst.reject > span b { color: var(--bad); font-weight: 500; }
+  .tdempty { padding: 32px 16px; text-align: center; color: var(--muted); display: grid; gap: 8px; justify-items: center; }
+  .tdempty h3 { margin: 0; font-size: 18px; font-weight: 500; color: var(--ink); }
+  .tdempty p { margin: 0; max-width: 520px; }
+  .tdempty ul { text-align: left; }
+  .tdfoot { margin: 0; font-size: 12px; color: var(--faint); text-align: center; }
+  /* A phone: the five tabs (Today first) fit on one row, and Launch test on one line. */
+  @media (max-width: 430px) { .scope { gap: 2px; } .scope button { padding: 0 6px; } }
+  @media (max-width: 400px) { .tdacts button { font-size: 13px; } }
+  @media (min-width: 760px) {
+    .tdc { padding: 16px; gap: 14px; }
+    .tdtop { grid-template-columns: 112px minmax(0, 1fr) auto; gap: 16px; }
+    .tdph { width: 112px; height: 112px; }
+    .tdnm h3 { font-size: 17px; }
+    .tdsc b { font-size: 40px; }
+    .tdev2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: center; }
+    .tdacts { max-width: 480px; }
+  }
+</style>
 </head>
-<body>
+<body class="td">
 <div class="wrap">
   <div class="alert" id="alert" role="alert" hidden></div>
   <header class="top">
@@ -1177,7 +1315,8 @@
     </div>
   </header>
   <div class="status" id="runbox"><i class="dot"></i><span class="run" id="run">Loading…</span></div>
-  <div class="scope" role="group" aria-label="Which products"><button data-scope="world" aria-pressed="true">Outside EU <small id="nworld"></small></button><button data-scope="eu" aria-pressed="false">EU <small id="neu"></small></button><button data-scope="tiktok" aria-pressed="false">TikTok <small id="ntt"></small></button><button data-scope="google" aria-pressed="false">Google <small id="ngoogle"></small></button></div>
+  <div class="scope" role="group" aria-label="Which products"><button data-scope="today" aria-pressed="true" title="Today's winners: the day's 5 to 10 picks">Today <small id="ntoday"></small></button><button data-scope="world" aria-pressed="false">Outside EU <small id="nworld"></small></button><button data-scope="eu" aria-pressed="false">EU <small id="neu"></small></button><button data-scope="tiktok" aria-pressed="false">TikTok <small id="ntt"></small></button><button data-scope="google" aria-pressed="false">Google <small id="ngoogle"></small></button></div>
+  <section class="tdbox" id="today" aria-label="Today's winners" aria-busy="true"></section>
 
   <div class="tools">
   <section class="radar min" id="radar" aria-label="Market Radar" hidden>
@@ -1348,7 +1487,8 @@ const GSORTED = { proof: 'all four rules first, most proof', days: 'by oldest ad
 for (const [o, v] of [[SORTED, 'by momentum'], [WSORTED, 'by momentum'], [ESORT_LABEL, 'Momentum'], [WSORT_LABEL, 'Momentum']]) o.mom = v;
 const saved = store.get('wh-scope');
 const scope0 = saved === 'eu' || saved === 'tiktok' || saved === 'google' ? saved : 'world'; // the markets outside the EU come first
-const st = { scope: scope0, view: scope0 === 'eu' ? 'inbox' : 'all', q: '', sort: 'rpd', wsort: 'proof', gsort: 'proof', jev: '', r2500: false, r10k: false, p4: false, noteu: false, fresh: false,
+// Today's winners (its own script, below) is the first screen. Before the first daily run it hands over to scope0, as before.
+const st = { scope: 'today', view: 'all', q: '', sort: 'rpd', wsort: 'proof', gsort: 'proof', jev: '', r2500: false, r10k: false, p4: false, noteu: false, fresh: false,
   gfull: false, gmeta: false, gnometa: false, gtt: false, hidden: false, cc: '', offset: 0 };
 let ADS = [];
 let total = 0;
@@ -1953,7 +2093,7 @@ function googleRadar(m) {
   $('rall').textContent = showAll ? 'Top only' : `All ${m.markets.length} countries`;
 }
 async function loadMarkets() {
-  if (st.scope === 'tiktok') return;
+  if (st.scope === 'tiktok' || st.scope === 'today') return;
   const asked = st.scope;
   try {
     const res = await fetch('/api/markets' + (asked === 'world' || asked === 'google' ? '?scope=' + asked : ''), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
@@ -2391,7 +2531,7 @@ function setMade(n, bump) {
 
 let seq = 0;
 async function load(append) {
-  if (st.scope === 'tiktok') return;
+  if (st.scope === 'tiktok' || st.scope === 'today') return;
   if (st.view === 'learned') { seq++; loadLearned(); return; }
   if (st.view === 'launch') { seq++; lnView(); return; }
   if (st.view === 'econ') { seq++; ecView(); return; }
@@ -2700,11 +2840,12 @@ function sortOptions() {
 function goScope(s) {
   if (st.scope === s) return;
   st.scope = s;
-  store.set('wh-scope', s);
+  if (s !== 'today') store.set('wh-scope', s); // Today always comes first: the hunt you used last is kept for when it cannot
   st.cc = '';
   st.view = s === 'eu' ? 'inbox' : 'all';
   seq++; // an answer still on its way belongs to the tab you left
   document.body.classList.toggle('tt', s === 'tiktok');
+  document.body.classList.toggle('td', s === 'today');
   document.body.classList.remove('inbox');
   ADS = [];
   MARKETS = null;
@@ -2714,7 +2855,8 @@ function goScope(s) {
   shownTop = '';
   for (const b of document.querySelectorAll('[data-scope]')) b.setAttribute('aria-pressed', String(b.dataset.scope === s));
   sortOptions();
-  if (s === 'tiktok') ttLoad();
+  if (s === 'today') { radar(); if (typeof tdOpen === 'function') tdOpen(); }
+  else if (s === 'tiktok') ttLoad();
   else { radar(); load(); loadMarkets(); }
   window.scrollTo({ top: 0 });
 }
@@ -4129,7 +4271,643 @@ addEventListener('pagehide', ecFlush);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') ecFlush(); });
 
 // Desktop: cards lean toward the pointer (CSS variables through the CSSOM: the CSP blocks style attributes).
-if (st.scope === 'tiktok') { document.body.classList.add('tt'); ttLoad(); } else { load(); loadMarkets(); }
+if (st.scope === 'today') document.body.classList.add('td'); // the Today script below loads it, or hands over to scope0
+else if (st.scope === 'tiktok') { document.body.classList.add('tt'); ttLoad(); } else { load(); loadMarkets(); }
+</script>
+<script nonce="__NONCE__">
+'use strict';
+// ---- Today's winners (today.mjs): the day's 5 to 10 picks of daily.mjs, the board's first screen. A script of its own, so
+// the code above stays as it is: goScope('today') opens it (body.td: the hunt's controls and lists step aside). Before the
+// first daily run the board opens on the hunt you used last, as before, and Today is one tap away. A tap marks the pick
+// (POST /api/today) and goes to the board's own endpoints too, so ✓ Approved, the TikTok tab, 🚀 and what the board learns
+// agree: EU and outside the EU /api/hide (and the reason on its decision row, /api/feedback, where the board has the same
+// reason), TikTok /api/tiktok, Launch test also /api/launch { start }. Saves go out one after the other. #today/<id> (the
+// digest's links) opens Today on that card. Every text from the API is escaped: names and ad copy come from advertisers.
+const TD = { j: null, home: '', want: null, seq: 0, gen: 0, busy: new Set(), why: '', open: new Set(), badImg: new Set(), err: '', at: 0, chain: Promise.resolve() };
+const TD_SRC = { eu: 'EU', world: 'Outside EU', tiktok: 'TikTok', google: 'Google', research: 'Research' };
+const TD_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const TD_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const TD_RUNG = [['paid', 'Paid', 'Runs paid ads now'], ['sustained', 'Sustained', 'Its ads keep running or are copied'],
+  ['selling', 'Selling', 'Independent proof of sales: sold counts, a store best-seller rank or reviews'], ['profitable', 'Profitable', 'On paper: the price leaves a break-even CPA after VAT, fees, product and shipping']];
+const TD_PILLAR = [['proof', 'Proof', "The evidence ladder's facts"], ['demand', 'Demand', 'Rising or falling'], ['competition', 'Competition', 'Room for one more seller'],
+  ['margin', 'Margin', 'Euros left for ads'], ['fit', 'Fit', "Your niches and Jev's read of the product"]];
+const TD_REASONS = ['wow', 'my niche', 'good margin', 'easy to ship', 'not my niche', 'too expensive', 'hard to source', 'brand or copy risk', 'claims or rules', 'sizes or returns', 'seen it before', 'other'];
+const TD_GOOD = new Set(['wow', 'my niche', 'good margin', 'easy to ship']);
+// The board's own reasons for the same words (app.mjs REASONS), saved on its decision row too: 🧠 learns them as well.
+const TD_FB = { good: { wow: 'wow', 'my niche': 'niche', 'good margin': 'margin', 'easy to ship': 'easy' }, bad: { 'not my niche': 'niche', 'too expensive': 'price' } };
+const TD_VERB = { keep: '✓ Kept', reject: '✗ Rejected', launch: '🚀 Launch test' };
+const TD_DONE = { keep: 'Kept', reject: 'Rejected', launch: 'Launch test' };
+const TD_PASSED = { decided: 'decided before', 'shown lately': 'shown on a recent day', excluded: 'in an excluded category', blocked: 'blocked by the risk radar',
+  score: 'score under the bar', evidence: 'too little evidence', price: 'no price known', margin: 'margin too thin', risk: 'too risky', 'not read by Jev': 'not read by Jev yet',
+  'rotation or duplicate': 'the same store, niche or item as a pick', sheet: 'dropped by their product sheet' };
+const TD_SIG = { oldest_ad_days: 'Oldest ad, days', ads_for_product: 'Ads for the product', eu_reach_per_day: 'EU reach a day', best_seller_rank: 'Store best-seller rank',
+  store_trustpilot: 'Store on Trustpilot', new_ads_14d: 'New ads in 14 days', markets: 'Markets', store_products: 'Products in the store', breakeven_cpa_eur: 'Break-even CPA, €',
+  niche: 'Niche fit', appeal: 'Appeal', rival_stores: 'Rival stores' };
+const TD_KIND = { fact: ['fact', 'Fact'], estimate: ['estimate', 'Estimate'], claim: ['unverified', 'Claim'] };
+
+const tdHashId = () => { const m = /^#today(?:\/([A-Za-z0-9_-]{1,160}))?\/?$/.exec(location.hash || ''); return m ? m[1] || '' : null; };
+const tdDom = (id) => 'td-' + String(id).replace(/[^A-Za-z0-9_-]/g, '-');
+const tdIdOf = (p) => (p.id ? String(p.id) : 'rank-' + p.rank);
+const tdKind = (p) => String(p.key || '').split('|')[0];
+const tdBoardKind = (k) => k === 'eu' || k === 'world' || k === 'google';
+const tdPick = (key) => ((TD.j && TD.j.picks) || []).find((p) => p.key === key) || null;
+const tdAd = (p) => (Array.isArray(p.ad_ids) ? p.ad_ids : []).map(String).find((x) => /^[A-Za-z0-9_-]{1,64}$/.test(x)) || '';
+const tdArr = (x) => (Array.isArray(x) ? x : []);
+const tdObj = (x) => (x && typeof x === 'object' && !Array.isArray(x) ? x : null);
+function tdDayLabel(d, short) {
+  const t = new Date(String(d) + 'T12:00:00Z');
+  if (!Number.isFinite(+t)) return String(d || '');
+  return short ? `${TD_WEEK[t.getUTCDay()]} ${t.getUTCDate()}` : `${TD_WEEK[t.getUTCDay()]} ${t.getUTCDate()} ${TD_MON[t.getUTCMonth()]} ${t.getUTCFullYear()}`;
+}
+// Times in Bangkok (UTC+7, no daylight saving): the days and the daily run are Bangkok's.
+const tdTime = (iso) => { const t = Date.parse(iso); return Number.isFinite(t) ? new Date(t + 7 * 3600e3).toISOString().slice(11, 16) : ''; };
+const tdDate = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || '')); return m ? `${Number(m[3])} ${TD_MON[Number(m[2]) - 1]} ${m[1]}` : String(s || ''); };
+const tdEur = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? '–' : (Number(v) < 0 ? '−' : '') + money(Math.abs(Number(v)), 'EUR'));
+function tdLab(x) {
+  if (x == null || typeof x === 'boolean') return '';
+  if (typeof x === 'string' || typeof x === 'number') return String(x);
+  if (Array.isArray(x)) return x.map(tdLab).filter(Boolean).join(', ');
+  if (typeof x === 'object') return tdLab(x.label ?? x.text ?? x.phrase ?? x.word ?? x.name ?? x.angle ?? x.hook ?? x.line ?? x.cc ?? '');
+  return '';
+}
+const tdNum = (v) => (typeof v === 'boolean' ? (v ? 'yes' : 'no') : typeof v === 'number' && Number.isFinite(v) ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : tdLab(v));
+const tdSig = (s) => TD_SIG[s] || String(s || '').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+
+async function tdFetch(day) {
+  const res = await fetch('/api/today' + (day ? '?day=' + encodeURIComponent(day) : ''), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+  if (res.status === 401) { location.reload(); throw new Error('Log in first'); }
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+  return j;
+}
+async function tdSend(path, body) {
+  const res = await fetch(path, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+  return j;
+}
+// One save after the other: a reason never lands before the decision it belongs to, an Undo never before the tap.
+function tdChain(fn) {
+  const p = TD.chain.then(fn);
+  TD.chain = p.then(() => {}, () => {});
+  return p;
+}
+
+// Rendering ------------------------------------------------------------------------------------------------------------
+function tdStatus(j) {
+  const r = j.run;
+  if (!r) return '';
+  if (r.status === 'running') return 'Running since ' + tdTime(r.started_at);
+  const n = tdArr(j.picks).length;
+  const c = tdObj(r.counts) || {};
+  const passed = c.passed != null && Number.isFinite(Number(c.passed)) ? Number(c.passed) : null; // when the API sends the run's counts
+  return [`${n} pick${n === 1 ? '' : 's'}`, r.pool ? `${Number(r.pool).toLocaleString('en-US')} scored` : '', passed != null ? `${passed.toLocaleString('en-US')} passed the bar` : '',
+    r.status === 'failed' ? 'failed ' + tdTime(r.finished_at || r.started_at) : r.finished_at ? 'ready ' + tdTime(r.finished_at) : ''].filter(Boolean).join(' · ');
+}
+// Why products were passed over (the selection's counts, and the candidates their product sheet dropped).
+function tdPassedHtml(r) {
+  const rows = Object.entries((r && tdObj(r.passed_over)) || {}).filter(([, n]) => Number(n) > 0).sort((a, b) => b[1] - a[1]);
+  const dropped = r && tdObj(r.prepare) ? tdArr(r.prepare.dropped).length : 0;
+  if (dropped) rows.push(['sheet', dropped]);
+  return rows.length ? `<ul>${rows.map(([k, n]) => `<li><b>${esc(Number(n).toLocaleString('en-US'))}</b>${esc(TD_PASSED[k] || k)}</li>`).join('')}</ul>` : '';
+}
+const tdEmptyHtml = (h, p) => `<div class="tdempty"><h3>${esc(h)}</h3><p>${esc(p)}</p></div>`;
+function tdNoneHtml(j, po) {
+  const r = j.run || {};
+  const why = r.status === 'failed' ? `The run failed${r.error ? ': ' + r.error : ''}.` : r.status === 'running' ? 'The run is still going: the picks come when it is done.'
+    : 'No product passed the quality bar (it is never lowered to fill the list).';
+  return `<div class="tdempty"><h3>No picks for ${esc(tdDayLabel(j.day))}</h3><p>${esc(why)}</p>${po ? `<p>Passed over:</p>${po}` : ''}</div>`;
+}
+function tdDayHtml(d, cur) {
+  const s = ['ok', 'short', 'failed', 'running'].includes(d.status) ? d.status : '';
+  const n = Number(d.picks) || 0;
+  const what = d.status === 'failed' ? 'the run failed' : d.status === 'running' ? 'still running' : `${n} pick${n === 1 ? '' : 's'}${d.status === 'short' ? ', fewer than 5 passed' : ''}`;
+  return `<button data-tday="${esc(d.day)}" aria-pressed="${d.day === cur}" title="${esc(tdDayLabel(d.day) + ': ' + what)}"><i class="tddot ${s}" aria-hidden="true"></i>${esc(tdDayLabel(d.day, true))}<small aria-hidden="true">${esc(d.status === 'failed' ? '✗' : d.status === 'running' ? '…' : String(n))}</small><span class="tdvh">, ${esc(what)}</span></button>`;
+}
+function tdHtml(j) {
+  if (!j) return tdEmptyHtml("Today's winners", TD.err ? 'Could not load them: ' + TD.err : 'Loading…');
+  if (!j.ready) return tdEmptyHtml("Today's winners", "Today's winners start after the next deploy and the first daily run.");
+  const ban = j.banner && j.banner.text ? `<div class="alert tdban ${j.banner.level === 'red' ? 'red' : 'yellow amber'}" role="alert">${esc(j.banner.text)}</div>` : '';
+  if (!j.day) return ban + tdEmptyHtml("Today's winners", "No daily run yet: today's winners start after the first daily run.");
+  const r = j.run || {};
+  const picks = tdArr(j.picks);
+  const days = tdArr(j.days).length ? `<div class="tddays" role="group" aria-label="Day">${j.days.map((d) => tdDayHtml(d, j.day)).join('')}</div>` : '';
+  const q = esc('day=' + encodeURIComponent(j.day));
+  const po = tdPassedHtml(r);
+  const dl = r.status && r.status !== 'running' ? `<span>Digest</span><a href="/api/today/digest?${q}&amp;format=md" download>Markdown ↓</a><a href="/api/today/digest?${q}&amp;format=csv" download>CSV ↓</a>` : '';
+  const more = po && picks.length ? `<details class="tdpo" data-tdo="po"${TD.open.has('head:po') ? ' open' : ''}><summary>Why not more?</summary>${po}</details>` : '';
+  return `<div class="tdhead"><h2>Winners for ${esc(tdDayLabel(j.day))}</h2><p class="tdstat">${esc(tdStatus(j))}</p></div>${ban}${days}
+    ${dl || more ? `<div class="tdtools">${dl}${more}</div>` : ''}
+    ${picks.length ? `<ol class="tdlist">${picks.map((p) => `<li>${tdCardHtml(p)}</li>`).join('')}</ol>` : tdNoneHtml(j, po)}
+    ${picks.length ? '<p class="tdfoot">Keep, Reject or Launch test: the score learns from it, and ✓ Approved, the TikTok tab and 🚀 follow.</p>' : ''}`;
+}
+
+function tdLadderHtml(p) {
+  const l = tdObj(p.ladder) || {};
+  const n = TD_RUNG.filter(([k]) => l[k] === true).length;
+  return `<ol class="tdlad" aria-label="Evidence ladder: ${n} of 4">${TD_RUNG.map(([k, label, tip]) => {
+    const v = l[k];
+    return `<li class="${v === true ? 'yes' : v === false ? 'no' : 'idk'}" data-rung="${k}" title="${esc(tip)}"><b aria-hidden="true">${v === true ? '✓' : v === false ? '✗' : '?'}</b>${esc(label)}<span class="tdvh">: ${v === true ? 'yes' : v === false ? 'no' : 'not known'}</span></li>`;
+  }).join('')}</ol>`;
+}
+function tdPillarsHtml(p) {
+  const s = tdObj(p.pillars) || {};
+  return `<ul class="tdpil" aria-label="Score pillars, 0 to 1">${TD_PILLAR.map(([k, label, tip]) => {
+    const v = s[k] == null ? NaN : Number(s[k]);
+    const ok = Number.isFinite(v);
+    return `<li data-pillar="${k}" title="${esc(tip)}"><span>${esc(label)}</span><i data-w="${ok ? Math.round(Math.max(0, Math.min(1, v)) * 1000) / 10 : 0}"></i><b>${ok ? esc(v.toFixed(2)) : '–'}</b></li>`;
+  }).join('')}</ul>`;
+}
+// The board's own unit economics (econ.mjs: VAT out first, then fees, product, shipping); "est." while the supplier price is a guess.
+function tdMoneyHtml(p) {
+  const e = tdObj(p.econ) || {};
+  const pr = tdObj(p.price) || {};
+  const eur = e.price_eur ?? pr.eur;
+  if (eur == null && e.margin_eur == null) return '<p class="tdln"><b>Money</b> no price known yet, so no margin.</p>';
+  const est = e.supplier === 'est';
+  const orig = pr.amount != null && pr.currency && pr.currency !== 'EUR' ? money(pr.amount, pr.currency) : '';
+  const why = est ? '. est.: the supplier price is an estimate, not a quote' : '';
+  const cell = (v, label, tip, cls) => `<div class="m${cls ? ' ' + cls : ''}" title="${esc(tip)}"><b>${esc(v)}</b><span>${esc(label)}</span></div>`;
+  const m = e.margin_eur == null ? NaN : Number(e.margin_eur);
+  const roas = e.breakeven_roas == null ? NaN : Number(e.breakeven_roas);
+  return `<div class="meta m4 tdm" aria-label="Money">${cell(tdEur(eur), 'price', orig ? 'Its price: ' + orig : 'Its price', '')}${cell(tdEur(e.margin_eur), est ? 'margin · est.' : 'margin', 'What one order leaves before ads: after VAT, fees, the product and shipping' + why, Number.isFinite(m) ? (m > 0 ? 'good' : 'low') : '')}${cell(tdEur(e.breakeven_cpa_eur), est ? 'break-even CPA · est.' : 'break-even CPA', 'The most an order may cost in ads before it loses money' + why, '')}${cell(Number.isFinite(roas) ? roas.toFixed(2) + '×' : '–', 'break-even ROAS', 'Below this ROAS the ads cost more than an order leaves', '')}</div>`;
+}
+function tdRiskHtml(p) {
+  const r = tdObj(p.risk) || {};
+  const flags = tdArr(r.flags).map(tdLab).filter(Boolean);
+  const und = tdArr(r.undecided).map(tdLab).filter(Boolean);
+  const m = r.mult == null ? NaN : Number(r.mult);
+  const row = Number.isFinite(m) || flags.length ? `<div class="tdrisk">${Number.isFinite(m) ? `<b title="The risk multiplier the score was scaled by: 1 is no risk found">Risk × ${esc(m.toFixed(2))}</b>` : ''}${flags.length ? flags.map((f) => `<span>${esc(f)}</span>`).join('') : '<span class="ok">No risk flag</span>'}</div>` : '';
+  return row + (und.length ? `<p class="tdund">Connor hasn't decided: ${esc(und.join(', '))}</p>` : '');
+}
+const tdFold = (dom, part, title, sec) => `<details data-tdo="${part}"${TD.open.has(dom + ':' + part) ? ' open' : ''}><summary>${esc(title)}</summary><div class="tddet">${sec.map(([h, body]) => `<div><h4>${esc(h)}</h4>${body}</div>`).join('')}</div></details>`;
+const tdUl = (xs) => `<ul>${xs.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`;
+// The audience step's card (wh-audience): its one line, and the rest one tap away. Fields can be missing: each part is optional.
+function tdAudHtml(p, dom) {
+  const a = tdObj(p.audience);
+  const line = a && a.one_line ? tdLab(a.one_line) : typeof p.audience === 'string' && p.audience.trim() ? p.audience : p.jev_audience ? tdLab(p.jev_audience) + ' (Jev, estimate)' : 'not prepared yet';
+  const head = `<p class="tdln"><b>Audience</b> ${esc(line)}</p>`;
+  if (!a) return head;
+  const c = tdObj(a.card) || a;
+  const sec = [];
+  const problem = tdLab(tdObj(c.problem) ? c.problem.line : c.problem);
+  if (problem) sec.push(['Problem', `<p>${esc(problem)}</p>`]);
+  if (c.reach_line) sec.push(['Who the ads reach', `<p>${esc(tdLab(c.reach_line))}</p>`]);
+  const personas = tdArr(c.personas).slice(0, 3).map((x) => {
+    if (!tdObj(x)) return `<li>${esc(tdLab(x))}</li>`;
+    const where = tdObj(x.countries) ? tdLab(x.countries.launch) : tdLab(x.countries);
+    const wants = tdArr(x.wants).slice(0, 2).map(tdLab).filter(Boolean).join(', ');
+    const fears = tdArr(x.fears).slice(0, 2).map(tdLab).filter(Boolean).join(', ');
+    return `<li><b>${esc(tdLab(x.label || x.name) || 'Persona')}</b> ${esc([tdLab(x.gender), tdLab(x.ages), where].filter(Boolean).join(' · '))}${wants ? `<br>Wants: ${esc(wants)}` : ''}${fears ? `<br>Fears: ${esc(fears)}` : ''}</li>`;
+  });
+  if (personas.length) sec.push(['Personas', `<ul>${personas.join('')}</ul>`]);
+  const trig = tdArr(c.triggers).slice(0, 4).map(tdLab).filter(Boolean);
+  if (trig.length) sec.push(['Triggers', tdUl(trig)]);
+  const obj = tdArr(c.objections).slice(0, 4).map((o) => [tdLab(o), tdObj(o) ? tdLab(o.answer) : '']).filter((o) => o[0]);
+  if (obj.length) sec.push(['Objections', `<ul>${obj.map(([q, ans]) => `<li><b>${esc(q)}</b>${ans ? ': ' + esc(ans) : ''}</li>`).join('')}</ul>`]);
+  const words = (tdObj(c.words) ? tdArr(c.words.phrases) : tdArr(c.words)).slice(0, 8).map(tdLab).filter(Boolean);
+  if (words.length) sec.push(['Their words', `<p>${words.map((w) => `“${esc(w)}”`).join(' · ')}</p>`]);
+  const angles = tdArr(c.angles).slice(0, 5).map((x) => (tdObj(x)
+    ? `<li>${x.first_test ? '<b>First test</b> · ' : ''}<b>${esc(tdLab(x.angle || x.label) || 'Angle')}</b>${x.hook ? `: “${esc(tdLab(x.hook))}”` : ''}${x.persona ? ` (${esc(tdLab(x.persona))})` : ''}</li>`
+    : `<li>${esc(tdLab(x))}</li>`));
+  if (angles.length) sec.push(['Angles', `<ul>${angles.join('')}</ul>`]);
+  const t = c.targeting;
+  if (tdObj(t)) {
+    const ctl = tdObj(t.control) || t;
+    const rows = [['Campaign', ctl.campaign], ['Countries', ctl.countries], ['Age', ctl.age], ['Gender', ctl.gender], ['Audience', ctl.audience], ['Placements', ctl.placements]]
+      .map(([k, v]) => [k, tdLab(v)]).filter(([, v]) => v);
+    const sg = tdObj(t.suggestions) ? Object.entries(t.suggestions).map(([k, v]) => [k, tdLab(v)]).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`) : [];
+    const it = tdObj(t.interests) ? [tdLab(t.interests.names), tdLab(t.interests.status)].filter(Boolean).join(' · ') : '';
+    if (rows.length || sg.length || it) {
+      sec.push(['Targeting', `<ul>${rows.map(([k, v]) => `<li><b>${esc(k)}</b> ${esc(v)}</li>`).join('')}${sg.length ? `<li><b>Suggested</b> ${esc(sg.join(' · '))}</li>` : ''}${it ? `<li><b>Interests</b> ${esc(it)}</li>` : ''}</ul>`]);
+    }
+  } else if (tdLab(t)) sec.push(['Targeting', `<p>${esc(tdLab(t))}</p>`]);
+  const miss = tdArr(a.missing).map(tdLab).filter(Boolean);
+  if (miss.length) sec.push(['Missing', `<p>${esc(miss.join(' · '))}</p>`]);
+  return sec.length ? head + tdFold(dom, 'aud', 'Audience card', sec) : head;
+}
+// The main blocker without a product sheet: the first risk flag or return risk (as the digest says it).
+function tdBlocker(p) {
+  const r = tdObj(p.risk) || {};
+  const first = tdArr(r.flags).map(String).find((f) => !/^Ad numbers/.test(f)) || tdArr(r.returns).map(String)[0] || '';
+  return first ? first.replace(/^Docs: /, 'needs papers: ').replace(/^Returns: /, '') : 'none found';
+}
+// The product sheet (wh-validate): its one line and main blocker, the whole sheet one tap away.
+function tdSheetHtml(p, dom) {
+  const s = tdObj(p.sheet) || (typeof p.sheet === 'string' && p.sheet.trim() ? { one_line: p.sheet } : null);
+  if (!s) return `<p class="tdln"><b>Product sheet</b> not prepared yet · <b>Main blocker</b> ${esc(tdBlocker(p))} (from the risk flags)</p>`;
+  const test = tdObj(s.test);
+  const bits = [s.market ? 'market ' + tdLab(s.market) : '', s.level ? 'level ' + tdLab(s.level) : '',
+    test && test.budget_eur != null ? `test ${tdEur(test.budget_eur)}${test.daily_eur != null ? ` at ${tdEur(test.daily_eur)} a day` : ''}${test.mode ? ` (${tdLab(test.mode)})` : ''}` : ''].filter(Boolean);
+  const head = `<p class="tdln"><b>Product sheet</b> ${esc(tdLab(s.one_line) || 'made')}</p><p class="tdln"><b>Main blocker</b> ${esc(tdLab(s.main_blocker) || tdBlocker(p))}${bits.length ? ' · ' + esc(bits.join(' · ')) : ''}</p>`;
+  const sec = [];
+  const sh = tdObj(s.sheet);
+  if (typeof s.md === 'string' && s.md.trim()) sec.push(['The sheet', `<pre class="tdmd">${esc(s.md)}</pre>`]);
+  else if (sh) {
+    const comp = tdObj(sh.compliance) ? tdLab(sh.compliance.main) : '';
+    const plan = tdObj(sh.test_plan) ? tdLab(sh.test_plan.structure) : '';
+    if (comp) sec.push(['Compliance', `<p>${esc(comp)}</p>`]);
+    if (plan) sec.push(['Test plan', `<p>${esc(plan)}</p>`]);
+    for (const [k, h] of [['facts', 'Facts'], ['assumptions', 'Assumptions']]) {
+      const xs = tdArr(sh[k]).map(tdLab).filter(Boolean);
+      if (xs.length) sec.push([h, tdUl(xs)]);
+    }
+  }
+  const miss = tdArr(s.missing).map(tdLab).filter(Boolean);
+  if (miss.length) sec.push(['Missing', `<p>${esc(miss.join(' · '))}</p>`]);
+  return sec.length ? head + tdFold(dom, 'sheet', 'Product sheet details', sec) : head;
+}
+// Every number with its source and date: fact (from data), estimate (Jev, a default, a guess) or claim (unverified).
+function tdEvHtml(p, dom) {
+  const ev = tdArr(p.evidence).filter((x) => tdObj(x));
+  if (!ev.length) return '';
+  const facts = ev.filter((x) => x.kind === 'fact').length;
+  const items = ev.map((x) => {
+    const k = TD_KIND[x.kind] || ['unverified', tdLab(x.kind) || 'Unchecked'];
+    const link = safe(x.link);
+    return `<li><span><b>${esc(tdSig(x.signal))}</b> ${esc(tdNum(x.value))} <span class="rt ${k[0]}">${esc(k[1])}</span></span><small>${esc([tdLab(x.source), tdDate(x.date)].filter(Boolean).join(' · '))}${link ? ` · <a href="${link}" target="_blank" rel="noopener noreferrer">open ↗</a>` : ''}</small></li>`;
+  }).join('');
+  return `<details data-tdo="ev"${TD.open.has(dom + ':ev') ? ' open' : ''}><summary>Evidence <small>${ev.length} · ${facts} fact${facts === 1 ? '' : 's'}</small></summary><ul class="tdevl">${items}</ul></details>`;
+}
+function tdLinksHtml(p) {
+  const L = tdObj(p.links) || {};
+  const seen = new Set();
+  const out = [];
+  for (const [u, t] of [[Array.isArray(L.ad_library) ? L.ad_library[0] : L.ad_library, 'Ad Library'], [L.tiktok, 'TikTok'], [L.product_url, 'Product page']]) {
+    const s = safe(u);
+    if (!s || seen.has(u)) continue;
+    seen.add(u);
+    out.push(`<a href="${s}" target="_blank" rel="noopener noreferrer">${esc(t)} ↗</a>`);
+  }
+  return out.length ? `<div class="tdlinks">${out.join('')}</div>` : '';
+}
+function tdActsHtml(p) {
+  const off = TD.busy.has(p.key) ? ' disabled' : '';
+  if (!p.decision) return `<div class="tdacts" role="group" aria-label="Decide"><button class="ok" data-tdd="keep"${off}>Keep</button><button class="no" data-tdd="reject"${off}>Reject</button><button class="go" data-tdd="launch"${off}>Launch test</button></div>`;
+  const sub = [p.decided_at ? tdTime(p.decided_at) : '', off ? 'Saving…' : p.note || ''].filter(Boolean).join(' · ');
+  return `<div class="tdst ${esc(p.decision)}"><span><b>${esc(TD_VERB[p.decision] || p.decision)}</b>${p.reason ? ' · ' + esc(p.reason) : ''}${sub ? `<small>${esc(sub)}</small>` : ''}</span>${p.decision === 'launch' ? `<button data-tdln="1"${off}>Open 🚀</button>` : ''}${TD.why === p.key ? '' : `<button data-tdwhy="1"${off}>${p.reason ? 'Reason' : 'Add a reason'}</button>`}<button data-tdu="1"${off}>Undo</button></div>`;
+}
+// Why? One reason, optional (the decision is saved without one). Keep and Launch test get the good ones, Reject the others.
+function tdWhyHtml(p) {
+  const good = p.decision !== 'reject';
+  const all = (TD.j && tdArr(TD.j.reasons).length ? TD.j.reasons : TD_REASONS).map(String);
+  const off = TD.busy.has(p.key) ? ' disabled' : '';
+  return `<div class="tdwy" role="group" aria-label="Why? Optional"><p>Why?<small>Optional: the score learns from it</small></p><div class="tdrs">${all.filter((r) => r === 'other' || TD_GOOD.has(r) === good)
+    .map((r) => `<button data-tdr="${esc(r)}" aria-pressed="${p.reason === r}"${off}>${esc(r)}</button>`).join('')}</div><button class="tdskip" data-tdx="1"${off}>${p.reason ? 'Done' : 'No reason'}</button></div>`;
+}
+function tdCardHtml(p) {
+  const L = tdObj(p.links) || {};
+  const dom = tdDom(tdIdOf(p));
+  const name = tdLab(p.name).trim() || 'Untitled product';
+  const url = safe(L.product_url);
+  const img = safe(p.image) && !TD.badImg.has(String(p.image)) ? safe(p.image) : '';
+  const photo = img ? `<img src="${img}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<i>${esc(name.slice(0, 1).toUpperCase())}</i>`;
+  const rank = `<span class="tdrk">${esc(p.rank ?? '')}</span>`;
+  const ph = url ? `<a class="tdph" href="${url}" target="_blank" rel="noopener noreferrer" tabindex="-1" aria-hidden="true">${rank}${photo}</a>` : `<span class="tdph" aria-hidden="true">${rank}${photo}</span>`;
+  const sub = [TD_SRC[p.src] || TD_SRC[tdKind(p)] || '', tdArr(p.markets).slice(0, 5).map(tdLab).join(', '), [p.category, p.sub].map(tdLab).filter(Boolean).join(' › ')].filter(Boolean).join(' · ');
+  const score = p.score == null || !Number.isFinite(Number(p.score)) ? '–' : String(Math.round(Number(p.score)));
+  return `<article class="tdc${p.decision ? ' done' : ''}" id="${esc(dom)}" data-key="${esc(p.key)}" aria-label="${esc(`${p.rank ?? ''}. ${name}`)}">
+    <div class="tdtop">${ph}<div class="tdnm"><h3>${url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${esc(name)}</a>` : esc(name)}</h3><small>${esc(sub)}</small></div>
+      <div class="tdsc" title="Winner Score, 0 to 100"><b>${esc(score)}</b><span>score</span></div></div>
+    <div class="tdev2">${tdLadderHtml(p)}${tdPillarsHtml(p)}</div>
+    ${p.why ? `<p class="tdwhy">${esc(tdLab(p.why))}</p>` : ''}
+    ${tdMoneyHtml(p)}${tdRiskHtml(p)}${tdAudHtml(p, dom)}${tdSheetHtml(p, dom)}${tdEvHtml(p, dom)}${tdLinksHtml(p)}${tdActsHtml(p)}
+    ${p.decision && TD.why === p.key ? tdWhyHtml(p) : ''}
+  </article>`;
+}
+// Widths through the CSSOM (the CSP blocks style attributes). grow: from 0, so the bars grow in.
+function tdBars(root, grow = true) {
+  const bars = [...root.querySelectorAll('.tdpil i[data-w]')];
+  const set = () => { for (const i of bars) i.style.setProperty('--w', Number(i.dataset.w) + '%'); };
+  if (grow) requestAnimationFrame(set); else set();
+}
+function tdShow(j) {
+  TD.j = j;
+  TD.at = Date.now();
+  const box = $('today');
+  box.innerHTML = tdHtml(j);
+  box.setAttribute('aria-busy', 'false');
+  tdBars(box);
+  tdCount();
+}
+// One card again (the others, their folds and the scroll stay as they are). focus: what gets the keyboard next.
+function tdPaint(p, focus = '') {
+  const el = document.getElementById(tdDom(tdIdOf(p)));
+  if (!el) return;
+  const t = document.createElement('template');
+  t.innerHTML = tdCardHtml(p);
+  const n = t.content.firstElementChild;
+  if (el.classList.contains('hi')) n.classList.add('hi');
+  el.replaceWith(n);
+  tdBars(n, false);
+  const f = focus && n.querySelector(focus);
+  if (f) f.focus({ preventScroll: true });
+}
+// The count on the Today tab: the newest day's picks you have not decided on.
+function tdCount() {
+  if (!TD.j || !TD.j.day || TD.j.day !== TD.home) return;
+  const n = tdArr(TD.j.picks).filter((p) => !p.decision).length;
+  $('ntoday').textContent = n ? String(n) : '';
+}
+
+// Loading --------------------------------------------------------------------------------------------------------------
+async function tdLoad(day) {
+  const my = ++TD.seq;
+  $('today').setAttribute('aria-busy', 'true');
+  try {
+    const j = await tdFetch(day);
+    if (my !== TD.seq) return;
+    TD.why = '';
+    tdShow(j);
+  } catch (e) {
+    if (my !== TD.seq) return;
+    $('today').setAttribute('aria-busy', 'false');
+    toast('Could not load that day: ' + e.message, '');
+  }
+}
+// The tab opens (goScope): what it had at once, then fresh from the server (the day you were on, else the newest).
+function tdOpen() {
+  if (TD.j) tdShow(TD.j);
+  else $('today').innerHTML = tdHtml(null);
+  tdRefresh();
+}
+async function tdRefresh() {
+  const my = ++TD.seq;
+  const gen = TD.gen;
+  const day = TD.j && TD.j.day && TD.j.day !== TD.home ? TD.j.day : '';
+  try {
+    const j = await tdFetch(day);
+    if (my !== TD.seq) return;
+    if (!day) TD.home = j.day || '';
+    if (TD.gen !== gen || TD.busy.size || TD.why) { /* a tap since it was asked, or a save on its way: the cards on screen are newer */ }
+    else if (st.scope === 'today') tdShow(j);
+    else { TD.j = j; tdCount(); }
+  } catch (e) {
+    if (my !== TD.seq) return;
+    TD.err = e.message;
+    if (!TD.j && st.scope === 'today') $('today').innerHTML = tdHtml(null);
+  }
+  if (TD.want !== null && st.scope === 'today') tdGo(TD.want);
+}
+// #today/<id>: that card, highlighted. Not among the shown day's picks: the other days with picks, newest first.
+async function tdGo(id) {
+  TD.want = null;
+  if (!id) return;
+  let el = document.getElementById(tdDom(id));
+  if (!el && (await tdFind(id))) el = document.getElementById(tdDom(id));
+  if (!el) { toast('That pick is not in the last 14 days', ''); return; }
+  for (const x of document.querySelectorAll('#today .tdc.hi')) x.classList.remove('hi');
+  el.classList.add('hi');
+  requestAnimationFrame(() => el.scrollIntoView({ block: 'start' }));
+}
+async function tdFind(id) {
+  const j = TD.j;
+  for (const d of j ? tdArr(j.days) : []) {
+    if (d.day === j.day || !(Number(d.picks) > 0)) continue;
+    let k;
+    try { k = await tdFetch(d.day); } catch (e) { return false; }
+    if (!tdArr(k.picks).some((p) => tdIdOf(p) === id)) continue;
+    if (st.scope === 'today') tdShow(k);
+    return true;
+  }
+  return false;
+}
+function tdLeave() {
+  TD.why = '';
+  if (tdHashId() !== null) history.replaceState(null, '', location.pathname + location.search); // a reload opens the tab you are on
+}
+
+// Deciding -------------------------------------------------------------------------------------------------------------
+function tdTT(id, d) {
+  if (typeof TT === 'undefined' || !TT) return;
+  const a = TT.find((x) => x.id === id);
+  if (a) a.d = d; // the TikTok tab shows it without a reload
+}
+// The board's own decision, as its own buttons make it: ✓ / ✗ on the product (/api/hide), Approved / Reject on the TikTok
+// tab (/api/tiktok); Launch test approves and starts the launch card (/api/launch, as 🚀's Start). Returns what it did.
+async function tdMirror(p, d) {
+  const kind = tdKind(p);
+  const yes = d !== 'reject';
+  if (kind === 'tiktok') {
+    const id = p.key.slice('tiktok|'.length);
+    await tdSend('/api/tiktok', { id, decision: yes ? 'approved' : 'rejected' });
+    tdTT(id, yes ? 'approved' : 'rejected');
+    if (d !== 'launch') return yes ? 'Approved on the TikTok tab too.' : 'Rejected on the TikTok tab too.';
+  } else if (tdBoardKind(kind)) {
+    const ad = tdAd(p);
+    if (!ad) return 'It has no ad on the board: marked here only.';
+    await tdSend('/api/hide', { ad_id: ad, status: yes ? 'seen' : 'rejected' });
+    if (d !== 'launch') return yes ? 'On ✓ Approved too.' : 'Rejected on the board too.';
+  } else return 'A research pick: marked here only.';
+  try {
+    const j = await tdSend('/api/launch', { start: p.key });
+    const l = j.launch;
+    if (l && typeof LN !== 'undefined') {
+      LN.list = [l].concat((LN.list || []).filter((x) => x.key !== l.key));
+      if (typeof lnCount === 'function') lnCount();
+    }
+    p.launch = l ? l.key : p.key;
+    return 'Approved, and its launch card is in 🚀.';
+  } catch (e) {
+    return `Approved, but its launch card did not start (${e.message}): open 🚀 to start it.`;
+  }
+}
+// Undo there too. The launch card the tap started goes while nothing is on it yet; with your work on it, it stays.
+async function tdUnmirror(p, was) {
+  const kind = tdKind(p);
+  let note;
+  if (kind === 'tiktok') {
+    const id = p.key.slice('tiktok|'.length);
+    await tdSend('/api/tiktok', { id, decision: '' });
+    tdTT(id, null);
+    note = 'Undecided on the TikTok tab too.';
+  } else if (tdBoardKind(kind) && tdAd(p)) {
+    await tdSend('/api/hide', { ad_id: tdAd(p), status: 'none' });
+    note = 'Undecided on the board too.';
+  } else return '';
+  if (was.decision !== 'launch') return note;
+  const res = await fetch('/api/launch', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+  const l = tdArr(j.launches).find((x) => x.key === (was.launch || p.key));
+  if (!l) return note;
+  if (l.decision || Object.keys(l.steps || {}).length) return note + ' Its launch card stays in 🚀: it has your work on it.';
+  await tdSend('/api/launch', { key: l.key, remove: true });
+  if (typeof LN !== 'undefined' && LN.list) {
+    LN.list = LN.list.filter((x) => x.key !== l.key);
+    if (LN.focus === l.key) LN.focus = '';
+    if (typeof lnCount === 'function') lnCount();
+  }
+  return note + ' Its launch card is gone too.';
+}
+async function tdDecide(p, d) {
+  if (p.decision || TD.busy.has(p.key) || !TD.j || !TD_DONE[d]) return;
+  const day = TD.j.day;
+  TD.gen++;
+  Object.assign(p, { decision: d, reason: null, decided_at: new Date().toISOString(), note: '' });
+  TD.why = p.key; // the reason chips come up under the card
+  TD.busy.add(p.key);
+  tdPaint(p);
+  tdCount();
+  let out;
+  try {
+    out = await tdChain(async () => {
+      const r = await tdSend('/api/today', { day, key: p.key, decision: d, reason: null });
+      let note;
+      try { note = await tdMirror(p, d); } catch (e) { note = 'Marked here, but the board did not follow: ' + e.message + '.'; }
+      return { at: r.decided_at, note };
+    });
+  } catch (e) {
+    Object.assign(p, { decision: null, reason: null, decided_at: null, note: '' });
+    TD.busy.delete(p.key);
+    if (TD.why === p.key) TD.why = '';
+    tdPaint(p, '[data-tdd]');
+    tdCount();
+    toast('Could not save: ' + e.message, '');
+    return;
+  }
+  Object.assign(p, { decided_at: out.at || p.decided_at, note: out.note });
+  TD.busy.delete(p.key);
+  tdPaint(p, TD.why === p.key ? '[data-tdr]' : '[data-tdu]');
+  toast(`${TD_DONE[d]}. ${out.note}`, '');
+}
+async function tdReason(p, r) {
+  if (!p.decision || TD.busy.has(p.key) || !TD.j) return;
+  const day = TD.j.day;
+  TD.gen++;
+  const before = p.reason;
+  const want = before === r ? null : r; // a second tap takes it back
+  p.reason = want;
+  TD.why = '';
+  TD.busy.add(p.key);
+  tdPaint(p);
+  try {
+    await tdChain(async () => {
+      await tdSend('/api/today', { day, key: p.key, decision: p.decision, reason: want });
+      // The same reason on the board's decision row, where the board has it (what 🧠 learns from). Extra: never fails the tap.
+      const fb = TD_FB[p.decision === 'reject' ? 'bad' : 'good'];
+      const ad = tdAd(p);
+      const now = want != null && Object.hasOwn(fb, want) ? [fb[want]] : [];
+      if (ad && tdBoardKind(tdKind(p)) && (now.length || (before != null && Object.hasOwn(fb, before)))) await tdSend('/api/feedback', { ad_id: ad, reasons: now }).catch(() => {});
+    });
+  } catch (e) {
+    p.reason = before;
+    TD.busy.delete(p.key);
+    tdPaint(p);
+    toast('Could not save the reason: ' + e.message, '');
+    return;
+  }
+  TD.busy.delete(p.key);
+  tdPaint(p, '[data-tdu]');
+  toast(want ? 'Reason saved: ' + want : 'Reason taken back', '');
+}
+async function tdUndo(p) {
+  if (!p.decision || TD.busy.has(p.key) || !TD.j) return;
+  const day = TD.j.day;
+  TD.gen++;
+  const was = { decision: p.decision, reason: p.reason, decided_at: p.decided_at, note: p.note, launch: p.launch };
+  Object.assign(p, { decision: null, reason: null, decided_at: null, note: '' });
+  if (TD.why === p.key) TD.why = '';
+  TD.busy.add(p.key);
+  tdPaint(p);
+  tdCount();
+  let note;
+  try {
+    note = await tdChain(async () => {
+      await tdSend('/api/today', { day, key: p.key, decision: null, reason: null });
+      try { return await tdUnmirror(p, was); } catch (e) { return 'The board did not follow: ' + e.message + '.'; }
+    });
+  } catch (e) {
+    Object.assign(p, was);
+    TD.busy.delete(p.key);
+    tdPaint(p, '[data-tdu]');
+    tdCount();
+    toast('Could not undo: ' + e.message, '');
+    return;
+  }
+  p.launch = '';
+  TD.busy.delete(p.key);
+  tdPaint(p, '[data-tdd]');
+  toast(note ? 'Undone. ' + note : 'Undone', '');
+}
+// Open 🚀 on its launch card: the launch view sits in the hunt's tabs (not the TikTok tab's), the one you used last.
+function tdOpenLaunch(p) {
+  if (typeof LN === 'undefined' || typeof goView !== 'function') return;
+  Object.assign(LN, { focus: p.launch || p.key, tab: 'launch', picking: false, open: new Set(['sourcing']) });
+  const last = store.get('wh-scope');
+  const b = document.querySelector(`[data-scope="${last === 'eu' || last === 'google' ? last : 'world'}"]`);
+  if (b) b.click();
+  goView('launch');
+}
+
+$('today').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b || b.disabled) return;
+  if (b.dataset.tday) { if (!TD.j || b.dataset.tday !== TD.j.day) tdLoad(b.dataset.tday); return; }
+  const c = b.closest('.tdc');
+  const p = c ? tdPick(c.dataset.key) : null;
+  if (!p) return;
+  if (b.dataset.tdd) tdDecide(p, b.dataset.tdd);
+  else if (b.dataset.tdr) tdReason(p, b.dataset.tdr);
+  else if (b.dataset.tdx) { TD.why = ''; tdPaint(p, '[data-tdu]'); }
+  else if (b.dataset.tdwhy) { TD.why = p.key; tdPaint(p, '[data-tdr]'); }
+  else if (b.dataset.tdu) tdUndo(p);
+  else if (b.dataset.tdln) tdOpenLaunch(p);
+});
+// Folds stay open when a card is drawn again (a decision, a reason, the server's answer).
+$('today').addEventListener('toggle', (e) => {
+  const d = e.target;
+  if (!d || !d.dataset || !d.dataset.tdo) return;
+  const c = d.closest('.tdc');
+  const k = (c ? c.id : 'head') + ':' + d.dataset.tdo;
+  if (d.open) TD.open.add(k); else TD.open.delete(k);
+}, true);
+// A photo the store no longer serves: its first letter instead (and not asked again).
+$('today').addEventListener('error', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+  TD.badImg.add(img.getAttribute('src') || '');
+  const h = img.closest('.tdc') && img.closest('.tdc').querySelector('h3');
+  const i = document.createElement('i');
+  i.textContent = h ? h.textContent.trim().slice(0, 1).toUpperCase() : '?';
+  img.replaceWith(i);
+}, true);
+for (const b of document.querySelectorAll('[data-scope]')) b.addEventListener('click', () => { if (st.scope !== 'today') tdLeave(); });
+addEventListener('hashchange', () => {
+  const id = tdHashId();
+  if (id === null) return;
+  if (st.scope === 'today') { tdGo(id); return; }
+  TD.want = id;
+  const b = document.querySelector('[data-scope="today"]');
+  if (b) b.click();
+});
+// Back on the phone after a while (a home-screen app stays open for days): the day's picks again.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && st.scope === 'today' && Date.now() - TD.at > 15 * 60e3 && !TD.busy.size && !TD.why) tdRefresh();
+});
+
+// The first screen: Today, unless there is no daily run yet (then the hunt you used last, as before). #today/<id>: Today always.
+async function tdBoot() {
+  TD.want = tdHashId();
+  $('today').innerHTML = tdHtml(null);
+  const my = ++TD.seq;
+  let j = null;
+  try { j = await tdFetch(''); } catch (e) { TD.err = e.message; }
+  if (my !== TD.seq) return; // the tab was opened again meanwhile: that answer counts
+  if (j) TD.home = j.day || '';
+  if (st.scope !== 'today') { if (j) { TD.j = j; tdCount(); } return; } // another tab was picked meanwhile
+  const runs = !!(j && j.ready && tdArr(j.days).length);
+  if (!runs && TD.want === null) {
+    if (j) TD.j = j;
+    const b = document.querySelector(`[data-scope="${scope0}"]`) || document.querySelector('[data-scope="world"]');
+    if (b) b.click();
+    return;
+  }
+  if (j) tdShow(j);
+  else $('today').innerHTML = tdHtml(null);
+  if (TD.want !== null) tdGo(TD.want);
+}
+tdBoot();
 </script>
 <script nonce="__NONCE__">
 'use strict';

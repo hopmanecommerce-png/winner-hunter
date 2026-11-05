@@ -396,7 +396,7 @@ test('migration 0081 is additive: two new columns, an index, the candidates tabl
   assert.deepStrictEqual(st.map((s) => s.split(/\s+/).slice(0, 3).join(' ')), ['ALTER TABLE lasso_stores', 'ALTER TABLE lasso_stores', 'CREATE INDEX IF', 'CREATE TABLE IF', 'CREATE INDEX IF']);
   assert.ok(st.every((s) => !/\b(DROP|DELETE|UPDATE|RENAME)\b/i.test(s)), 'nothing dropped, deleted or changed');
   const files = fs.readdirSync(new URL('../worker/migrations/', import.meta.url)).filter((x) => x.endsWith('.sql')).sort();
-  assert.strictEqual(files[files.length - 1], '0081_lasso_discovery.sql', 'the next number after 0080');
+  assert.strictEqual(files[files.indexOf('0080_lasso_seed.sql') + 1], '0081_lasso_discovery.sql', 'the next number after 0080');
   const db = new DatabaseSync(':memory:');
   const client = d1Client({ accountId: 'a', databaseId: 'd', token: 't' }, { doFetch: d1Rest(db).doFetch, retryMs: 0 });
   const texts = files.map((f) => fs.readFileSync(new URL(f, new URL('../worker/migrations/', import.meta.url)), 'utf8'));

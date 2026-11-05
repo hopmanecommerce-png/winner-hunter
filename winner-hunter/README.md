@@ -8,13 +8,51 @@ live board** on your phone. Then you make ads for the top products.
 GitHub Actions (4x a day, outside the EU)  →  Cloudflare D1 (the database)  →  Board (Cloudflare Worker, with PIN)
 ```
 
+## Today's winners (the first screen)
+
+Every morning, `daily.mjs` (workflow **Today's winners**) picks **5 to 10 products** and prepares each one, so the only
+step left is a tap. It starts when Momentum finishes, from the VPS crontab at 06:05 in Bangkok, or at 23:20 UTC as a
+fallback; the first of the three does the day.
+
+- **The Winner Score** (`lib/winner-score.mjs`) gives every product 0 to 100.
+  - It climbs an evidence ladder: **paid** (ads now), **sustained** (an ad 30+ days, or 5+ copies of 14+ days),
+    **selling** (10,000+ sold on TikTok, its store's top 10, or 500+ reviews), **profitable** (break-even CPA €20+).
+  - Five pillars: proof, demand, competition, margin (this board's 💶 numbers) and fit (your niches, learned from your
+    decisions, and Jev's read).
+  - Two gates: what people eat or take, and gymwear, are excluded; the risk radar's Block is blocked. A product that is
+    not physical never is.
+  - The spec, with every threshold: `research/2026-11-05-winner-system/wh-score/SCORE-SPEC.md` (product-research repo).
+- **The day's picks** (`lib/daily-picks.mjs`):
+  - a bar every pick passes: score 50+, two rungs, a price with a break-even CPA of €15+, a Jev category;
+  - never a product you decided on or one shown in the last 14 days, one per store, no brand listings;
+  - at most 2 per category, and fewer than 5 is said, never padded.
+  - The product sheet of each candidate (`lib/validate.mjs`: margin per market with real weights) is the last gate.
+    Each pick gets its audience card (`lib/audience.mjs`).
+- **The Today tab** shows the cards: score breakdown, ladder, evidence links, audience, margin, blockers, and
+  **Keep / Reject / Launch test** with a reason. A tap is also your ✓ / ✗ on the product, so the rest of the board
+  agrees. A red banner shows when the day's run failed or has not run by 07:00 in Bangkok; amber when fewer than 5
+  passed. **Digest** downloads the day as Markdown or CSV (`/api/today/digest`).
+- **The digest in your chat.** `scripts/fetch-daily-digest.mjs` on the VPS writes `~/winner-daily/YYYY-MM-DD.md` and
+  `latest.md`; Grok Bot sends `latest.md` at about 07:00. With no digest yet it writes a dated line, never yesterday's
+  picks.
+- **Learning.** Every night the backtest checks the score against all your decisions (AUC per day in
+  `score_backtests`), with a report on Mondays. New weights only come when they rank your decisions clearly better.
+- **D1** (migration `0090_daily_winners.sql`, new tables only): `daily_runs` (the run and its digest), `daily_picks`,
+  `winner_scores` (each day's scores, for the history), `score_backtests`, `daily_cache` (the audience step's data).
+- **Costs a day:** at most `DAILY_CREDITS` (200) ScrapeCreators credits and `DAILY_JEV_USD` ($0.50) of Jev. The log shows
+  counts only.
+- **By hand:** Actions → Today's winners → Run workflow (tick force to make the day again; your decisions stay). On a
+  copy: `node winner-hunter/daily.mjs --local copy.sqlite --migrate --out ~/winner-daily`. Rank or backtest:
+  `node winner-hunter/winner-score.mjs rank|backtest --local copy.sqlite`.
+
 ## Jev's answers (Outside EU tab)
 
 After every hunt `world-check.mjs` asks Jev (TypeSafe) about each new product, once, from its name, type, shop and photo. The card shows its category and tags such as "People take 99%"; the **Jev** filter and the CSV have the same data. Its risks rank a product lower in both Inboxes, and the Inbox card says why: people or pets take it × 0.3, sizing returns, a medical claim, a brand or hard to ship × 0.5 each, for children, cosmetics, electric, fragile or big × 0.8 each, never below × 0.2. An EU product people or pets take stays out of the Inbox (Browse still lists it). Hard to ship, Medical claim and Cosmetics get a red tag. It needs the GitHub secret `TYPESAFE_API_KEY`; without a key or a balance the products stay on the board without answers. About 0.01 cents a product.
 
 ## AI read (experimental)
 
-Twice a day `ai-check.mjs` (workflow **AI check**) asks a cheap Claude model (Claude Haiku 5.5) about each board product it has
+**Manual only since 5 Nov 2026:** it uses the Anthropic API, and automated steps use TypeSafe's Jev, so nothing starts it on a
+schedule or from another job (Actions → AI check → Run workflow). When run, `ai-check.mjs` (workflow **AI check**) asks a cheap Claude model (Claude Haiku 5.5) about each board product it has
 not read yet: the products outside the EU that still run, the EU's still on the board, and every product you approved or
 rejected. Per product: what it is (a plain name), niche, the ads' hook, the buyer, wow factor, saturation, claims risk, and a
 0-100 **fit** with reasons for and against and how sure it is. It is saved in D1 table `ai_checks`.
@@ -278,6 +316,8 @@ google.mjs       the Google hunt (lib/google-ads.mjs: the Scrape Creators client
 bestsellers.mjs  store signals for the board's products: best-seller rank + Trustpilot (after the hunt; lib/bestsellers.mjs, lib/trust.mjs)
 lasso.mjs        the weekly Lasso discovery: stores with Lasso's hosted checkout (lib/lasso.mjs, lib/lasso-sources.mjs; the board's chip: worker/src/lasso.mjs)
 momentum.mjs     once a day: each product's numbers, trend, rivals and crowding (lib/momentum.mjs; the board: worker/src/momentum.mjs)
+daily.mjs        once a day: Today's winners (lib/winner-score.mjs, lib/daily-picks.mjs, lib/daily-digest.mjs; the board: worker/src/today.mjs)
+winner-score.mjs the Winner Score from the command line: rank or backtest (lib/score-backtest.mjs)
 migrate.mjs      creates the D1 tables (safe to run every time)
 import.mjs       one-time import of the old winners
 keywords.txt     the search words (keywords-optin.txt: only with KEYWORDS_OPTIN=1)

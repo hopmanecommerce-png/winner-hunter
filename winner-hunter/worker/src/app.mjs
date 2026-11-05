@@ -23,8 +23,11 @@ import { SOURCING_JS, sourcingGet, sourcingPost } from './sourcing.mjs';
 import { GOOGLE_SQL, TIKTOK_SHOPS_SQL, GOOGLE_CSV_COLS, googleRow, crossLink, googleProof, googleFacts, googleMarketsOf, googleAlert } from './google.mjs';
 import { ECON_JS, econContext, econAd, econBoard, econSorts, econGet, econPost, decisionsGet, decisionsPost, decisionLogged, tiktokLogged } from './econ.mjs';
 import { RISK_JS, riskChecks, riskHide, riskOut, riskList, riskPost } from './risk.mjs';
+import { AUDIENCE_JS } from './audience.mjs';
+import { VALIDATE_JS } from './validate.mjs';
 import { LASSO_JS, readLasso, readLassoNew, attachLasso, lassoBoard, lassoView, lassoCard } from './lasso.mjs';
 import { PIPELINE_JS, pipelineGet, pipelinePost, pipelineImage } from './pipeline.mjs';
+import { todayGet, todayPost, todayDigest } from './today.mjs';
 
 const COOKIE = '__Host-wh';
 const MAX_AGE = 90 * 864e2; // seconds
@@ -903,7 +906,9 @@ button:hover{background:#fff}
 </style></head><body>
 <form method="post" action="/login"><span class="k">Products already selling, with proof</span><h1>Winner Hunter</h1><p>Enter your PIN to open the board.</p>
 <input name="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="64" required autofocus aria-label="PIN">
-${msg ? `<p class="err" role="alert">${esc(msg)}</p>` : ''}<button type="submit">Open</button></form></body></html>`;
+<input name="to" type="hidden" value="">
+${msg ? `<p class="err" role="alert">${esc(msg)}</p>` : ''}<button type="submit">Open</button></form>
+<script nonce="${nonce}">document.forms[0].to.value = location.hash.slice(0, 100);</script></body></html>`;
   return secure(new Response(html, { status, headers: { 'Content-Type': 'text/html; charset=utf-8' } }), { nonce, html: true });
 }
 
@@ -1161,7 +1166,10 @@ async function login(req, env, now) {
     console.error(e);
   }
   if (!key) return pinPage(nonce, 'The board cannot sign you in right now. Try again in a minute.', 503);
-  return redirect('/', `${COOKIE}=${await makeToken(env.BOARD_PIN, now, key)}; Path=/; Max-Age=${MAX_AGE}; HttpOnly; Secure; SameSite=Lax`);
+  // A link to one of Today's cards (the digest's #today/<id>) keeps its card through the PIN page; nothing else is followed.
+  const to = String((form && form.get('to')) || '');
+  const back = /^#today\/[a-z0-9-]{1,80}$/.test(to) ? to : '';
+  return redirect('/' + back, `${COOKIE}=${await makeToken(env.BOARD_PIN, now, key)}; Path=/; Max-Age=${MAX_AGE}; HttpOnly; Secure; SameSite=Lax`);
 }
 
 async function ads(url, env, now, viewer) {
@@ -1456,6 +1464,21 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       if (path === '/export.csv' && method === 'GET') return await csv(url, env, now);
       return json({ error: 'Method not allowed' }, 405);
     }
+    // ---- Today's winners (today.mjs): the daily picks of daily.mjs, the board's first screen, and the digest as a file.
+    if (path === '/api/today' || path === '/api/today/digest') {
+      if (!ok) return path === '/api/today/digest' ? text('Log in first.', 401) : json({ error: 'Log in first' }, 401);
+      if (path === '/api/today/digest') {
+        if (method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+        const d = await todayDigest(env, url);
+        return text(d.body, d.status, { 'Content-Type': d.type, ...(d.name ? { 'Content-Disposition': `attachment; filename="${d.name}"` } : {}) });
+      }
+      if (method === 'GET') return json(await todayGet(env, url, now));
+      if (method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+      const { j, err } = await readJson(req, url);
+      if (err) return err;
+      const out = await todayPost(env, j, now);
+      return json(out.body, out.status);
+    }
     if (path === '/api/tiktok') {
       if (!ok) return json({ error: 'Log in first' }, 401);
       if (method === 'GET') return json(await tiktokList(env));
@@ -1588,6 +1611,12 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       const lean = async () => products(await snapshot(env.DB, now), (await env.DB.prepare('SELECT ad_id, status, at FROM hidden').all()).results, [], now);
       return json(await momentumApi(env, scope, { board: lean, toAd }));
     }
+    // ---- Validate-first product sheets (validate.mjs): /validate.js is the sheet kit the board runs (after /risk.js and
+    // /sourcing.js), so a sheet can be made or redone in the browser, as the daily job makes it.
+    if (path === '/validate.js') {
+      if (!ok) return json({ error: 'Log in first' }, 401);
+      return method === 'GET' ? text(VALIDATE_JS, 200, { 'Content-Type': 'text/javascript; charset=utf-8' }) : json({ error: 'Method not allowed' }, 405);
+    }
     // ---- Compliance and risk radar (risk.mjs): Block / Docs / OK per product, and your trademark and documents checks. A
     // block of its own, like the Launch view. /risk.js: the radar's rules, which the board runs as well.
     if (path === '/api/risk' || path === '/risk.js') {
@@ -1599,6 +1628,11 @@ export async function handle(req, env, { html = '', now = Date.now(), launch = n
       if (err) return err;
       const out = await riskPost(env, j, now, { rows: () => snapshot(env.DB, now) });
       return json(out.body, out.status);
+    }
+    // 🎯 /audience.js: the audience card's renderer (worker/src/audience.mjs), which the board runs as window.AUDIENCE.
+    if (path === '/audience.js') {
+      if (!ok) return json({ error: 'Log in first' }, 401);
+      return method === 'GET' ? text(AUDIENCE_JS, 200, { 'Content-Type': 'text/javascript; charset=utf-8' }) : json({ error: 'Method not allowed' }, 405);
     }
     return text('Not found', 404);
   } catch (e) {

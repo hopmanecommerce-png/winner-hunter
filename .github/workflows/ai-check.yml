@@ -7,6 +7,9 @@
 # batch usually ends within minutes, and one still running is collected by the next run.
 # Secrets: CF_API_TOKEN (or CF_D1_TOKEN), CF_ACCOUNT_ID, ANTHROPIC_API_KEY. Variables (optional): AI_MODEL, AI_MAX_USD, AI_MONTH_USD.
 # This repository is public: the log and the summary hold counts and money only, no product names and no decisions.
+# MANUAL ONLY (since 5 Nov 2026): it uses the Anthropic API, which the rule for automated product code rules out (AI steps
+# use TypeSafe's Jev). It has no schedule and nothing starts it: not the daily winners job, not another workflow. Run it by
+# hand (Actions → AI check → Run workflow) if you still want an AI read.
 name: AI check
 
 on:
@@ -24,10 +27,6 @@ on:
         description: 'Minutes to wait for the batch before leaving it to the next run (max 30)'
         required: false
         default: '20'
-  schedule:
-    # After the hunts outside the EU of 01:17 and 13:17 UTC (world-hunter.yml) have saved their products.
-    - cron: '41 4 * * *'
-    - cron: '41 16 * * *'
 
 permissions:
   contents: read
