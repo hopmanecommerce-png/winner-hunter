@@ -189,7 +189,7 @@ export async function runSheets(picks, { day = today(), quotes = [], audience = 
   for (const raw of picks) {
     let pick = raw;
     try {
-      pick = Object.assign({}, raw);
+      pick = pickFromScored(Object.assign({}, raw)); // the scorer's shape or the sheet's own
       if (!pick.audience && pick.id && audience[pick.id]) pick.audience = audience[pick.id];
       const s = sheetOf(pick, opts);
       let name = safeName(s.id);
@@ -223,7 +223,7 @@ export async function runSheets(picks, { day = today(), quotes = [], audience = 
 }
 
 /** The links of a batch worth checking. */
-export const linksOf = (picks) => picks.flatMap((p) => [p.product_url, p.store_url, p.ad_url, p.supplier && p.supplier.url]).filter(Boolean);
+export const linksOf = (picks) => picks.map((x) => pickFromScored(x)).flatMap((p) => [p.product_url, p.store_url, p.ad_url, p.supplier && p.supplier.url]).filter(Boolean);
 
 /** paste: a 1688 link (or the app's share text) onto one pick's supplier. Returns the pick as it is now. */
 export function pasteInto(picks, id, text) {

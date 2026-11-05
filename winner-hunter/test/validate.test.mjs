@@ -13,7 +13,7 @@ import { VALIDATE, VALIDATE_JS, sheetOf, renderSheet, digestOf, csvRow, CSV_COLS
 import { RISK_JS } from '../worker/src/risk.mjs';
 import { cleanStep, marginOf, marginInputs, summaryOf, STEPS } from '../worker/src/launch.mjs';
 import { SOURCING_JS } from '../worker/src/sourcing.mjs';
-import { runSheets, quotesFrom, checkLinks, pasteInto, picksFrom, indexOf, argsOf, productSheet, pickFromScored, oneLineOf, missingOf } from '../lib/validate.mjs';
+import { runSheets, quotesFrom, checkLinks, pasteInto, picksFrom, indexOf, argsOf, productSheet, pickFromScored, oneLineOf, missingOf, linksOf } from '../lib/validate.mjs';
 
 const DAY = '2026-11-05';
 const near = (a, b, d = 0.011) => assert.ok(Math.abs(a - b) <= d, `${a} is not ${b} (±${d})`);
@@ -353,17 +353,31 @@ test('/validate.js: the browser runs the same kit (with /risk.js and /sourcing.j
 // The batch tool
 // ---------------------------------------------------------------------------
 
+const SCORED = {
+  rank: 1, key: 'world|calmbed.no/products/calmbed', id: 'world-calmbed-no-products-calmbed-1a2b3c', name: 'CalmBed calming dog bed', src: 'world', category: 'Pets', sub: 'Beds',
+  score: 71, level: 3, pillars: { proof: 0.82, demand: 0.55, competition: 0.6, margin: 0.7, fit: 0.64 }, risk: { mult: 0.85, gate: null, flags: ['Docs: CE'], undecided: [] },
+  price: { amount: 650, currency: 'NOK', eur: 62.52 }, econ: { margin_eur: 21.3, breakeven_cpa_eur: 21.3, supplier_cost_eur: 8.3, supplier: 'est' },
+  evidence: [{ signal: 'oldest_ad_days', value: 64, kind: 'fact', source: 'Meta Ad Library', date: '2026-11-01', link: 'https://www.facebook.com/ads/library/?id=1' }, { signal: 'revenue_month', value: '$40k', kind: 'claim', source: 'a spy tool', date: '2026-10-30' }],
+  links: { product_url: 'https://calmbed.no/products/calmbed', store_url: 'https://calmbed.no', ad_library: ['https://www.facebook.com/ads/library/?id=1'], board: 'https://board.example/#today/world-calmbed' },
+  ad_ids: ['1'], stores: ['calmbed.no'], markets: ['NO', 'SE'],
+};
+
 test('runSheets: one sheet per pick, a broken pick reported and the rest still made, the index sorted by break-even CPA', async () => {
-  const picks = [FULL, { id: 'cheap', name: 'Cheap thing', price: 9.95, cur: 'EUR' }, { id: 'serum', name: 'Hair serum', price: 29, cur: 'EUR' }, { id: 'bad', name: 'Bad', get price() { throw new Error('broken'); } }];
+  const picks = [FULL, { id: 'cheap', name: 'Cheap thing', price: 9.95, cur: 'EUR' }, { id: 'serum', name: 'Hair serum', price: 29, cur: 'EUR' }, { id: 'bad', name: 'Bad', get price() { throw new Error('broken'); } }, SCORED];
   const { sheets, files, summary } = await runSheets(picks, { day: DAY, quotes: QUOTES });
-  assert.strictEqual(summary.sheets, 3);
+  assert.strictEqual(summary.sheets, 4);
+  const scored = sheets.find((s) => s.id === SCORED.id);
+  assert.ok(scored.economics.markets[0].offers.length, 'a scored pick (price as an object) is read through pickFromScored');
+  assert.ok(linksOf([SCORED]).includes('https://calmbed.no/products/calmbed'));
   assert.deepStrictEqual(summary.failed.map((f) => f.id), ['bad']);
   assert.ok(files['cool-pillowcase.json'] && files['cool-pillowcase.md'] && files['index.md'] && files['sheets.csv'] && files['summary.json']);
   assert.strictEqual(summary.blocked, 1);
-  const order = files['index.md'].split('\n').filter((l) => l.startsWith('| [')).map((l) => /\]\(([^)]+)\.md\)/.exec(l)[1]);
-  assert.strictEqual(order[0], 'cool-pillowcase', 'the most room for ads first');
-  assert.strictEqual(sheets.length, 3);
-  assert.strictEqual(summary.digest.length, 3);
+  const rows = files['index.md'].split('\n').filter((l) => l.startsWith('| ['));
+  const be = rows.map((l) => l.split(' | ')[4]).map((c) => (c === '–' ? -1 : Number(c.replace('€', ''))));
+  assert.deepStrictEqual(be, [...be].sort((a, b) => b - a), 'the most room for ads first');
+  assert.ok(rows.some((l) => l.includes('(cool-pillowcase.md)')));
+  assert.strictEqual(sheets.length, 4);
+  assert.strictEqual(summary.digest.length, 4);
   assert.doesNotMatch(files['summary.json'], /"ms"/, 'no timing in the file');
   assert.match(indexOf(sheets, DAY), /^# Product sheets, 2026-11-05/);
 });
@@ -437,14 +451,6 @@ test('the CLI: sheets for a picks file into a folder, the same files on a second
 // The daily job's step (shared/INTERFACES.md)
 // ---------------------------------------------------------------------------
 
-const SCORED = {
-  rank: 1, key: 'world|calmbed.no/products/calmbed', id: 'world-calmbed-no-products-calmbed-1a2b3c', name: 'CalmBed calming dog bed', src: 'world', category: 'Pets', sub: 'Beds',
-  score: 71, level: 3, pillars: { proof: 0.82, demand: 0.55, competition: 0.6, margin: 0.7, fit: 0.64 }, risk: { mult: 0.85, gate: null, flags: ['Docs: CE'], undecided: [] },
-  price: { amount: 650, currency: 'NOK', eur: 62.52 }, econ: { margin_eur: 21.3, breakeven_cpa_eur: 21.3, supplier_cost_eur: 8.3, supplier: 'est' },
-  evidence: [{ signal: 'oldest_ad_days', value: 64, kind: 'fact', source: 'Meta Ad Library', date: '2026-11-01', link: 'https://www.facebook.com/ads/library/?id=1' }, { signal: 'revenue_month', value: '$40k', kind: 'claim', source: 'a spy tool', date: '2026-10-30' }],
-  links: { product_url: 'https://calmbed.no/products/calmbed', store_url: 'https://calmbed.no', ad_library: ['https://www.facebook.com/ads/library/?id=1'], board: 'https://board.example/#today/world-calmbed' },
-  ad_ids: ['1'], stores: ['calmbed.no'], markets: ['NO', 'SE'],
-};
 
 test('pickFromScored: the scorer\'s product in the sheet\'s shape (price, links, markets, evidence with claims kept as claims)', () => {
   const p = pickFromScored(SCORED);
