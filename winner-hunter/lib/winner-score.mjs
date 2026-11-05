@@ -436,8 +436,8 @@ function whyOf({ ladder, econ, f, sold, adDays, copies }) {
   if (copies != null && copies >= 5) out.push(`${copies} ${f.src === 'world' ? 'ads' : 'ad copies'}`);
   if (num(f.reach_day) >= 1000) out.push(`${Math.round(f.reach_day / 1000)}k EU reach a day`);
   if (num(f.rivals) != null) out.push(f.rivals === 0 ? 'no rival stores found' : `${f.rivals} rival stores`);
-  if (econ) out.push(`break-even CPA €${Math.round(econ.breakeven_cpa_eur)}${econ.supplier === 'est' ? ' (est.)' : ''}`);
-  if (!out.length) out.push(ladder.paid ? 'runs paid ads' : 'little evidence yet');
+  // The money is said apart (the digest's margin and CPA, the product sheet's per market), so not here.
+  if (!out.length) out.push(econ && econ.breakeven_cpa_eur >= 20 ? 'room for ads at its price' : ladder.paid ? 'runs paid ads' : 'little evidence yet');
   return out.slice(0, 4).join(', ');
 }
 

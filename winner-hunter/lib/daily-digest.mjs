@@ -44,14 +44,25 @@ export function blockerOf(p) {
   return first ? clean(first.replace(/^Docs: /, 'needs papers: ').replace(/^Returns: /, ''), 70) : 'none found';
 }
 
+/**
+ * The name Connor reads: the listing's own, or, for a listing in Japanese, Chinese or Korean, the audience card's English
+ * search phrase with a note (the board card keeps the original).
+ */
+export function nameOf(p) {
+  const name = clean(p.name, 70);
+  const phrase = p.audience && p.audience.card && p.audience.card.phrase ? clean(p.audience.card.phrase, 50) : '';
+  if (/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(name) && phrase) return phrase[0].toUpperCase() + phrase.slice(1) + ' (listing not in English)';
+  return name;
+}
+
 /** The digest as Markdown. run: { day, picks, message, failed: { stage, error } | null, asOf }. */
 export function digestMd({ day, picks = [], message = '', failed = null, asOf = '' }) {
   const n = picks.length;
-  const out = [`Winners for ${dayLabel(day)}: ${n} pick${n === 1 ? '' : 's'}${asOf ? ` (data to ${asOf})` : ''}`];
+  const out = [`Winners for ${dayLabel(day)}: ${n} pick${n === 1 ? '' : 's'}${asOf ? ` (made ${asOf})` : ''}`];
   picks.slice(0, 10).forEach((p, i) => {
     const { margin, cpa, est } = moneyOf(p);
     const money = margin != null ? `Margin ${euro(margin)}, break-even CPA ${euro(cpa)}${est ? ' (est.)' : ''}.` : 'Margin unknown (no price).';
-    out.push(`${i + 1}. ${clean(p.name, 70)}: score ${p.score}, ${clean(p.why, 120)}. Audience: ${audienceLine(p)}. ${money} Blocker: ${blockerOf(p)}. {{BOARD}}/#today/${p.id}`);
+    out.push(`${i + 1}. ${nameOf(p)}: score ${p.score}, ${clean(p.why, 120)}. Audience: ${audienceLine(p)}. ${money} Blocker: ${blockerOf(p)}. {{BOARD}}/#today/${p.id}`);
   });
   if (failed) out.push(`The run failed at ${clean(failed.stage, 30)}: ${clean(failed.error, 160)}.`);
   if (message) out.push(clean(message, 200));

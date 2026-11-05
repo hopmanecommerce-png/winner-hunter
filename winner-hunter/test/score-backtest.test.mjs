@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import { auc, aucCi, precisionAt, rng, backtest, backtestMd, learnWeights, labelled } from '../lib/score-backtest.mjs';
-import { digestMd, digestCsv, dayLabel, bangkokDay, withBoard, blockerOf, moneyOf } from '../lib/daily-digest.mjs';
+import { digestMd, digestCsv, dayLabel, bangkokDay, withBoard, blockerOf, moneyOf, nameOf } from '../lib/daily-digest.mjs';
 
 test('AUC: 1 when every approval scores higher, 0 the other way, 0.5 for ties; null without both kinds', () => {
   assert.strictEqual(auc([{ s: 3, y: 1 }, { s: 2, y: 1 }, { s: 1, y: 0 }]), 1);
@@ -87,7 +87,7 @@ test('the digest: a date line, one line per pick with why, audience, margin, CPA
   const md = digestMd({ day: '2026-11-06', picks, asOf: '06:00 ICT' });
   const lines = md.trim().split('\n');
   assert.ok(lines.length <= 25);
-  assert.strictEqual(lines[0], 'Winners for Fri 6 Nov 2026: 12 picks (data to 06:00 ICT)');
+  assert.strictEqual(lines[0], 'Winners for Fri 6 Nov 2026: 12 picks (made 06:00 ICT)');
   assert.strictEqual(lines.filter((l) => /^\d+\. /.test(l)).length, 10, 'never more than 10 lines of picks');
   assert.match(lines[1], /^1\. Product 0: score 70, #1 in its store, ads 60 days\. Audience: Women 35-55 in NL and BE who sleep hot\. Margin €21, break-even CPA €21 \(est\.\)\. Blocker: needs papers: CE\. \{\{BOARD\}\}\/#today\/p-0$/);
   assert.match(lines[2], /Margin €18, break-even CPA €18\. Blocker: papers for CE, WEEE\./);
@@ -97,6 +97,12 @@ test('the digest: a date line, one line per pick with why, audience, margin, CPA
   assert.match(fail, /The run failed at collect: Cloudflare D1: HTTP 500\./);
   const short = digestMd({ day: '2026-11-06', picks: picks.slice(0, 3), message: 'Only 3 products passed the quality bar today (the bar is never lowered to fill the list).' });
   assert.match(short, /Only 3 products passed/);
+});
+
+test('a listing in Japanese is named by the audience card\'s English phrase in the digest', () => {
+  assert.strictEqual(nameOf({ name: '【新発売】ペットドライヤー L200', audience: { card: { phrase: 'dog hair dryer' } } }), 'Dog hair dryer (listing not in English)');
+  assert.strictEqual(nameOf({ name: 'Cooling pillow', audience: { card: { phrase: 'pillow' } } }), 'Cooling pillow');
+  assert.strictEqual(nameOf({ name: '猫用おもちゃ' }), '猫用おもちゃ', 'no phrase: the name as it is');
 });
 
 test('the digest helpers: day labels, the Bangkok day, blockers and money fall back to the score', () => {
