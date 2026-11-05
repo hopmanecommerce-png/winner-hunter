@@ -28,8 +28,12 @@ const DAY = 864e5;
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const hostName = (s) => String(s ?? '').trim().toLowerCase().replace(/\.$/, '');
+// OTX gives its times without a zone ("2026-10-20T10:00:00"); they are UTC. JavaScript reads such a time as local time, so it
+// is read as UTC here (else a machine in another time zone saves another first-seen time).
+const ZONELESS = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
 const iso = (v) => {
-  const t = typeof v === 'number' ? v : Date.parse(String(v ?? ''));
+  const s = String(v ?? '').trim();
+  const t = typeof v === 'number' ? v : Date.parse(ZONELESS.test(s) ? s.replace(' ', 'T') + 'Z' : s);
   return Number.isFinite(t) && t > 0 ? new Date(t).toISOString() : '';
 };
 
