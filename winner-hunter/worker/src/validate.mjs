@@ -926,7 +926,10 @@ export function validateKit(R, S) {
       const fixes = [m.min_price != null ? `green (break-even ROAS ${DEFAULTS.green_roas}×) from a selling price of ${eur(m.min_price)}${m.min_price_local != null ? ` (${m.min_price_local} ${m.cur})` : ''}` : `no selling price makes it green here`,
         m.max_cost != null ? `at this price, a supplier price up to ${eur(m.max_cost)} (¥${m.max_cost_cny}) is green` : 'no supplier price makes it green at this price'];
       L.push(`It turns ${fixes.join('; ')}.`);
-      if (m.before_registration != null) L.push(`Below the ${m.tax.pct}% registration threshold (${mdText(m.tax.limit.split(';')[0])}) you keep the tax: ${eur(m.before_registration)} an order in the test phase.`);
+      if (m.before_registration != null) {
+        const until = (/pass ([^;]+?)(?: a year| in 12 months)/.exec(m.tax.limit) || [])[1];
+        L.push(`Until your sales to ${m.name} pass ${until ? mdText(until) + (/12 months/.test(m.tax.limit) ? ' in 12 months' : ' a year') : 'the registration threshold'}, you don't charge the ${m.tax.pct}%: ${eur(m.before_registration)} an order in the test phase.`);
+      }
     } else L.push('No price known yet: no margin. Add the competitor\'s price or your own.');
     L.push('', '## Landed cost and shipping', '');
     if (o) {

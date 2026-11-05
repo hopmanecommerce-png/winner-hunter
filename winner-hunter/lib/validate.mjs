@@ -174,7 +174,8 @@ export function indexOf(sheets, day) {
     const o = m && m.offers[0];
     const t = s.test_plan;
     const name = s.name.length > 70 ? s.name.slice(0, 68).replace(/\s+\S*$/, '') + '…' : s.name;
-    L.push(`| [${name.replace(/\|/g, '\\|')}](${safeName(s.id)}.md) | ${d.market || '–'} | ${o ? '€' + o.price.toFixed(2) : '–'} | ${d.margin_eur != null ? '€' + d.margin_eur.toFixed(2) : '–'}${d.cost_status && d.cost_status !== 'fact' ? ' est.' : ''} | ${d.be_cpa_eur != null ? '€' + d.be_cpa_eur.toFixed(2) : '–'} | ${d.be_roas != null ? d.be_roas + '×' : '–'} | ${s.level} | ${d.main_blocker.replace(/\|/g, '\\|')} | ${t.go ? `€${t.budget} (${t.mode})` : 'no'} |`);
+    const money = (x) => (x == null ? '–' : (x < 0 ? '−€' : '€') + Math.abs(x).toFixed(2));
+    L.push(`| [${name.replace(/\|/g, '\\|')}](${safeName(s.id)}.md) | ${d.market || '–'} | ${o ? money(o.price) : '–'} | ${money(d.margin_eur)}${d.cost_status && d.cost_status !== 'fact' ? ' est.' : ''} | ${d.be_cpa_eur != null ? '€' + d.be_cpa_eur.toFixed(2) : '–'} | ${d.be_roas != null ? d.be_roas + '×' : '–'} | ${s.level} | ${d.main_blocker.replace(/\|/g, '\\|')} | ${t.go ? `€${t.budget} (${t.mode})` : 'no'} |`);
   }
   return L.join('\n') + '\n';
 }
@@ -252,6 +253,15 @@ export function pasteInto(picks, id, text) {
 // The daily job's step: productSheet(pick, ctx)
 // ---------------------------------------------------------------------------
 
+// The scorer's signals in plain words (anything else: its name and value).
+const SIGNALS = {
+  best_seller_rank: (v) => `#${v} in its store's best sellers`, store_trustpilot: (v) => `Trustpilot: ${v}`, oldest_ad_days: (v) => `Its oldest ad runs ${v} days`,
+  ads_for_product: (v) => `${v} ad${Number(v) === 1 ? '' : 's'} for this product`, eu_reach_per_day: (v) => `EU reach ${Number(v).toLocaleString('en')} a day`, new_ads_14d: (v) => `New ads in 14 days: ${v}`,
+  markets: (v) => `Its ads run in ${v}`, store_products: (v) => `Store size: ${v} products`, shop_ads: (v) => `Its store runs ${v} active ads`, tiktok_sold: (v) => `${v} sold on TikTok Shop`,
+  momentum: (v) => `Momentum: ${v}`, rivals: (v) => `Other stores selling it: ${v}`,
+};
+const evidenceText = (e) => (SIGNALS[e.signal] ? SIGNALS[e.signal](e.value) : `${String(e.signal).replace(/_/g, ' ')}: ${e.value}`);
+
 /**
  * A scored product (shared/INTERFACES.md, section 2: key, id, name, src, category, sub, score, pillars, risk, price
  * { amount, currency, eur }, econ, evidence [{ signal, value, kind, source, date, link }], links { product_url,
@@ -291,7 +301,7 @@ export function pickFromScored(p) {
   const price = p.price && typeof p.price === 'object' ? p.price : null;
   const ads = Array.isArray(links.ad_library) ? links.ad_library : links.ad_library ? [links.ad_library] : [];
   const ev = (Array.isArray(p.evidence) ? p.evidence : []).filter((e) => e && (e.signal || e.text) && !/^breakeven|^margin/.test(String(e.signal || ''))).slice(0, 8).map((e) => ({
-    text: e.text || `${String(e.signal).replace(/_/g, ' ')}: ${e.value}`, url: e.link || '', status: e.kind === 'fact' ? 'fact' : e.kind === 'claim' ? 'claim (unverified)' : 'estimate', date: e.date || '',
+    text: e.text || evidenceText(e), url: e.link || '', status: e.kind === 'fact' ? 'fact' : e.kind === 'claim' ? 'claim (unverified)' : 'estimate', date: e.date || '', source: e.source || '',
   }));
   const pillars = p.pillars && typeof p.pillars === 'object' ? Object.fromEntries(Object.entries(p.pillars).map(([k, v]) => [k, typeof v === 'number' ? Math.round(v * 100) : v])) : null;
   const zh = p.zh || zhGuess(p.name || '') || '';
