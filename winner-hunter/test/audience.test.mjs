@@ -443,6 +443,26 @@ test('audienceCard never throws: a vendor that is down, no keys, no budget, a ba
   assert.ok(bad.missing.some((m) => /^error/.test(m)));
 });
 
+test('audienceCard keeps inside the daily job\'s 90 s: no paid call after the soft deadline, a short timeout per call', async () => {
+  const calls = [];
+  const slow = async (url, init) => {
+    calls.push(String(url));
+    await new Promise((r, j) => {
+      const t = setTimeout(r, 400);
+      if (init && init.signal) init.signal.addEventListener('abort', () => { clearTimeout(t); j(Object.assign(new Error('aborted'), { name: 'TimeoutError' })); });
+    });
+    return json({ success: true, credits_charged: 1, comments: [] });
+  };
+  const t0 = Date.now();
+  const r = await audienceCard({ id: 'p', name: 'P', phrase: 'dog water fountain', ad_ids: ['111222333444'] }, { env: { SCRAPECREATORS_API_KEY: 'k' }, budget: { credits: 14 }, fetch: slow, sleep: noSleep,
+    cache: memoryCache(), softMs: 300, callMs: 150, seedBaseline: null });
+  const took = Date.now() - t0;
+  assert.ok(r.card, 'a card all the same');
+  assert.ok(took < 1500, `took ${took} ms`);
+  assert.ok(calls.length <= 3, `${calls.length} calls before the deadline`);
+  assert.ok(r.missing.some((m) => /stopped|failed|unreachable/.test(m)));
+});
+
 test('enrich: the board\'s own facts by primary key; subOf matches shortened subcategories', async () => {
   const seen = [];
   const db = async (sql, params) => {
