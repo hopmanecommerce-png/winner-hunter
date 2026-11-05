@@ -141,7 +141,9 @@ export function gateOf(f, risk) {
   if (num(p.people) != null && p.people >= 0.5) return { gate: 'excluded', why: 'People eat or take it (Jev)' };
   if (words.out === 'supplement' || words.out === 'food or drink') return { gate: 'excluded', why: words.out === 'supplement' ? 'Supplement (name)' : 'Food or drink (name)' };
   if ((num(p.gymwear) != null && p.gymwear >= 0.5) || words.out === 'gymwear') return { gate: 'excluded', why: 'Gymwear' };
-  if (f.excluded) return { gate: 'excluded', why: String(f.excluded) };
+  // A source's own exclusion (the TikTok export's hand reads) counts for what is eaten, taken or gymwear only: a product that
+  // is not physical is never gated for that (Connor, 1 Nov 2026).
+  if (f.excluded && /supplement|food|drink|gym/i.test(String(f.excluded))) return { gate: 'excluded', why: String(f.excluded) };
   const name = `${f.title || ''} ${String(f.product_url || '').split('/products/')[1] || ''}`.replace(/[-_]+/g, ' ');
   if (SKIN.test(name) && !NOT_SKIN.test(name) && !(risk && risk.level === 'block')) return { gate: 'blocked', why: 'Cosmetic (skin-care words)' };
   if (PSEUDO.test(`${name} ${f.store_url || ''}`) && !(risk && risk.level === 'block')) return { gate: 'blocked', why: 'Health promise (grounding, earthing or menopause)' };

@@ -50,6 +50,9 @@ test('the gates: eaten or taken and gymwear are excluded, a Block is blocked, pe
   assert.strictEqual(g({ title: 'Grain-free dog food 2 kg', jev: { p: jevP({ animals: 0.95 }), main: 'Pets', sub: 'Food and treats' } }), null, 'pet food stays (Connor, 31 Oct)');
   const digital = base({ title: 'Sleep coaching course (download)', jev: { p: jevP({ physical: 0.02 }), main: 'Other', sub: 'Services and digital' } });
   assert.strictEqual(gateOf(digital, riskOf(digital)).gate, null, 'a non-physical product is never gated for that');
+  const handRead = base({ title: 'Budget planner spreadsheet', excluded: 'not a product', jev: { p: jevP({ physical: 0.1 }), main: 'Other' } });
+  assert.strictEqual(gateOf(handRead, riskOf(handRead)).gate, null, "a source's 'not a product' is no gate either");
+  assert.strictEqual(g({ title: 'Seamless set', excluded: 'gymwear', jev: null }), 'excluded');
 });
 
 test('undecided categories are flagged, never gated', () => {
