@@ -171,6 +171,10 @@ export function riskOf(f) {
 // 648/2004). A docs reason, not a block.
 const CHEMICAL = /(?<![\p{L}\p{N}])(?:detergents?|laundry\s+(?:sheets?|pods?|strips?|tablets?)|wasmiddel\p{L}*|waschmittel\p{L}*|lessive|dishwasher\s+(?:tablets?|pods?)|vaatwastabletten|cleaning\s+(?:paste|spray|solution|tablets?|concentrate)|bleach|chlorine|drain\s+(?:cleaner|unblocker)|ontstopper)(?![\p{L}\p{N}])/iu;
 
+// Another company's trademark named in the title, as compatible-with use ("for iPhone", "MagSafe"): it sells, but only
+// as referential use, and Meta takes IP reports on it (2026-10-28-product-hunt, the watch straps). A docs reason.
+const TRADEMARK = /(?<![\p{L}\p{N}])(?:i\s?phone|ipad|airpods?|apple\s+watch|magsafe|macbook|samsung|galaxy\s+(?:s|z|watch|buds)\d*|pixel\s+\d|tesla|dyson|nespresso|thermomix|lego|playstation|nintendo|xbox|stanley|yeti)(?![\p{L}\p{N}])/iu;
+
 /** The risk multiplier and the reasons for it. */
 export function riskMult(risk, f) {
   const R = SPEC.risk;
@@ -179,6 +183,10 @@ export function riskMult(risk, f) {
   if (CHEMICAL.test(String(f.title || ''))) {
     docs *= R.docs;
     flags.push('Docs: Chemical labels (CLP)');
+  }
+  if (TRADEMARK.test(String(f.title || '')) && !risk.reasons.some((r) => r.k === 'brand' || r.k === 'tm')) {
+    docs *= R.docs;
+    flags.push('Docs: Trademark named (referential use only)');
   }
   for (const r of risk.reasons) {
     if (r.level === 'docs') {
