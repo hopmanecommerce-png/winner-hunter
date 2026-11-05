@@ -9,8 +9,9 @@ import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import { execFileSync } from 'node:child_process';
-import { VALIDATE, VALIDATE_JS, sheetOf, renderSheet, digestOf, csvRow, CSV_COLS, orderOf, shipOf, customsOf, marketOf, testPlanOf, pAtLeast } from '../worker/src/validate.mjs';
+import { VALIDATE, VALIDATE_JS, sheetOf, renderSheet, digestOf, csvRow, CSV_COLS, orderOf, shipOf, customsOf, marketOf, testPlanOf, pAtLeast, launchStepsOf } from '../worker/src/validate.mjs';
 import { RISK_JS } from '../worker/src/risk.mjs';
+import { cleanStep, marginOf, marginInputs, summaryOf, STEPS } from '../worker/src/launch.mjs';
 import { SOURCING_JS } from '../worker/src/sourcing.mjs';
 import { runSheets, quotesFrom, checkLinks, pasteInto, picksFrom, indexOf, argsOf, productSheet, pickFromScored, oneLineOf, missingOf } from '../lib/validate.mjs';
 
@@ -510,4 +511,32 @@ test('productSheet never throws: an empty or odd pick still gets a sheet that sa
   const loss = await productSheet({ id: 'l', name: 'Tiny thing', price: { amount: 5, currency: 'EUR' }, src: 'eu', links: {} }, { day: '2026-11-06' });
   assert.match(oneLineOf(loss.sheet), /^Loses €\d+ an order in NZ/);
   assert.deepStrictEqual(missingOf(loss.sheet).slice(0, 1), ['a supplier price (estimated from the selling price)']);
+});
+
+test('launchStepsOf: the sheet fills the 🚀 launch card (every field valid for launch.mjs), its margin close to the sheet\'s, no ticks', () => {
+  const sheet = sheetOf(Object.assign({}, FULL, { supplier: Object.assign({}, FULL.supplier, { status: 'fact' }) }), { day: DAY });
+  const steps = launchStepsOf(sheet);
+  assert.deepStrictEqual(Object.keys(steps), ['sourcing', 'margin', 'compliance', 'research', 'creatives', 'launch']);
+  for (const [k, st] of Object.entries(steps)) {
+    const c = cleanStep(k, st);
+    assert.ok(c, k);
+    assert.deepStrictEqual(c.v, st.v, `${k}: every value survives the card's own clean-up`);
+    assert.strictEqual(c.done, false);
+    assert.ok(!Object.values(c.v).includes(true), `${k}: no tick set for Connor`);
+  }
+  const card = marginOf(marginInputs(steps));
+  const o = sheet.economics.markets[0].offers[0];
+  assert.ok(Math.abs(card.contribution - o.contribution) <= o.refunds + 0.26 + 0.02, `card ${card.contribution} vs sheet ${o.contribution}`);
+  assert.strictEqual(steps.launch.v.budget, 20);
+  assert.match(steps.launch.v.kill, /€40\.00: Stop unless there is 1 sale/);
+  assert.strictEqual(steps.creatives.v.hook1, 'Hook A');
+  const sum = summaryOf({ facts: {}, steps });
+  assert.ok(sum.margin && sum.margin.be_roas > 0);
+  const blocked = launchStepsOf(sheetOf({ id: 'k', name: 'Teeth whitening kit', price: 49.95, cur: 'EUR' }, { day: DAY }));
+  assert.deepStrictEqual(blocked.launch.v, {});
+  assert.match(blocked.launch.note, /^No test: Blocked/);
+  const guess = launchStepsOf(sheetOf({ id: 'g', name: 'Thing', price: 39.95, cur: 'EUR' }, { day: DAY }));
+  assert.strictEqual(guess.margin.v.cogs, undefined, 'a guessed supplier price is not put on the card');
+  assert.strictEqual(guess.sourcing.v.unit, undefined);
+  assert.strictEqual(STEPS.length, 7);
 });

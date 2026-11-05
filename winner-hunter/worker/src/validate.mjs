@@ -124,7 +124,7 @@ export function validateKit(R, S) {
     refund_sizes_pct: 15, // the same when the buyer has to pick a size (the radar's ↩ Sizes): an assumption
     cost_guess_pct: 15, // no supplier price yet: this share of the selling price (the board's default), an estimate
     weight_guess_g: 300, // no weight and no product type that says more: the board's default
-    offers: [{ units: 1, off: 0 }, { units: 2, off: 15 }, { units: 3, off: 25 }], // 1, "2 for 15% off", "3 for 25% off": assumptions
+    offers: [{ units: 1, off: 0 }, { units: 2, off: 15 }, { units: 3, off: 20 }], // buy 2 save 15%, buy 3 save 20%: the NZ model of 28 Oct (SUPPLIERS-NZ.md), an assumption
     target_roas: 2.5, green_roas: 2, red_roas: 3, min_profit: 10, // the board's 💶 verdict thresholds
     max_days: 12, // the most days a customer waits (supplier.mjs's delivery gate; the May 2026 rule "under 12 days to NL/BE")
     home: 'NZ', // the test market: snuggro's primary Shopify market (Admin API, 5 Nov 2026)
@@ -333,7 +333,8 @@ export function validateKit(R, S) {
       out.cost = { eur: round(quote.goods_cny * AGENT.goods_eur_per_cny, 2), status: 'fact', basis: `Kungfubuy quote ${quote.id} (${quote.day}): goods ¥${quote.goods_cny} at the agent's rate (¥${round(1 / AGENT.goods_eur_per_cny, 2)} per €)` };
     } else if (sc) {
       const e = sc.cur === 'CNY' ? sc.amount * AGENT.goods_eur_per_cny : toEur(sc.amount, sc.cur);
-      out.cost = e != null ? { eur: round(e), status: sup.status === 'fact' ? 'fact' : 'estimate', basis: `supplier price ${sc.cur === 'CNY' ? '¥' : ''}${sc.amount}${sc.cur === 'CNY' ? '' : ' ' + sc.cur}${sc.cur === 'CNY' ? ` at the agent's rate (¥${round(1 / AGENT.goods_eur_per_cny, 2)} per €)` : ''}${sup.url ? ' (' + (sup.platform || 'link') + ')' : ''}` } : null;
+      const said = `supplier price ${sc.cur === 'CNY' ? '¥' : ''}${sc.amount}${sc.cur === 'CNY' ? '' : ' ' + sc.cur}${sc.cur === 'CNY' ? ` at the agent's rate (¥${round(1 / AGENT.goods_eur_per_cny, 2)} per €)` : ''}${sup.url ? ' (' + (sup.platform || 'link') + ')' : ''}`;
+      out.cost = e != null ? { eur: round(e), status: sup.status === 'fact' ? 'fact' : 'estimate', basis: sup.basis ? `${said}: ${clean(sup.basis, 200)}` : said } : null;
     }
     if (!out.cost && out.price) out.cost = { eur: round((out.price.eur * s.cost_guess_pct) / 100), status: 'guess', basis: `no supplier price yet: ${s.cost_guess_pct}% of the selling price (the board's default)` };
     const qw = quote && quote.weight_g > 0 ? quote.weight_g : null;
@@ -453,6 +454,7 @@ export function validateKit(R, S) {
     { k: 'food', label: 'Food contact', keys: ['food', 'bamboo'] },
     { k: 'other', label: 'Other restricted (weapons, biocides, adult, CBD, pet medicine)', keys: ['weapon', 'regulated', 'adult', 'biocide', 'pet_med', 'eat', 'pet_eat', 'blade', 'ship'] },
     { k: 'returns', label: 'Return risk (sizes, fragile, bulky)', keys: ['sizing', 'fragile', 'bulky', 'ioss'] },
+    { k: 'ugc', label: 'Creatives: no copied UGC', keys: [] },
   ];
   // Market-specific stops for electric and radio goods (market-rules.mjs blocker items, 31 Oct 2026).
   const MARKET_STOPS = {
@@ -496,6 +498,10 @@ export function validateKit(R, S) {
       if (c.k === 'brand') {
         const h = hits[0];
         items.push({ k: 'brand', label: c.label, status: h ? 'blocker' : 'todo', text: h ? h.text : 'Nothing in its name: still search TMview for the name and the shop before you sell', source: radar && radar.tm && radar.tm.url ? radar.tm.url : 'https://www.tmdn.org/tmview/' });
+        continue;
+      }
+      if (c.k === 'ugc') {
+        items.push({ k: 'ugc', label: c.label, status: 'todo', text: 'Use your own or licensed footage and photos: a competitor\'s or a creator\'s video in your ad breaks portrait rights and copyright (research/2026-10-25-25-videos, section 5)' });
         continue;
       }
       if (c.k === 'weee') {
@@ -748,7 +754,7 @@ export function validateKit(R, S) {
     if (notChecked.length) assumptions.push(`Not checked yet: ${notChecked.join(', ')} (links)`);
     return {
       v: VERSION, id, key: clean(p.key, 1000), name: clean(p.name, 200) || 'Untitled product', day, source: p.source || '', level,
-      product: { name: clean(p.name, 200), problem: clean((p.audience && p.audience.problem) || p.problem || '', 400), category: p.category || null, img: https(p.img) },
+      product: { name: clean(p.name, 200), problem: clean((p.audience && p.audience.problem) || p.problem || '', 400), category: p.category || null, img: https(p.img), offer_note: clean(p.offer_note, 200), notes: clean(p.notes_for_sheet || p.notes, 400) },
       score: p.score || null, audience: p.audience ? { problem: clean(p.audience.problem, 300), persona: p.audience.personas && p.audience.personas[0] ? p.audience.personas[0] : null, line: clean(p.audience.line || '', 200) } : null,
       evidence: evidenceOf(p), links, economics: econ, compliance: comp, supplier, test_plan: plan, facts, assumptions,
       fx: { as_of: FX.as_of, source: FX.source },
@@ -801,6 +807,55 @@ export function validateKit(R, S) {
     return CSV_COLS.map((c) => esc(v[c])).join(',');
   }
 
+  // ---- From the sheet to the board's 🚀 launch card ----------------------------------------------------------------
+  /**
+   * The launch card's checklist (launch.mjs STEPS), filled in from a sheet, for "Launch test" on the board: { sourcing,
+   * margin, compliance, research, creatives, launch }, each { done: false, note, v }. Numbers in euros for the test market;
+   * the margin step's shipping holds shipping + import costs and its fees the card rate + conversion, so the card's own
+   * margin comes close to the sheet's (the card has no refunds or fixed fee). Compliance ticks stay for Connor to set: the
+   * note says what is open. Never a tick for something nobody checked.
+   */
+  function launchStepsOf(sheet) {
+    const m = sheet.economics.markets[0];
+    const o = m && m.offers[0];
+    const i = sheet.economics.inputs;
+    const tp = sheet.test_plan;
+    const sp = sheet.supplier;
+    const comp = sheet.compliance;
+    const steps = {};
+    const step = (k, v, note) => (steps[k] = { done: false, note: clean(note, 1000), v });
+    const sv = {};
+    if (sp.url) sv.supplier = sp.url;
+    if (i.cost && i.cost.status !== 'guess') sv.unit = round(i.cost.eur);
+    if (o) sv.ship = round(o.ship + o.customs + o.ddp_tax);
+    const moq = sheet.supplier.gates.find((g) => g.k === 'moq');
+    if (moq && /MOQ (\d+)/.test(moq.text)) sv.moq = Number(/MOQ (\d+)/.exec(moq.text)[1]);
+    if (m && m.days && (m.days.median != null || m.days.high != null)) sv.lead = m.days.median != null ? m.days.median : m.days.high;
+    step('sourcing', sv, `From the sheet of ${sheet.day}: ${sp.status === 'quote' ? `Kungfubuy quote ${sp.quote.id}` : sp.status === 'link' ? 'supplier link pasted' : 'no supplier yet, paste the 1688 link'}. ${i.cost ? i.cost.basis : ''}`);
+    if (o) {
+      const fees = round(o.fees > 0 ? ((o.fees - (MKT[m.cc].eu ? PAY.eea.fixed : PAY.intl.fixed)) / o.price) * 100 : 0, 2);
+      const vat = o.vat > 0 ? MKT[m.cc].tax.pct : 0;
+      const target = round(Math.min(o.price / DEFAULTS.target_roas, o.be_cpa));
+      step('margin', { price: o.price, ...(i.cost && i.cost.status !== 'guess' ? { cogs: round(o.product) } : {}), ship: round(o.ship + o.customs + o.ddp_tax), fees, vat, cpa: target },
+        `${m.name}: break-even CPA ${eur(o.be_cpa)}, ROAS ${times(o.be_roas)} (the sheet, with refunds and the €${MKT[m.cc].eu ? PAY.eea.fixed : PAY.intl.fixed} fixed fee). Target CPA: the board's ROAS ${DEFAULTS.target_roas}.${i.cost && i.cost.status === 'guess' ? ' COGS left empty: the supplier price is still a guess.' : ''}`);
+    }
+    const open = comp.items.filter((x) => ['blocker', 'docs', 'todo', 'risk'].includes(x.status)).map((x) => `${x.label}: ${STATUS[x.status] || x.status}`);
+    step('compliance', {}, `Risk radar ${comp.level}. Open: ${open.join('; ') || 'nothing'}${comp.undecided.length ? `. Flag: ${comp.undecided.map((u) => u.text).join('; ')}` : ''}`);
+    const rv = {};
+    const ad = sheet.links.find((l) => l.label === 'Ad (Meta Ad Library)');
+    if (ad && https(ad.url)) rv.ads = ad.url;
+    const store = sheet.links.find((l) => l.label === 'Store');
+    if (store) rv.comp1 = store.url;
+    if (tp.go && tp.angles && tp.angles[0]) rv.angle = clean(tp.angles[0], 500);
+    step('research', rv, sheet.evidence.slice(0, 3).map((e) => e.text).join('; '));
+    const cv = {};
+    if (tp.go) tp.angles.slice(0, 3).forEach((a, n) => (cv['hook' + (n + 1)] = clean(a, 500)));
+    step('creatives', cv, 'Own or licensed footage only: no copied UGC (portrait rights, copyright)');
+    if (tp.go) step('launch', { budget: tp.daily, kill: clean(tp.gates.map((g) => `${g.at}: ${g.rule}`).join(' | '), 500), scale: clean(tp.scale.join(' | '), 500) }, `${tp.mode === 'preorder' ? 'Pre-order' : 'Dropship'} test in ${tp.market_name}, ${eur(tp.budget)} in all. ${tp.source}`);
+    else step('launch', {}, `No test: ${tp.why}`);
+    return steps;
+  }
+
   // ---- The one-page markdown ----------------------------------------------------------------------------------------
   const STATUS = { blocker: 'Block', docs: 'Docs', todo: 'To do', clear: 'Clear', 'n/a': 'n/a', risk: 'Risk' };
   const LEVEL = { red: 'Red', amber: 'Amber', green: 'Green' };
@@ -820,6 +875,8 @@ export function validateKit(R, S) {
     L.push('## Product and problem', '');
     L.push(`- ${mdText(sh.product.name)}${sh.product.category ? ` (${mdText([sh.product.category.main, sh.product.category.sub].filter(Boolean).join(' › '))})` : ''}`);
     L.push(`- Problem it solves: ${mdText(sh.product.problem || (sh.audience && sh.audience.problem) || 'not filled in yet (the audience card adds it)')}`);
+    if (sh.product.offer_note) L.push(`- Offer: ${mdText(sh.product.offer_note)}`);
+    if (sh.product.notes) L.push(`- Earlier research: ${mdText(sh.product.notes)}`);
     if (sh.audience && sh.audience.persona) {
       const pe = sh.audience.persona;
       L.push(`- Buyer: ${mdText([pe.age, pe.gender, Array.isArray(pe.countries) ? pe.countries.join('/') : pe.countries, pe.situation].filter(Boolean).join(', '))}`);
@@ -914,7 +971,7 @@ export function validateKit(R, S) {
   }
 
   return { VERSION, FX, PAY, LINES, LIST, LIST_AT, OBSERVED, AGENT, EU_CUSTOMS, MARKETS: MKT, MARKET_ORDER, DEFAULTS, CHECKS, CSV_COLS, toEur, fromEur, priceOf, marketOf, shipOf, daysOf, customsOf, orderOf, levelOf,
-    inputsOf, marketsOf, economicsOf, complianceOf, quoteFor, offerId, supplierOf, testPlanOf, pNone, pAtLeast, sheetOf, evidenceOf, digestOf, csvRow, renderSheet, slug };
+    inputsOf, marketsOf, economicsOf, complianceOf, quoteFor, offerId, supplierOf, testPlanOf, pNone, pAtLeast, sheetOf, evidenceOf, digestOf, csvRow, renderSheet, launchStepsOf, slug };
 }
 
 import { riskKit } from './risk.mjs';
@@ -922,6 +979,6 @@ import { sourcingKit } from './sourcing.mjs';
 
 /** The kit with the board's own risk radar and sourcing kit: what the Worker and the CLI (validate.mjs) use. */
 export const VALIDATE = validateKit(riskKit(), sourcingKit());
-export const { sheetOf, renderSheet, digestOf, csvRow, CSV_COLS, MARKETS, DEFAULTS, FX, orderOf, shipOf, customsOf, marketOf, quoteFor, testPlanOf, complianceOf, pAtLeast } = VALIDATE;
+export const { sheetOf, renderSheet, digestOf, csvRow, CSV_COLS, MARKETS, DEFAULTS, FX, orderOf, shipOf, customsOf, marketOf, quoteFor, testPlanOf, complianceOf, pAtLeast, launchStepsOf } = VALIDATE;
 /** GET /validate.js: the kit's source, run once in the board as window.VALIDATE, after /risk.js and /sourcing.js. */
 export const VALIDATE_JS = `'use strict';\nwindow.VALIDATE = (${validateKit})(window.RISK, window.SOURCING);\n`;
