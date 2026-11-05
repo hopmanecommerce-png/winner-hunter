@@ -12,23 +12,24 @@ import { execFileSync } from 'node:child_process';
 import { VALIDATE, VALIDATE_JS, sheetOf, renderSheet, digestOf, csvRow, CSV_COLS, orderOf, shipOf, customsOf, marketOf, testPlanOf, pAtLeast } from '../worker/src/validate.mjs';
 import { RISK_JS } from '../worker/src/risk.mjs';
 import { SOURCING_JS } from '../worker/src/sourcing.mjs';
-import { runSheets, quotesFrom, checkLinks, pasteInto, picksFrom, indexOf, argsOf } from '../validate.mjs';
+import { runSheets, quotesFrom, checkLinks, pasteInto, picksFrom, indexOf, argsOf, productSheet, pickFromScored, oneLineOf, missingOf } from '../lib/validate.mjs';
 
 const DAY = '2026-11-05';
 const near = (a, b, d = 0.011) => assert.ok(Math.abs(a - b) <= d, `${a} is not ${b} (±${d})`);
 const D = VALIDATE.DEFAULTS;
 
-// Rows of Connor's Kungfubuy quotation export (research/2026-10-31-source-snapshots, read 31 Oct 2026): product + YunExpress
-// shipping for 1 to 4 units, the 1688 goods price and the weight Kungfubuy used. The shipping fit must reproduce them.
+// Rows of Connor's Kungfubuy quotation export (research/2026-10-31-source-snapshots, read 31 Oct 2026; quotation numbers left
+// out): product + YunExpress shipping for 1 to 4 units, the 1688 goods price and the weight Kungfubuy used. The shipping fit
+// must reproduce them.
 const QUOTES = [
-  { id: 'AF2026072854289AF0604-161974', day: '2026-07-28', country: 'Australia', goods_cny: 32, weight_g: 1200, eur: [16.81, 27.99, 39.37, 50.75, 0] },
-  { id: 'N20260728314069168', day: '2026-07-28', country: 'Australia', goods_cny: 26, weight_g: 230, eur: [10.5, 15.2, 20.1, 25.02, 0] },
-  { id: 'N20260705755213725', day: '2026-07-05', country: 'Australia', goods_cny: 114, weight_g: 704, eur: [25.74, 45.85, 66.15, 86.47, 0] },
-  { id: 'N20260906210628745', day: '2026-09-06', offer: '598741273144', asked: 'https://detail.1688.com/offer/819402786700.html', country: 'Australia', goods_cny: 24.8, weight_g: 412, eur: [12.18, 0, 0, 0, 0] },
-  { id: 'N20260628430175636', day: '2026-06-28', country: 'Holland', goods_cny: 27.5, weight_g: 90, eur: [9.76, 16.06, 22.57, 29.08, 0] },
-  { id: 'N20260625173701074', day: '2026-06-25', country: 'Holland', goods_cny: 35, weight_g: 461, eur: [13.19, 22.94, 32.87, 42.81, 0] },
-  { id: 'N20260628683347368', day: '2026-06-28', country: 'Poland', goods_cny: 28, weight_g: 160, eur: [9.42, 16.45, 23.68, 30.89, 0] },
-  { id: 'N20260624314377106', day: '2026-06-24', country: 'Poland', goods_cny: 51, weight_g: 254, eur: [13.27, 24.14, 35.21, 46.28, 0] },
+  { id: 'Q-AU-1', day: '2026-07-28', country: 'Australia', goods_cny: 32, weight_g: 1200, eur: [16.81, 27.99, 39.37, 50.75, 0] },
+  { id: 'Q-AU-2', day: '2026-07-28', country: 'Australia', goods_cny: 26, weight_g: 230, eur: [10.5, 15.2, 20.1, 25.02, 0] },
+  { id: 'Q-AU-3', day: '2026-07-05', country: 'Australia', goods_cny: 114, weight_g: 704, eur: [25.74, 45.85, 66.15, 86.47, 0] },
+  { id: 'Q-AU-4', day: '2026-09-06', offer: '598741273144', asked: 'https://detail.1688.com/offer/819402786700.html', country: 'Australia', goods_cny: 24.8, weight_g: 412, eur: [12.18, 0, 0, 0, 0] },
+  { id: 'Q-NL-1', day: '2026-06-28', country: 'Holland', goods_cny: 27.5, weight_g: 90, eur: [9.76, 16.06, 22.57, 29.08, 0] },
+  { id: 'Q-NL-2', day: '2026-06-25', country: 'Holland', goods_cny: 35, weight_g: 461, eur: [13.19, 22.94, 32.87, 42.81, 0] },
+  { id: 'Q-PL-1', day: '2026-06-28', country: 'Poland', goods_cny: 28, weight_g: 160, eur: [9.42, 16.45, 23.68, 30.89, 0] },
+  { id: 'Q-PL-2', day: '2026-06-24', country: 'Poland', goods_cny: 51, weight_g: 254, eur: [13.27, 24.14, 35.21, 46.28, 0] },
 ];
 const CC = { Australia: 'AU', Holland: 'NL', Poland: 'PL' };
 
@@ -133,7 +134,7 @@ test('a quote to the test market itself is the fact for product + shipping; else
   assert.strictEqual(nl.quoted, false);
   assert.notStrictEqual(nl.offers[0].ship_status, 'fact');
   assert.strictEqual(s.supplier.status, 'quote');
-  assert.strictEqual(s.supplier.quote.id, 'N20260906210628745');
+  assert.strictEqual(s.supplier.quote.id, 'Q-AU-4');
 });
 
 // ---------------------------------------------------------------------------
@@ -429,4 +430,84 @@ test('the CLI: sheets for a picks file into a folder, the same files on a second
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ---------------------------------------------------------------------------
+// The daily job's step (shared/INTERFACES.md)
+// ---------------------------------------------------------------------------
+
+const SCORED = {
+  rank: 1, key: 'world|calmbed.no/products/calmbed', id: 'world-calmbed-no-products-calmbed-1a2b3c', name: 'CalmBed calming dog bed', src: 'world', category: 'Pets', sub: 'Beds',
+  score: 71, level: 3, pillars: { proof: 0.82, demand: 0.55, competition: 0.6, margin: 0.7, fit: 0.64 }, risk: { mult: 0.85, gate: null, flags: ['Docs: CE'], undecided: [] },
+  price: { amount: 650, currency: 'NOK', eur: 62.52 }, econ: { margin_eur: 21.3, breakeven_cpa_eur: 21.3, supplier_cost_eur: 8.3, supplier: 'est' },
+  evidence: [{ signal: 'oldest_ad_days', value: 64, kind: 'fact', source: 'Meta Ad Library', date: '2026-11-01', link: 'https://www.facebook.com/ads/library/?id=1' }, { signal: 'revenue_month', value: '$40k', kind: 'claim', source: 'a spy tool', date: '2026-10-30' }],
+  links: { product_url: 'https://calmbed.no/products/calmbed', store_url: 'https://calmbed.no', ad_library: ['https://www.facebook.com/ads/library/?id=1'], board: 'https://board.example/#today/world-calmbed' },
+  ad_ids: ['1'], stores: ['calmbed.no'], markets: ['NO', 'SE'],
+};
+
+test('pickFromScored: the scorer\'s product in the sheet\'s shape (price, links, markets, evidence with claims kept as claims)', () => {
+  const p = pickFromScored(SCORED);
+  assert.strictEqual(p.id, SCORED.id);
+  assert.strictEqual(p.price, 650);
+  assert.strictEqual(p.cur, 'NOK');
+  assert.deepStrictEqual(p.markets, ['NO', 'SE']);
+  assert.strictEqual(p.ad_url, 'https://www.facebook.com/ads/library/?id=1');
+  assert.strictEqual(p.board_url, 'https://board.example/#today/world-calmbed');
+  assert.deepStrictEqual(p.category, { main: 'Pets', sub: 'Beds' });
+  assert.strictEqual(p.score.total, 71);
+  assert.strictEqual(p.score.breakdown.proof, 82);
+  assert.ok(p.evidence.some((e) => /claim/.test(e.status)));
+  assert.strictEqual(p.zh, '狗窝', 'Chinese 1688 words from the title (pipeline.mjs zhGuess)');
+  const own = { id: 'x', name: 'Own shape', price: 10, cur: 'EUR' };
+  assert.strictEqual(pickFromScored(own), own);
+});
+
+test('productSheet: the sheet, the digest numbers, a one-line phrase under 110 characters, and what is missing', async () => {
+  const out = await productSheet(SCORED, { day: '2026-11-06', now: '2026-11-05T23:00:00Z' });
+  assert.strictEqual(out.sheet.id, SCORED.id);
+  assert.strictEqual(out.market, 'NZ', 'tested in the store\'s market, NO and SE on the sheet too');
+  assert.ok(out.sheet.economics.markets.some((m) => m.cc === 'NO'));
+  assert.strictEqual(out.breakeven_cpa_eur, out.margin_eur);
+  assert.ok(out.one_line.length <= 110, out.one_line);
+  assert.match(out.one_line, /^Margin €\d+, break-even CPA €\d+ in NZ \(est\.\)\. Blocker: /);
+  assert.ok(out.missing.includes('a supplier price (estimated from the selling price)'));
+  assert.ok(out.missing.includes('the audience card'));
+  assert.ok(out.missing.includes('a link check'), 'no ctx.fetch: no link check');
+  assert.match(out.md, /^# CalmBed calming dog bed/);
+  assert.match(out.md, /1688\]\(https:\/\/s\.1688\.com\/selloffer\/offer_search\.htm\?charset=utf8&keywords=%E7%8B%97%E7%AA%9D\)/);
+  assert.deepStrictEqual(out.spent, { credits: 0, jevUsd: 0 });
+});
+
+test('productSheet: links checked through ctx.fetch and cached across runs in ctx.cache; an aborted run still returns a sheet', async () => {
+  const store = new Map();
+  const cache = { get: async (k) => store.get(k), put: async (k, v) => store.set(k, v) };
+  let calls = 0;
+  const fetch = async () => {
+    calls++;
+    return { status: 200, body: null };
+  };
+  const a = await productSheet(SCORED, { day: '2026-11-06', fetch, cache });
+  assert.strictEqual(calls, 3, 'product page, store, ad');
+  assert.ok(a.sheet.links.filter((l) => l.label !== 'Board card').every((l) => l.ok === true));
+  assert.ok(!a.missing.includes('a link check') || a.sheet.links.some((l) => l.ok == null));
+  const b = await productSheet(SCORED, { day: '2026-11-06', fetch, cache });
+  assert.strictEqual(calls, 3, 'the second run takes them from the cache');
+  assert.deepStrictEqual(b.sheet.links, a.sheet.links);
+  const ctl = new AbortController();
+  ctl.abort();
+  const c = await productSheet(SCORED, { day: '2026-11-06', fetch, signal: ctl.signal });
+  assert.strictEqual(calls, 3, 'aborted: no checks');
+  assert.ok(c.sheet && c.one_line);
+});
+
+test('productSheet never throws: an empty or odd pick still gets a sheet that says what is missing', async () => {
+  for (const p of [null, {}, { name: 'Only a name' }, { id: 'x', price: { amount: 'abc', currency: 'XYZ' }, links: {} }]) {
+    const out = await productSheet(p, { day: '2026-11-06' });
+    assert.ok(out.sheet && typeof out.one_line === 'string');
+    assert.ok(out.missing.includes('a selling price'));
+    assert.strictEqual(out.one_line, 'No price yet. Blocker: none');
+  }
+  const loss = await productSheet({ id: 'l', name: 'Tiny thing', price: { amount: 5, currency: 'EUR' }, src: 'eu', links: {} }, { day: '2026-11-06' });
+  assert.match(oneLineOf(loss.sheet), /^Loses €\d+ an order in NZ/);
+  assert.deepStrictEqual(missingOf(loss.sheet).slice(0, 1), ['a supplier price (estimated from the selling price)']);
 });
