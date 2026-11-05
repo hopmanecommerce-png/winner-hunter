@@ -651,7 +651,7 @@ export function validateKit(R, S) {
     const T = s.test;
     const m = econ.markets[0];
     const o = m && m.offers[0];
-    const angles = pick && pick.audience && Array.isArray(pick.audience.angles) ? pick.audience.angles.slice(0, T.creatives).map((a) => clean(typeof a === 'string' ? a : a.hook || a.text || '', 140)).filter(Boolean) : [];
+    const angles = anglesOf(pick && pick.audience).slice(0, T.creatives);
     const fix = m ? [m.min_price != null ? `green from a selling price of ${eur(m.min_price)}${m.min_price_local != null ? ` (${m.min_price_local} ${m.cur})` : ''}` : '', m.max_cost != null ? `or a supplier price up to ${eur(m.max_cost)} (¥${m.max_cost_cny})` : ''].filter(Boolean).join(' ') : '';
     if (!o || !(o.be_cpa > 0) || comp.level === 'block' || m.level === 'red') {
       const why = !o ? 'No price: no break-even CPA to test against' : comp.level === 'block' ? `Blocked: ${comp.main}`
@@ -724,6 +724,18 @@ export function validateKit(R, S) {
     };
   }
 
+  // ---- The audience card (wh-audience: problem { line }, personas [{ label, gender, ages, countries { launch } }], angles
+  // [{ hook, first_test }], targeting { control }, one_line), or a plain one (problem, personas, angles as text).
+  const problemOf = (a) => (!a ? '' : typeof a.problem === 'string' ? a.problem : a.problem && a.problem.line && !/^not enough/i.test(a.problem.line) ? a.problem.line : '');
+  function personaOf(a) {
+    const pe = a && Array.isArray(a.personas) ? a.personas[0] : null;
+    if (!pe) return null;
+    const cc = pe.countries && !Array.isArray(pe.countries) && Array.isArray(pe.countries.launch) ? pe.countries.launch : pe.countries;
+    return { label: clean(pe.label || '', 80), age: clean(pe.ages || pe.age || '', 80), gender: clean(pe.gender || '', 80), countries: Array.isArray(cc) ? cc.slice(0, 6) : cc ? [String(cc)] : [], situation: typeof pe.situation === 'string' ? clean(pe.situation, 120) : '' };
+  }
+  /** The hooks for the test: the card's first-test angles first, then the rest; text or { hook }. */
+  const anglesOf = (a) => (a && Array.isArray(a.angles) ? [...a.angles.filter((x) => x && x.first_test), ...a.angles.filter((x) => !(x && x.first_test))] : []).map((x) => clean(typeof x === 'string' ? x : x.hook || x.text || '', 140)).filter(Boolean);
+
   // ---- The sheet ----------------------------------------------------------------------------------------------------
   /**
    * The sheet of one pick. opts: { day: 'YYYY-MM-DD' (D0, also which customs apply), quotes: Kungfubuy quote rows,
@@ -775,8 +787,9 @@ export function validateKit(R, S) {
     if (walled.length) assumptions.push(`Not checkable by script: ${walled.join(', ')}; it opens in a browser`);
     return {
       v: VERSION, id, key: clean(p.key, 1000), name: clean(p.name, 200) || 'Untitled product', day, source: p.source || '', level,
-      product: { name: clean(p.name, 200), problem: clean((p.audience && p.audience.problem) || p.problem || '', 400), category: p.category || null, img: https(p.img), offer_note: clean(p.offer_note, 200), notes: clean(p.notes_for_sheet || p.notes, 400) },
-      score: p.score || null, audience: p.audience ? { problem: clean(p.audience.problem, 300), persona: p.audience.personas && p.audience.personas[0] ? p.audience.personas[0] : null, line: clean(p.audience.line || '', 200) } : null,
+      product: { name: clean(p.name, 200), problem: clean(problemOf(p.audience) || p.problem || '', 400), category: p.category || null, img: https(p.img), offer_note: clean(p.offer_note, 200), notes: clean(p.notes_for_sheet || p.notes, 400) },
+      score: p.score || null, audience: p.audience ? { problem: clean(problemOf(p.audience), 300), persona: personaOf(p.audience), line: clean(p.audience.one_line || p.audience.line || '', 200),
+        targeting: p.audience.targeting && p.audience.targeting.control ? clean(p.audience.targeting.control.audience || '', 200) : '' } : null,
       evidence: evidenceOf(p), links, economics: econ, compliance: comp, supplier, test_plan: plan, facts, assumptions,
       fx: { as_of: FX.as_of, source: FX.source },
     };
@@ -898,9 +911,9 @@ export function validateKit(R, S) {
     L.push(`- Problem it solves: ${mdText(sh.product.problem || (sh.audience && sh.audience.problem) || 'not filled in yet (the audience card adds it)')}`);
     if (sh.product.offer_note) L.push(`- Offer: ${mdText(sh.product.offer_note)}`);
     if (sh.product.notes) L.push(`- Earlier research: ${mdText(sh.product.notes)}`);
-    if (sh.audience && sh.audience.persona) {
-      const pe = sh.audience.persona;
-      L.push(`- Buyer: ${mdText([pe.age, pe.gender, Array.isArray(pe.countries) ? pe.countries.join('/') : pe.countries, pe.situation].filter(Boolean).join(', '))}`);
+    if (sh.audience && (sh.audience.line || sh.audience.persona)) {
+      const pe = sh.audience.persona || {};
+      L.push(`- Buyer: ${mdText(sh.audience.line || [pe.label, pe.age, pe.gender, (pe.countries || []).join('/'), pe.situation].filter(Boolean).join(', '))} (audience card)`);
     }
     L.push('', '## Evidence that it sells', '');
     if (sh.evidence.length) for (const x of sh.evidence) L.push(`- ${mdLink(x.text, x.url)}${x.date ? ` (${x.date})` : ''}${x.status !== 'fact' ? ` *(${x.status})*` : ''}`);

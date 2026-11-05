@@ -575,3 +575,22 @@ test('GET /validate.js needs the PIN and serves the kit as a script; nothing els
   assert.strictEqual(await js.text(), VALIDATE_JS);
   assert.strictEqual((await call({ method: 'POST' })).status, 405);
 });
+
+test('the audience card of wh-audience: its problem, buyer line and first-test hooks land on the sheet and in the test plan', () => {
+  const card = {
+    problem: { line: 'Physical discomfort (14 of 99 statements)', themes: [] }, one_line: 'travellers, 61.6% women 35-64, CH; pain: physical discomfort',
+    personas: [{ label: 'Travellers', gender: 'mostly women (61.6% of reach)', ages: '35-64 (71.3% of reach)', countries: { launch: ['CH'], eu_reach: [] }, situation: [{ label: 'Traveller' }] }],
+    angles: [{ hook: 'Packing for the next trip? Add this.' }, { hook: 'The flat old pillow that digs in by the end of the day.', first_test: true }, { hook: 'Side sleeper? Watch this first.', first_test: true }, { hook: 'What the price gets.', first_test: true }],
+    targeting: { control: { audience: 'Advantage+ audience on, no interests (let Meta find the buyers)' } },
+  };
+  const s = sheetOf({ id: 'p', name: '4D pillow', price: 89.95, cur: 'EUR', audience: card }, { day: DAY });
+  assert.strictEqual(s.product.problem, 'Physical discomfort (14 of 99 statements)');
+  assert.strictEqual(s.audience.persona.label, 'Travellers');
+  assert.deepStrictEqual(s.audience.persona.countries, ['CH']);
+  assert.deepStrictEqual(s.test_plan.angles, ['The flat old pillow that digs in by the end of the day.', 'Side sleeper? Watch this first.', 'What the price gets.']);
+  const md = renderSheet(s);
+  assert.match(md, /- Buyer: travellers, 61\.6% women 35-64, CH; pain: physical discomfort \(audience card\)/);
+  assert.match(md, /targeting: see the audience card/);
+  const thin = sheetOf({ id: 'q', name: 'X', price: 30, cur: 'EUR', audience: { problem: { line: 'not enough customer statements to say' }, angles: [] } }, { day: DAY });
+  assert.strictEqual(thin.product.problem, '', 'no problem line when the card says it has too few statements');
+});
