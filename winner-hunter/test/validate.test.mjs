@@ -387,16 +387,22 @@ test('checkLinks: opens each link once a day (cache), records a bot wall or a ti
   const fake = async (u, init) => {
     calls.push(u);
     if (u.includes('slow')) return new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))));
-    return { status: u.includes('wall') ? 403 : 200, body: { cancel: async () => {} } };
+    return { status: u.includes('wall') || u.includes('facebook') ? 403 : 200, body: { cancel: async () => {} } };
   };
-  const urls = ['https://a.test/x', 'https://wall.test/y', 'https://slow.test/z', 'http://not-https.test', 'https://a.test/x'];
+  const urls = ['https://a.test/x', 'https://wall.test/y', 'https://slow.test/z', 'http://not-https.test', 'https://a.test/x', 'https://www.facebook.com/ads/library/?id=1'];
   const got = await checkLinks(urls, { day: DAY, fetch: fake, timeoutMs: 30 });
   assert.deepStrictEqual(got['https://a.test/x'], { ok: true, status: 200, checked: DAY });
   assert.deepStrictEqual(got['https://wall.test/y'], { ok: false, status: 403, checked: DAY });
   assert.deepStrictEqual(got['https://slow.test/z'], { ok: false, status: 'timeout', checked: DAY });
-  assert.strictEqual(calls.length, 3, 'once each, https only');
+  assert.deepStrictEqual(got['https://www.facebook.com/ads/library/?id=1'], { ok: null, status: 'bot wall (403)', checked: DAY }, 'Facebook\'s bot wall is not a broken link');
+  assert.strictEqual(calls.length, 4, 'once each, https only');
   const again = await checkLinks(urls, { day: DAY, cache: got, fetch: fake });
-  assert.strictEqual(calls.length, 3, 'the same day: from the cache');
+  assert.strictEqual(calls.length, 4, 'the same day: from the cache');
+  const browser = { 'https://www.facebook.com/ads/library/?id=1': { ok: true, status: 'browser: ad shown', checked: DAY, via: 'browser', active: true, started: 'Jun 14, 2026' } };
+  const md = renderSheet(sheetOf({ id: 'b', name: 'B', price: 20, cur: 'EUR', ad_url: 'https://www.facebook.com/ads/library/?id=1' }, { day: DAY, links: Object.assign({}, got, browser) }));
+  assert.match(md, /opens in a browser \(2026-11-05\), the ad is active, running since Jun 14, 2026/);
+  const walled = renderSheet(sheetOf({ id: 'w', name: 'W', price: 20, cur: 'EUR', ad_url: 'https://www.facebook.com/ads/library/?id=1' }, { day: DAY, links: got }));
+  assert.match(walled, /not checkable by script \(bot wall \(403\), 2026-11-05\)/);
   assert.deepStrictEqual(again, got);
 });
 

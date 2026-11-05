@@ -117,8 +117,9 @@ export function quotesFrom(text) {
 
 /**
  * Whether each link opens: a GET (redirects followed) with a timeout, a few at a time, within a time budget. Returns
- * { url: { ok, status, checked } }; a link checked on `day` before (cache) is not checked again. A 403 or 429 from a bot
- * wall counts as "did not open" with its status, so the sheet says so rather than guessing.
+ * { url: { ok, status, checked } }; a link checked on `day` before (cache) is not checked again: a browser check in the
+ * cache (via: 'browser') counts as one. A shop's 403 or 429 counts as "did not open", with its status. Facebook's 403 is
+ * its bot wall for every script: ok null ("not checkable by script"), never "broken".
  */
 export async function checkLinks(urls, { day = today(), cache = {}, fetch: doFetch = globalThis.fetch, timeoutMs = 8000, budgetMs = 60000, at = 3 } = {}) {
   const out = {};
@@ -134,7 +135,9 @@ export async function checkLinks(urls, { day = today(), cache = {}, fetch: doFet
     const timer = setTimeout(() => ctl.abort(), timeoutMs);
     try {
       const res = await doFetch(u, { method: 'GET', redirect: 'follow', signal: ctl.signal, headers: { 'user-agent': 'Mozilla/5.0 (link check)', accept: 'text/html,*/*' } });
-      out[u] = { ok: res.status >= 200 && res.status < 400, status: res.status, checked: day };
+      // Facebook answers every script with 403 (its Ad Library opens in a browser): not a broken link, just not checkable here.
+      const wall = res.status === 403 && /(^|\.)facebook\.com$/i.test(new URL(u).hostname);
+      out[u] = wall ? { ok: null, status: 'bot wall (403)', checked: day } : { ok: res.status >= 200 && res.status < 400, status: res.status, checked: day };
       try {
         await res.body?.cancel?.();
       } catch (e) {

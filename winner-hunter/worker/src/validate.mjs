@@ -734,7 +734,8 @@ export function validateKit(R, S) {
       const u = https(url);
       if (!u) return null;
       const c = linkInfo[u];
-      return { label, url: u, ok: c ? !!c.ok : null, status: c ? c.status : null, checked: c ? c.checked : null };
+      return { label, url: u, ok: c && c.ok != null ? !!c.ok : null, status: c ? c.status : null, checked: c ? c.checked : null, via: c && c.via ? c.via : null,
+        active: c && c.active != null ? c.active : null, started: c && c.started ? c.started : null };
     };
     const links = [link(p.product_url, 'Product page'), link(p.store_url, 'Store'), link(p.ad_url, 'Ad (Meta Ad Library)'), link(supplier.url, 'Supplier'), link(p.board_url, 'Board card')].filter(Boolean);
     const main = econ.markets[0];
@@ -754,8 +755,10 @@ export function validateKit(R, S) {
     assumptions.push(`Refunds ${econ.refund_pct}% of orders${sizes ? ' (it needs a size)' : ''} (assumption; the store's only data, 2 of 3 paid orders refunded in May–Jul 2026, is too little to use); offers ${s.offers.map((o) => `${o.units}${o.off ? ` at −${o.off}%` : ''}`).join(', ')} (assumption)`);
     if (p.score && p.score.claims) assumptions.push('Spy-tool revenue and creator claims on the score are unverified');
     for (const l of links) if (l.ok === false) assumptions.push(`${l.label} did not open (${l.status || 'no answer'}) when checked ${l.checked || ''}`.trim());
-    const notChecked = links.filter((l) => l.ok == null).map((l) => l.label);
+    const notChecked = links.filter((l) => l.ok == null && !l.status).map((l) => l.label);
     if (notChecked.length) assumptions.push(`Not checked yet: ${notChecked.join(', ')} (links)`);
+    const walled = links.filter((l) => l.ok == null && l.status).map((l) => `${l.label} (${l.status})`);
+    if (walled.length) assumptions.push(`Not checkable by script: ${walled.join(', ')}; it opens in a browser`);
     return {
       v: VERSION, id, key: clean(p.key, 1000), name: clean(p.name, 200) || 'Untitled product', day, source: p.source || '', level,
       product: { name: clean(p.name, 200), problem: clean((p.audience && p.audience.problem) || p.problem || '', 400), category: p.category || null, img: https(p.img), offer_note: clean(p.offer_note, 200), notes: clean(p.notes_for_sheet || p.notes, 400) },
@@ -889,7 +892,8 @@ export function validateKit(R, S) {
     if (sh.evidence.length) for (const x of sh.evidence) L.push(`- ${mdLink(x.text, x.url)}${x.date ? ` (${x.date})` : ''}${x.status !== 'fact' ? ` *(${x.status})*` : ''}`);
     else L.push('- None on this pick yet');
     L.push('', '## Links', '');
-    for (const l of sh.links) L.push(`- ${mdLink(l.label, l.url)}: ${l.ok == null ? 'not checked' : l.ok ? `opens (${l.status}, ${l.checked})` : `**did not open** (${l.status || 'no answer'}, ${l.checked})`}`);
+    const opened = (l) => (l.via === 'browser' ? `opens in a browser (${l.checked})${l.active === true ? ', the ad is active' : l.active === false ? ', the ad is **inactive**' : ''}${l.started ? `, running since ${l.started}` : ''}` : `opens (${l.status}, ${l.checked})`);
+    for (const l of sh.links) L.push(`- ${mdLink(l.label, l.url)}: ${l.ok == null ? (l.status ? `not checkable by script (${l.status}, ${l.checked})` : 'not checked') : l.ok ? opened(l) : `**did not open** (${l.status || 'no answer'}, ${l.checked})`}`);
     if (!sh.links.length) L.push('- No links on this pick');
     L.push('', '## Margin per offer and break-even CPA', '');
     if (o) {
