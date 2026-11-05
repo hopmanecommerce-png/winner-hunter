@@ -746,6 +746,8 @@ export function validateKit(R, S) {
   function sheetOf(pick, opts = {}) {
     const p = pick && typeof pick === 'object' ? pick : {};
     const s = Object.assign({}, DEFAULTS, opts.settings || {}, { test: Object.assign({}, DEFAULTS.test, (opts.settings && opts.settings.test) || {}) });
+    // A pick may name its own test market (an earlier run chose it, e.g. AU for the 29 Oct concepts): it wins over home.
+    if (p.test_market && Object.hasOwn(MKT, String(p.test_market).toUpperCase())) s.home = String(p.test_market).toUpperCase();
     const day = isDay(opts.day) ? opts.day : new Date().toISOString().slice(0, 10);
     const quote = quoteFor(p, opts.quotes);
     const markets = marketsOf(p);

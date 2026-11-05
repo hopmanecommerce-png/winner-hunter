@@ -594,3 +594,10 @@ test('the audience card of wh-audience: its problem, buyer line and first-test h
   const thin = sheetOf({ id: 'q', name: 'X', price: 30, cur: 'EUR', audience: { problem: { line: 'not enough customer statements to say' }, angles: [] } }, { day: DAY });
   assert.strictEqual(thin.product.problem, '', 'no problem line when the card says it has too few statements');
 });
+
+test('a pick can name its own test market; it wins over the default NZ', () => {
+  const s = sheetOf({ id: 't', name: 'Caravan sheet', price: 'A$149', markets: ['AU'], test_market: 'AU' }, { day: DAY });
+  assert.strictEqual(s.economics.markets[0].cc, 'AU');
+  assert.strictEqual(s.test_plan.market, 'AU');
+  assert.strictEqual(sheetOf({ id: 'u', name: 'X', price: 30, cur: 'EUR', test_market: 'XX' }, { day: DAY }).economics.markets[0].cc, 'NZ', 'an unknown market: the default');
+});
