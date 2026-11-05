@@ -21,7 +21,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chunks, d1Client, d1Settings, migrate } from './lib/d1.mjs';
+import { d1Client, d1Settings, migrate } from './lib/d1.mjs';
 import { tablesFrom, factsFrom, localDb } from './lib/winner-facts.mjs';
 import { scoreAll, learnNiche, SPEC, VERSION } from './lib/winner-score.mjs';
 import { selectDaily, RULES } from './lib/daily-picks.mjs';
@@ -192,7 +192,10 @@ export async function runDaily({ db, env = {}, now = Date.now(), day = null, for
     const cache = cacheOf(db, now);
     for (const p of chosen.picks) {
       if (signal.aborted) break;
-      const ctx = { now: iso, day: today, budget, cache, env, fetch: globalThis.fetch, db: { query: (q, a) => db.query(q, a) } };
+      // ctx.db: read-only lookups, called as db(sql, params) or db.query(sql, params) (both work).
+      const read = (q, a) => (/^\s*(SELECT|WITH)\b/i.test(String(q)) ? db.query(q, a) : Promise.reject(new Error('ctx.db is read-only')));
+      read.query = read;
+      const ctx = { now: iso, day: today, budget, cache, env, fetch: globalThis.fetch, db: read };
       for (const [k, fn] of [['audience', st.audience], ['sheet', st.sheet]]) {
         if (!fn) continue;
         const r = await stage(`${k}:${p.pick}`, LIMITS.step, (sig) => fn(p, { ...ctx, signal: sig }), []);
@@ -213,7 +216,7 @@ export async function runDaily({ db, env = {}, now = Date.now(), day = null, for
   const pub = await stage('publish', LIMITS.publish, async () => {
     if (save) {
       const rows = picks.map((p) => ({ key: p.key, rank: p.pick, id: p.id, score: p.score, level: p.level, title: p.name, data: JSON.stringify(p) }));
-      for (const part of chunks(rows, 20)) await db.query(PICKS_SQL, [today, JSON.stringify(part)]);
+      for (const row of rows) await db.query(PICKS_SQL, [today, JSON.stringify([row])]); // one pick a query: a card and a sheet can be 60 KB
       await db.query(STALE_PICKS_SQL, [today, JSON.stringify(picks.map((p) => p.key))]);
       const hist = new Map(ranked.slice(0, HISTORY_TOP).map((x) => [x.key, histRow(x)]));
       for (const p of chosen.picks) hist.set(p.key, histRow(p));
