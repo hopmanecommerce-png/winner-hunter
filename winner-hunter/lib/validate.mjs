@@ -219,7 +219,7 @@ export async function runSheets(picks, { day = today(), quotes = [], audience = 
     day, version: VALIDATE.VERSION, picks: picks.length, sheets: sheets.length, failed,
     levels: { green: count((s) => s.level === 'green'), amber: count((s) => s.level === 'amber'), red: count((s) => s.level === 'red') },
     blocked: count((s) => s.compliance.level === 'block'), tests: count((s) => s.test_plan.go), estimated_cost: count((s) => s.economics.inputs.cost && s.economics.inputs.cost.status !== 'fact'),
-    links: links ? { checked: Object.keys(links).length, broken: Object.values(links).filter((x) => !x.ok).length } : null,
+    links: links ? { checked: Object.keys(links).length, opened: Object.values(links).filter((x) => x.ok === true).length, broken: Object.values(links).filter((x) => x.ok === false).length, walled: Object.values(links).filter((x) => x.ok == null).length } : null,
     digest: sheets.map((s) => Object.assign({ id: s.id, name: s.name }, digestOf(s))), ms: Date.now() - started,
   };
   files['summary.json'] = JSON.stringify(Object.assign({}, summary, { ms: undefined }), null, 2) + '\n'; // no timing in the file: the same input, the same file

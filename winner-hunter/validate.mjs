@@ -63,7 +63,7 @@ async function cmdSheets(a) {
       cache = {};
     }
     const budgetMs = Math.max(5, Math.min(Number(a['max-seconds']) || 120, 600)) * 1000;
-    links = await checkLinks(linksOf(picks), { day, cache, budgetMs });
+    links = await checkLinks(linksOf(picks), { day: today(), cache, budgetMs }); // stamped with the day it was checked, not the sheet's day
     fs.writeFileSync(cacheFile, JSON.stringify(Object.fromEntries(Object.entries(Object.assign({}, cache, links)).sort()), null, 2) + '\n');
   }
   const { files, summary } = await runSheets(picks, { day, quotes, audience, links, home: a.home });
