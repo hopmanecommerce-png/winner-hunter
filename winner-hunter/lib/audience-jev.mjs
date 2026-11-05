@@ -17,15 +17,22 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const clip = (s, n) => Array.from(String(s ?? '').replace(/\s+/g, ' ').trim()).slice(0, n).join('');
 
 /** A capped Jev client: ask(questions, state) → answers. cap: most requests this run. stats(): calls, tokens, cost. */
-export function jevClient({ key, fetch: doFetch = globalThis.fetch, pause = wait, cap = 300, tries = 4, timeout = 60000 } = {}) {
+export function jevClient({ key, fetch: doFetch = globalThis.fetch, pause = wait, cap = 300, tries = 4, timeout = 60000, deadline = 0, clock = Date.now } = {}) {
   const k = String(key || '').trim();
   if (!k) throw new JevError(`No API key: add the GitHub secret ${SECRET}`, { stop: true });
   const t = { calls: 0, tokens: 0, failed: 0, cap };
+  // deadline (ms on clock's scale, 0 = none): past it no request starts, a retry included.
+  const late = () => !!deadline && clock() > deadline;
   async function ask(questions, state) {
+    if (late()) throw new JevError('deadline passed: no new request started', { stop: true });
     if (t.calls >= t.cap) throw new JevError(`Jev request cap reached (${t.cap})`, { stop: true });
     t.calls++;
     const body = JSON.stringify({ model: MODEL, questions, state });
     for (let attempt = 1; ; attempt++) {
+      if (attempt > 1 && late()) {
+        t.failed++;
+        throw new JevError('deadline passed: not asked again', { stop: true });
+      }
       let res;
       try {
         res = await doFetch(API, { method: 'POST', headers: { Authorization: `Bearer ${k}`, 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(timeout) });

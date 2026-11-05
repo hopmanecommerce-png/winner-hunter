@@ -11,6 +11,7 @@ import { jevClient, labelStatements, rankHooks, choosePhrase, BATCH } from '../l
 import { buildCard, cardMarkdown, hookProblem, shortLine, relevant, TEMPLATES } from '../lib/audience-card.mjs';
 import { audienceCard, enrich, subOf, addToBaseline, BASELINE_KEY } from '../lib/audience.mjs';
 import { parseArgs } from '../audience.mjs';
+import { scrapeCreators } from '../lib/google-ads.mjs';
 
 const json = (x, status = 200) => new Response(JSON.stringify(x), { status, headers: { 'content-type': 'application/json' } });
 const noSleep = async () => {};
@@ -443,24 +444,74 @@ test('audienceCard never throws: a vendor that is down, no keys, no budget, a ba
   assert.ok(bad.missing.some((m) => /^error/.test(m)));
 });
 
-test('audienceCard keeps inside the daily job\'s 90 s: no paid call after the soft deadline, a short timeout per call', async () => {
+// The daily job gives a step 90 s. These run on a fake clock: each fake call takes a fixed time on it, so the counts are
+// exact on any machine (no real timers, nothing depends on how fast the runner is).
+test('audienceCard keeps inside the daily job\'s 90 s: past the soft deadline no paid call starts (a fake clock)', async () => {
+  let t = 1000;
+  const clock = () => t;
   const calls = [];
-  const slow = async (url, init) => {
+  const sc = async (url) => {
     calls.push(String(url));
-    await new Promise((r, j) => {
-      const t = setTimeout(r, 400);
-      if (init && init.signal) init.signal.addEventListener('abort', () => { clearTimeout(t); j(Object.assign(new Error('aborted'), { name: 'TimeoutError' })); });
-    });
+    t += 200; // each call takes 200 ms on the fake clock
     return json({ success: true, credits_charged: 1, comments: [] });
   };
-  const t0 = Date.now();
-  const r = await audienceCard({ id: 'p', name: 'P', phrase: 'dog water fountain', ad_ids: ['111222333444'] }, { env: { SCRAPECREATORS_API_KEY: 'k' }, budget: { credits: 14 }, fetch: slow, sleep: noSleep,
-    cache: memoryCache(), softMs: 300, callMs: 150, seedBaseline: null });
-  const took = Date.now() - t0;
+  const pick = { id: 'p', name: 'P', phrase: 'dog water fountain', ad_ids: ['111222333444'] };
+  const r = await audienceCard(pick, { env: { SCRAPECREATORS_API_KEY: 'k' }, budget: { credits: 14 }, fetch: sc, sleep: noSleep, cache: memoryCache(), softMs: 300, clock, seedBaseline: null });
   assert.ok(r.card, 'a card all the same');
-  assert.ok(took < 1500, `took ${took} ms`);
-  assert.ok(calls.length <= 3, `${calls.length} calls before the deadline`);
-  assert.ok(r.missing.some((m) => /stopped|failed|unreachable/.test(m)));
+  assert.equal(calls.length, 2, 'calls start at 0 ms and 200 ms; none at 400 ms, past the 300 ms deadline');
+  assert.ok(r.missing.some((m) => /data pull stopped: deadline/.test(m)));
+  assert.equal(r.card.data.seconds, 0.4, 'the card says how long it took, on the same clock');
+});
+
+test('a retry is a new call: never started past the deadline (Scrape Creators and Jev, a fake clock)', async () => {
+  let t = 0;
+  const clock = () => t;
+  const calls = [];
+  const lost = async (url) => {
+    calls.push(String(url));
+    t += 350; // the answer is lost after 350 ms, past the 300 ms deadline
+    throw Object.assign(new Error('timed out'), { name: 'TimeoutError' });
+  };
+  const r = await audienceCard({ id: 'q', name: 'Q', phrase: 'cat fountain', ad_ids: ['555666777888'] }, { env: { SCRAPECREATORS_API_KEY: 'k' }, budget: { credits: 14 }, fetch: lost, sleep: noSleep, cache: memoryCache(), softMs: 300, clock, seedBaseline: null });
+  assert.equal(calls.length, 1, 'the lost call is not asked again after the deadline');
+  assert.ok(r.card);
+  // Jev on its own: a request at 0 ms is answered at 200, the next starts at 200 and ends at 400; the third is refused.
+  t = 0;
+  let asked = 0;
+  const jevFetch = async () => {
+    asked++;
+    t += 200;
+    return json({ answers: {}, usage: { input_tokens: 10 } });
+  };
+  const jev = jevClient({ key: 'k', fetch: jevFetch, pause: noSleep, deadline: 300, clock });
+  await jev.ask({}, {});
+  await jev.ask({}, {});
+  await assert.rejects(() => jev.ask({}, {}), /deadline passed: no new request started/);
+  assert.equal(asked, 2);
+  assert.equal(jev.stats().calls, 2, 'a refused request is not counted');
+  // And a Jev retry: the first try is lost past the deadline, so it is not asked again.
+  t = 0;
+  let tries = 0;
+  const jevLost = jevClient({ key: 'k', fetch: async () => { tries++; t += 350; throw Object.assign(new Error('x'), { name: 'TimeoutError' }); }, pause: noSleep, tries: 4, deadline: 300, clock });
+  await assert.rejects(() => jevLost.ask({}, {}), /deadline passed: not asked again/);
+  assert.equal(tries, 1);
+});
+
+test('the Scrape Creators client: no deadline, no change; with one, no call starts past it', async () => {
+  let t = 0;
+  const clock = () => t;
+  let n = 0;
+  const ok = async () => { n++; t += 200; return json({ success: true, credits_charged: 1 }); };
+  const capped = scrapeCreators({ key: 'k', cap: 10, fetch: ok, sleep: noSleep, kinds: KINDS, deadline: 300, clock });
+  await capped.call('reddit_search', { query: 'a' });
+  await capped.call('reddit_search', { query: 'b' });
+  await assert.rejects(() => capped.call('reddit_search', { query: 'c' }), (e) => e.kind === 'deadline' && e.stop === true);
+  assert.equal(n, 2);
+  assert.equal(capped.stats().spent, 2, 'a refused call costs nothing');
+  const free = scrapeCreators({ key: 'k', cap: 10, fetch: ok, sleep: noSleep, kinds: KINDS }); // the hunts' use: no deadline
+  t = 1e12;
+  await free.call('reddit_search', { query: 'd' });
+  assert.equal(n, 3);
 });
 
 test('enrich: the board\'s own facts by primary key; subOf matches shortened subcategories', async () => {

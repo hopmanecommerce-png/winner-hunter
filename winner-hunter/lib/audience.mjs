@@ -162,7 +162,7 @@ export function baselineFromState(s) {
 /**
  * One audience card. pick: the scored product (shared/INTERFACES.md) or a research candidate { id, name, phrase, markets,
  * category, ad_ids }. ctx: { now, day, signal, budget: { credits, jevUsd }, cache, env, fetch, db, markets, perPick,
- * jevCalls, log, seedBaseline, sleep }.
+ * jevCalls, log, seedBaseline, sleep, softMs, callMs, clock (ms; default Date.now, a test passes a fake one) }.
  * Returns { card, markdown, one_line, credits_used, jev: { calls, tokens, cost }, missing[] }. Never throws.
  */
 export async function audienceCard(pick, ctx = {}) {
@@ -173,19 +173,21 @@ export async function audienceCard(pick, ctx = {}) {
   let api = null;
   let jev = null;
   let credits = 0;
-  const started = Date.now();
+  // One clock for the step (a test passes a fake one): past the soft deadline no new paid call or Jev request starts.
+  const clock = typeof ctx.clock === 'function' ? ctx.clock : Date.now;
+  const started = clock();
   const softDeadline = started + (ctx.softMs ?? DEFAULTS.softMs);
-  const late = () => Date.now() > softDeadline || !!(ctx.signal && ctx.signal.aborted);
+  const late = () => clock() > softDeadline || !!(ctx.signal && ctx.signal.aborted);
   try {
     const cache = ctx.cache ? (ctx.cache.raw ? ctx.cache.raw : ctxCache(ctx.cache)) : memoryCache();
     const p = await enrich(pick, ctx.db);
     const budget = ctx.budget || {};
     const perPick = Math.max(0, Math.min(ctx.perPick ?? DEFAULTS.perPick, budget.credits ?? Infinity));
     if (String(env.SCRAPECREATORS_API_KEY || '').trim() && perPick > 0) {
-      api = audienceClient({ key: env.SCRAPECREATORS_API_KEY, cap: perPick, fetch: ctx.fetch, sleep: ctx.sleep, timeout: ctx.callMs ?? DEFAULTS.callMs });
+      api = audienceClient({ key: env.SCRAPECREATORS_API_KEY, cap: perPick, fetch: ctx.fetch, sleep: ctx.sleep, timeout: ctx.callMs ?? DEFAULTS.callMs, deadline: softDeadline, clock });
     } else missing.push(perPick > 0 ? 'no SCRAPECREATORS_API_KEY: cached data only' : 'no credits left today: cached data only');
     const jevOk = String(env.TYPESAFE_API_KEY || '').trim() && (budget.jevUsd == null || budget.jevUsd > 0) && ctx.jev !== false;
-    if (jevOk) jev = jevClient({ key: env.TYPESAFE_API_KEY, fetch: ctx.fetch, pause: ctx.sleep, cap: ctx.jevCalls ?? DEFAULTS.jevCalls, tries: 2, timeout: ctx.callMs ?? DEFAULTS.callMs });
+    if (jevOk) jev = jevClient({ key: env.TYPESAFE_API_KEY, fetch: ctx.fetch, pause: ctx.sleep, cap: ctx.jevCalls ?? DEFAULTS.jevCalls, tries: 2, timeout: ctx.callMs ?? DEFAULTS.callMs, deadline: softDeadline, clock });
     else missing.push('Jev off (no TYPESAFE_API_KEY or no budget): word lists only');
 
     // 2. The search phrase.
@@ -198,7 +200,7 @@ export async function audienceCard(pick, ctx = {}) {
     if (!phrase.phrase) missing.push('no English search phrase: no customer statements pulled');
 
     // 3. Collect.
-    const collected = await collect({ id: p.id, phrase: phrase.phrase, ad_ids: p.ad_ids, shop: ctx.shop, tiktok: p.tiktok }, { api, cache, now, perPick, signal: ctx.signal, deadline: softDeadline, log, ads: DEFAULTS.ads, threads: ctx.threads ?? 1 });
+    const collected = await collect({ id: p.id, phrase: phrase.phrase, ad_ids: p.ad_ids, shop: ctx.shop, tiktok: p.tiktok }, { api, cache, now, perPick, signal: ctx.signal, deadline: softDeadline, clock, log, ads: DEFAULTS.ads, threads: ctx.threads ?? 1 });
     credits = collected.credits;
     if (collected.stopped && collected.stopped !== 'no API key (cache only)') missing.push(`data pull stopped: ${collected.stopped}`);
     for (const e of collected.errors.slice(0, 3)) missing.push(e);
@@ -230,7 +232,7 @@ export async function audienceCard(pick, ctx = {}) {
     if (!card.reach) missing.push('no EU reach data');
     if (card.data.statements < 30) missing.push(`only ${card.data.statements} customer statements`);
     card.missing = missing;
-    card.data.seconds = Math.round((Date.now() - started) / 100) / 10;
+    card.data.seconds = Math.round((clock() - started) / 100) / 10;
     return { card, markdown: cardMarkdown(card), one_line: card.one_line, credits_used: credits, jev: jev ? jev.stats() : null, missing };
   } catch (e) {
     log(`audience ${pick && (pick.id || pick.key)}: ${e && e.stack ? e.stack : e}`);

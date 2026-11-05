@@ -37,8 +37,8 @@ export const MAX_TEXT = 600; // characters kept per statement
 export const MAX_ITEMS = 120; // statements kept per pull
 
 /** The client: scrapeCreators() on the audience endpoints. cap: the most credits this run may spend. */
-export function audienceClient({ key, cap, fetch, sleep, timeout } = {}) {
-  return scrapeCreators({ key, cap, fetch, sleep, timeout, kinds: KINDS });
+export function audienceClient({ key, cap, fetch, sleep, timeout, deadline, clock } = {}) {
+  return scrapeCreators({ key, cap, fetch, sleep, timeout, kinds: KINDS, deadline, clock });
 }
 
 // ---------------------------------------------------------------------------
@@ -297,7 +297,7 @@ export function ctxCache(c, days = 30) {
 
 /**
  * Everything for one product. pick: { id, phrase (English search words), ad_ids[], shop (also TikTok Shop reviews) }.
- * o: { api (audienceClient), cache, now, perPick (credits for this product), deadline (ms), log, threads (Reddit threads),
+ * o: { api (audienceClient), cache, now, perPick (credits for this product), deadline (ms on clock), clock (default Date.now), log, threads (Reddit threads),
  *      videos (TikTok videos to read), shop }.
  * Returns { ads[], voice[], pulls[], credits, errors[] }. Never throws for one source: a failed source is a line in errors,
  * and a stop (key, credits, the run's cap, an outage) ends the plan with what it has (stopped: the reason).
@@ -308,7 +308,8 @@ export async function collect(pick, o) {
   const res = { ads: [], voice: [], pulls: [], credits: 0, errors: [], stopped: '' };
   const perPick = Math.max(0, Math.floor(o.perPick ?? 14));
   const phrase = str(pick.phrase, 80);
-  const late = () => (!!o.deadline && Date.now() > o.deadline) || !!(o.signal && o.signal.aborted);
+  const clock = typeof o.clock === 'function' ? o.clock : Date.now;
+  const late = () => (!!o.deadline && clock() > o.deadline) || !!(o.signal && o.signal.aborted);
 
   // One pull: from the cache when it is young enough, else from the vendor (when the product's credits allow).
   async function pull(cacheKey, ttl, kind, params, read) {

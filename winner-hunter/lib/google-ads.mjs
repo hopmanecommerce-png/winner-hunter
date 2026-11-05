@@ -218,7 +218,7 @@ export const OUTAGE_AFTER = 3; // calls that failed in a row (after their own tr
  * that fail stop the run (kind 'outage'). stats(): ok (calls answered) and failed (calls that ended in an error) count
  * calls, not tries; by: the credits per kind. The key never appears in an error or a log.
  */
-export function scrapeCreators({ key, fetch: doFetch = globalThis.fetch, cap = 0, base = API, sleep = wait, tries = 3, timeout = 60000, kinds } = {}) {
+export function scrapeCreators({ key, fetch: doFetch = globalThis.fetch, cap = 0, base = API, sleep = wait, tries = 3, timeout = 60000, kinds, deadline = 0, clock = Date.now } = {}) {
   const k = String(key || '').trim();
   if (!k) throw new GoogleApiError(`No API key: add the GitHub secret ${SECRET}`, { kind: 'key', stop: true });
   const limit = Math.max(0, Math.floor(Number(cap) || 0));
@@ -238,7 +238,10 @@ export function scrapeCreators({ key, fetch: doFetch = globalThis.fetch, cap = 0
     const { path, cost } = kinds[kind];
     const u = new URL(path, base);
     for (const [name, v] of Object.entries(params)) if (v != null && v !== '') u.searchParams.set(name, String(v));
+    // deadline (ms on clock's scale, 0 = none): past it no new request starts, a retry included; the caller keeps what it has.
+    const late = () => !!deadline && clock() > deadline;
     for (let attempt = 1; ; attempt++) {
+      if (late()) throw new GoogleApiError('Deadline passed: no new call started', { kind: 'deadline', stop: true });
       if (t.spent + held + cost > t.cap) throw new GoogleApiError(`Credit cap reached: ${t.spent} of ${t.cap} credits spent`, { kind: 'cap', stop: true });
       held += cost;
       let res;
@@ -257,7 +260,7 @@ export function scrapeCreators({ key, fetch: doFetch = globalThis.fetch, cap = 0
         t.spent += cost;
         t.by[kind] += cost;
         t.lost += cost;
-        if (attempt < Math.min(tries, 2)) {
+        if (attempt < Math.min(tries, 2) && !late()) {
           await sleep(2000 * attempt);
           continue;
         }
@@ -273,7 +276,7 @@ export function scrapeCreators({ key, fetch: doFetch = globalThis.fetch, cap = 0
       if (res.status === 401) throw failed(new GoogleApiError(`Scrape Creators refused the API key (401): check the GitHub secret ${SECRET}`, { status: 401, kind: 'key', stop: true }));
       if (res.status === 402) throw failed(new GoogleApiError('Scrape Creators: no credits left (402): buy credits at app.scrapecreators.com', { status: 402, kind: 'credits', stop: true }));
       if (res.status === 429 || res.status >= 500) {
-        if (attempt < tries) {
+        if (attempt < tries && !late()) {
           await sleep(3000 * attempt);
           continue;
         }
