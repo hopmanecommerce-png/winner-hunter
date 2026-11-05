@@ -177,6 +177,7 @@ export const SITUATIONS = [
   ['smallhome', 'Small home or apartment', any(['apartment', 'condo', 'small space', 'studio apartment', 'dorm', 'tiny house', 'tiny flat', 'my flat'])],
   ['house', 'House with a garden', any(['backyard', 'back yard', 'garden', 'yard', 'house'])],
   ['hotsleeper', 'Sleeps hot', any(['hot sleeper', 'night sweats', 'sleep hot', 'wake up sweating', 'sweaty at night'])],
+  ['sidesleeper', 'Side or back sleeper', any(['side sleepers?', 'back sleepers?', 'stomach sleepers?', 'sleep on my (?:side|back|stomach)', 'sleeping on my (?:side|back|stomach)'])],
   ['worker', 'Long shifts or on their feet', any(['nurse', 'night shift', 'shift work', '12[- ]hour shifts?', 'on my feet', 'truck driver', 'teacher', 'warehouse'])],
   ['driver', 'Drives a lot or cares for a car', any(['my car', 'my truck', 'detailing', 'car wash', 'wash my car', 'commute'])],
   ['student', 'Student', any(['college', 'university', 'student', 'campus', 'dorm room'])],
@@ -187,7 +188,7 @@ export const SITUATIONS = [
 export const PERSONA = { dog: 'Dog owners', bigdog: 'Owners of big dogs', olddog: 'Owners of older dogs', puppy: 'New puppy owners', cat: 'Cat owners', multipet: 'Homes with several pets',
   parent: 'Parents', grandparent: 'Grandparents', partner: 'People buying with a partner in mind', giftgiver: 'Gift buyers', olderadult: 'Older adults', caravan: 'Caravan, RV and van owners',
   traveller: 'Travellers', outdoors: 'Campers and hikers', smallhome: 'People in small homes', house: 'Home owners with a garden', hotsleeper: 'Hot sleepers', worker: 'Shift workers',
-  driver: 'Car owners', student: 'Students', wfh: 'Desk workers' };
+  driver: 'Car owners', student: 'Students', wfh: 'Desk workers', sidesleeper: 'Side and back sleepers' };
 
 /** Situations with counts (one per statement) and a quote each, most mentioned first; only those said 2+ times. */
 export function situationsOf(items, { min = 2 } = {}) {
@@ -209,6 +210,14 @@ const STOP = new Set(('a an the and or but if so of to in on at by for from with
   'not no yes very really just also too only even still then than now up out off over about into onto again more most much many some any all each every one ones two can could will would should may might must shall ' +
   'get got gets getting go goes going went make makes made like likes liked thing things lol omg im ive dont doesnt didnt cant wont isnt its thats whats youre theyre ill id u ur ya yeah oh ok okay well what when where who why how which ' +
   'because cause while though although after before since until via per etc amp theyd youd hed shed wed theyll youll itll theyve youve weve hes shes thats theres heres lets gonna wanna gotta kinda sorta').split(/\s+/));
+// Words that make a phrase say nothing about the product ("last night", "lot of people", "love of my life").
+const GENERIC = new Set(('night nights year years day days week weeks month months time times today yesterday tomorrow morning evening people person lot lots thing things way ways life ' +
+  'guy guys girl girls video videos comment comments link links post posts love lol reason reasons kind sort part bit everyone someone anyone something anything nothing ' +
+  'january february march april may june july august september october november december monday tuesday wednesday thursday friday saturday sunday came across ' +
+  'last next first good great nice pretty little much many ago work job keep want need buy bought get got use used try tried look looks looking see seen say said know think feel go anyone ' +
+  'send stuff tv show dumb ui').split(/\s+/));
+/** Singular-ish form, so "fryers" and "fryer" are one word when a phrase is checked against the product's name. */
+export const stem = (w) => (w.length > 4 && w.endsWith('es') && !w.endsWith('ses') ? w.slice(0, -2) : w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w);
 const tokens = (t) => (String(t || '').toLowerCase().replace(/https?:\/\/\S+/g, ' ').replace(/[@#]\S+/g, ' ').replace(/['’]/g, '').match(/\p{L}[\p{L}\p{N}-]*/gu) || []);
 /** The text cut at punctuation, so a phrase never spans a comma or a full stop ("steel, plastic" is not a phrase). */
 const chunksOf = (t) => String(t || '').split(/[,.;:!?()\[\]\/|"“”…\n]+|\s[-–—]\s/).map(tokens).filter((c) => c.length >= 2);
@@ -219,15 +228,16 @@ const chunksOf = (t) => String(t || '').split(/[,.;:!?()\[\]\/|"“”…\n]+|\s
  * Returns [{ phrase, n, likes, example: { text, url, src } }], most said first, the longer phrase kept when two overlap.
  */
 export function phrasesOf(items, { min = 2, top = 15, ignore = [] } = {}) {
-  const skip = new Set(ignore.map((w) => String(w).toLowerCase()));
+  const skip = new Set(ignore.map((w) => stem(String(w).toLowerCase())));
   const by = new Map();
   for (const it of items) {
     const seen = new Set();
     for (const w of chunksOf(it.text)) for (let n = 2; n <= 4; n++) {
       for (let i = 0; i + n <= w.length; i++) {
         const g = w.slice(i, i + n);
-        if (STOP.has(g[0]) || STOP.has(g[n - 1]) || g.every((x) => skip.has(x) || STOP.has(x))) continue;
+        if (STOP.has(g[0]) || STOP.has(g[n - 1]) || g.every((x) => skip.has(stem(x)) || STOP.has(x))) continue;
         if (g.some((x) => x.length < 2) || g.filter((x) => !STOP.has(x)).length < 2) continue;
+        if (g.filter((x) => !STOP.has(x)).every((x) => GENERIC.has(x))) continue;
         const p = g.join(' ');
         if (seen.has(p)) continue;
         seen.add(p);

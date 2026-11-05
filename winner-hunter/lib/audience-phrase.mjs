@@ -94,7 +94,8 @@ export const DICT = [
   ['needle threader|einfadler|enfile aiguille|draadinsteker', 'needle threader'],
   ['drying towel|trockentuch|serviette de sechage|droogdoek|microfib(?:er|re) towel|twist (?:car )?(?:wash )?towel', 'car drying towel'],
   ['car (?:seat )?organi[sz]er|auto ?organizer|rangement voiture|auto organizer', 'car seat organizer'],
-  ['back ?seat .{0,24}seat cover|car seat covers?|seat covers?|autositzbezug|sitzbezuge?|housse de siege|autostoelhoes', 'car seat cover'],
+  ['back ?seat .{0,24}(?:seat )?(?:cover|protector)|rear seat (?:cover|protector)|ruckbankschutz|kofferraumschutz', 'back seat cover'],
+  ['car seat covers?|seat covers?|autositzbezug|sitzbezuge?|housse de siege|autostoelhoes', 'car seat cover'],
   ['sofa ?cover|sofabezug|housse de canape|bankhoes', 'stretch sofa cover'],
   ['water bottle|trinkflasche|gourde|waterfles', 'water bottle'],
   ['copper (?:water )?bottle|kupferflasche|koperen fles', 'copper water bottle'],
@@ -179,15 +180,29 @@ export function candidates(p) {
     if (i >= 0) hits.push(i);
   }
   for (const i of [...new Set(hits)].sort((a, b) => a - b)) add(DICT_RE[i][1], 'dictionary');
-  // An English handle or title says what the product is better than a category does ("dog-hair-dryer-l200").
+  // An English handle or title says what the product is better than a category does ("dog-hair-dryer-l200"). The
+  // category's context word goes in front when it is missing: "high back chair" finds office chairs, "camping …" does not.
+  const sub0 = p.sub && p.sub.includes(' > ') ? p.sub : p.main && p.sub ? `${p.main} > ${p.sub}` : '';
+  const ctxWord = contextWord(sub0, p.main);
   for (const [t, how] of [[p.handle || handleOf(p.url), 'handle'], [p.name, 'title'], [p.title, 'title']]) {
     if (!t || !englishish(t) || (how === 'title' && headline(t))) continue;
     const c = cleanEnglish(t);
-    if (c.split(' ').length >= 2) add(c, how);
+    if (c.split(' ').length < 2) continue;
+    add(ctxWord && !c.split(' ').some((w) => CONTEXT_OK[ctxWord].includes(w)) ? `${ctxWord} ${c}` : c, how);
   }
   const sub = p.sub && p.sub.includes(' > ') ? p.sub : p.main && p.sub ? `${p.main} > ${p.sub}` : '';
   if (sub && SUBCAT_QUERY[sub]) add(SUBCAT_QUERY[sub], 'category');
   return out;
+}
+
+// The word that puts a product in its world, by Jev category, and the words that already do the job.
+const CONTEXT_OK = { pet: ['pet', 'dog', 'dogs', 'cat', 'cats', 'puppy', 'kitten'], camping: ['camping', 'camp', 'outdoor', 'hiking', 'beach', 'fishing'], car: ['car', 'cars', 'auto', 'vehicle', 'truck', 'suv'],
+  baby: ['baby', 'kids', 'kid', 'toddler', 'child', 'children', 'infant', 'newborn'], caravan: ['caravan', 'rv', 'camper', 'motorhome', 'van'] };
+export function contextWord(sub, main) {
+  if (/^Outdoor and travel > Caravans/.test(sub)) return 'caravan';
+  if (/^Outdoor and travel > (Camping|Fishing)/.test(sub)) return 'camping';
+  const m = main || String(sub).split(' > ')[0];
+  return m === 'Pets' ? 'pet' : m === 'Car' ? 'car' : m === 'Baby and kids' ? 'baby' : '';
 }
 
 /** The phrase to search with: the first candidate, or '' when nothing fits (then the card is built from ads only). */

@@ -59,13 +59,13 @@ export const DEFAULT_MARKETS = ['NZ', 'AU'];
 // ---------------------------------------------------------------------------
 // What people use today instead of the product (the "status quo"), by the last word(s) of the search phrase.
 export const STATUS_QUO = [
-  [/fountain/, 'water bowl'], [/feeder|bowl/, 'food bowl'], [/harness/, 'collar'], [/leash|lead/, 'old lead'], [/dog bed|calming/, 'old dog bed'], [/litter/, 'litter tray'],
-  [/cooling mat/, 'hot floor'], [/grooming|hair remover|brush/, 'lint roller'], [/coat|jacket/, 'old jacket'], [/pillowcase/, 'cotton pillowcase'], [/neck pillow|travel/, 'rolled-up jumper'],
-  [/pillow/, 'flat old pillow'], [/topper|mattress/, 'tired mattress'], [/duvet|blanket|throw/, 'heavy duvet'], [/sheet|bedding/, 'standard sheets'], [/blind|insert|curtain/, 'thin curtains'],
-  [/sleep mask|eye mask/, 'pillow over the face'], [/shapewear/, 'shapewear that rolls down'], [/bra/, 'underwire bra'], [/tights/, 'thin tights'], [/slippers|socks/, 'cold floor'],
-  [/shoes/, 'stiff shoes'], [/wallet|card/, 'bulky wallet'], [/bag|backpack/, 'overstuffed bag'], [/towel/, 'old towel'], [/organi[sz]er|drawer|storage/, 'junk drawer'],
-  [/ornament/, 'shop-bought bauble'], [/paint by numbers/, 'blank canvas'], [/necklace|bracelet|earrings|jewel/, 'generic jewellery'], [/strap/, 'stock strap'], [/bottle/, 'plastic bottle'],
-  [/gutter/, 'ladder and bucket'], [/threader/, 'squinting at the needle'], [/vacuum storage/, 'overflowing wardrobe'], [/bread bag/, 'plastic bread bag'],
+  [/\b(?:fountain)(?:e?s)?\b/, 'water bowl'], [/\b(?:feeder|bowl)(?:e?s)?\b/, 'food bowl'], [/\b(?:harness)(?:e?s)?\b/, 'collar'], [/\b(?:leash|lead)(?:e?s)?\b/, 'old lead'], [/\b(?:dog bed|calming)(?:e?s)?\b/, 'old dog bed'], [/\b(?:litter)(?:e?s)?\b/, 'litter tray'],
+  [/\b(?:cooling mat)(?:e?s)?\b/, 'hot floor'], [/\b(?:grooming|hair remover|brush)(?:e?s)?\b/, 'lint roller'], [/\b(?:coat|jacket)(?:e?s)?\b/, 'old jacket'], [/\b(?:pillowcase)(?:e?s)?\b/, 'cotton pillowcase'], [/\b(?:neck pillow|travel)(?:e?s)?\b/, 'rolled-up jumper'],
+  [/\b(?:pillow)(?:e?s)?\b/, 'flat old pillow'], [/\b(?:topper|mattress)(?:e?s)?\b/, 'tired mattress'], [/\b(?:duvet|blanket|throw)(?:e?s)?\b/, 'heavy duvet'], [/\b(?:sheet|bedding)(?:e?s)?\b/, 'standard sheet'], [/\b(?:blind|insert|curtain)(?:e?s)?\b/, 'thin curtain'],
+  [/\b(?:sleep mask|eye mask)(?:e?s)?\b/, 'pillow over the face'], [/\b(?:shapewear)(?:e?s)?\b/, 'shapewear that rolls down'], [/\b(?:bra)(?:e?s)?\b/, 'underwire bra'], [/\b(?:tights)(?:e?s)?\b/, 'thin tights'], [/\b(?:slippers|socks)(?:e?s)?\b/, 'cold floor'],
+  [/\b(?:shoes)(?:e?s)?\b/, 'stiff old pair'], [/\b(?:wallet|card)(?:e?s)?\b/, 'bulky wallet'], [/\b(?:bag|backpack)(?:e?s)?\b/, 'overstuffed bag'], [/\b(?:towel)(?:e?s)?\b/, 'old towel'], [/\b(?:organi[sz]er|drawer|storage)(?:e?s)?\b/, 'junk drawer'],
+  [/\b(?:ornament)(?:e?s)?\b/, 'shop-bought bauble'], [/\b(?:watch band|band\b)(?:e?s)?\b/, 'stock band'], [/\b(?:paint by numbers)(?:e?s)?\b/, 'blank canvas'], [/\b(?:necklace|bracelet|earrings|jewel\w*)(?:e?s)?\b/, 'generic jewellery'], [/\b(?:strap)(?:e?s)?\b/, 'stock strap'], [/\b(?:bottle)(?:e?s)?\b/, 'plastic bottle'],
+  [/\b(?:gutter)(?:e?s)?\b/, 'ladder and bucket'], [/\b(?:seat cover|seat protector)(?:e?s)?\b/, 'back seat'], [/\b(?:threader)(?:e?s)?\b/, 'squinting at the needle'], [/\b(?:vacuum storage)(?:e?s)?\b/, 'overflowing wardrobe'], [/\b(?:bread bag)(?:e?s)?\b/, 'plastic bread bag'],
 ];
 const objectOf = (phrase) => {
   for (const [re, o] of STATUS_QUO) if (re.test(phrase)) return o;
@@ -79,20 +79,21 @@ const AUDIENCE_WHO = { 'Dog owners': 'dog', 'Cat owners': 'cat', 'Other pet owne
 /** Draft hooks per angle slot. Placeholders: {object} {who} {thing} {name} {recipient}. Each list best first. */
 export const TEMPLATES = {
   pain: {
-    dirty: ['Slimy {object} again?', 'Still scrubbing the {object} every day?'],
-    smell: ['When the {object} smells by day two.'],
-    hot: ['Hot nights in a house with no aircon.', 'Summer nights, and the bed still feels like a heater.'],
+    dirty: ['The {object} that never looks clean for long.', 'Still scrubbing the {object} every day?'],
+    slimy: ['Slimy {object} again?', 'Still scrubbing the {object} every day?'],
+    smell: ['That smell by day two? It is the {object}.'],
+    hot: ['Too hot, too sticky, every summer.'],
     cold: ['Cold nights and a {object} that never warms up.'],
-    sleep: ['3am, and the {object} is the problem again.'],
+    sleep: ['3am. Wide awake. Blame the {object}.'],
     pain: ['The {object} that digs in by the end of the day.'],
     mess: ['The {object} mess nobody shows on Instagram.'],
     falls: ['The {object} that slips off every single time.', 'Rides up, slips off, start again.'],
     pull: ['Walks that feel like a tug of war.'],
-    broke: ['Third {object} this year?'],
-    time: ['The daily {object} chore nobody enjoys.'],
+    broke: ['Another {thing} that gave up too soon?'],
+    time: ['The {object} routine nobody enjoys.'],
     money: ['A new {object} every few months adds up.'],
-    worry: ['Out all day, and the {who} is home alone.'],
-    annoy: ['The small daily annoyance everyone puts up with.'],
+    worry: [],
+    annoy: [],
   },
   objection: {
     price: ['What the price actually gets: shown in 20 seconds.'],
@@ -109,7 +110,7 @@ export const TEMPLATES = {
   },
   trigger: {
     newpet: ['New {who} at home? Sort this first.'],
-    baby: ['For the first months with a little one.'],
+    baby: [],
     move: ['New place, new {object}. Start here.'],
     summer: ['Before the first hot night of summer.'],
     winter: ['Before the cold nights set in.'],
@@ -133,6 +134,9 @@ export const TEMPLATES = {
     story: ['How a {object} problem turned into this.'],
   },
 };
+// Without Jev: how much one statement behind a draft counts, per kind. A real pain opens an ad best; a doubt is the
+// second ad, not the first (practice on file: LAUNCH-KIT.md, 25-videos README section 4).
+export const SLOT_WEIGHT = { pain: 1.5, trigger: 1.3, outcome: 1, objection: 0.7, open: 1 };
 export const PROOF = {
   pain: 'Open on the problem in the first 2 seconds (close-up, real setting), then the product in use.',
   trigger: 'Show the moment itself first, then the product in that moment.',
@@ -261,7 +265,7 @@ export function buildCard(input) {
   const usedAngles = new Set(competitors.map((c) => c.angle));
 
   // The problem.
-  const pains = themes.pain.filter((t) => t.key !== 'other' || t.n >= 3).slice(0, 4);
+  const pains = themes.pain.filter((t) => t.n >= 3).slice(0, 4);
   const topPain = pains[0] || null;
   const problemLine = topPain ? `${topPain.label} (${topPain.n} of ${voice.length} statements)` : pick.jev && pick.jev.problemtype ? `${pick.jev.problemtype} (Jev's reading of the product, no customer data)` : 'not enough customer statements to say';
 
@@ -275,12 +279,14 @@ export function buildCard(input) {
   const month = new Date(now).getUTCMonth(); // 0 = Jan
   const summerSoon = south ? month >= 8 || month <= 1 : month >= 2 && month <= 7;
   const recipient = RECIPIENT[(situations.find((s) => RECIPIENT[s.key]) || {}).key] || '';
-  const vars = { object: objectOf(ph), who, thing: ph, name, recipient: recipient || 'person' };
+  const vars = { object: objectOf(ph), who, thing: ph, name: cap1(ph) || name, recipient: recipient || 'person' };
   const drafts = draftAngles({ themes, vars, usedAngles, summerSoon, words });
   const ranking = jev && jev.ranking;
   const scored = drafts.map((d) => ({ ...d, jev_p: ranking && ranking.probs ? ranking.probs[d.hook] ?? null : null, jev_claim: ranking && ranking.claims ? ranking.claims[d.hook] ?? null : null }));
   let angles = scored.filter((d) => !(typeof d.jev_claim === 'number' && d.jev_claim >= 0.6));
   if (ranking && ranking.probs) angles = angles.map((a) => ({ ...a, _r: -(a.jev_p || 0) + a._i / 1e6 })).sort((a, b) => a._r - b._r);
+  // No Jev ranking: the angle with the most statements behind it goes first (a draft with no evidence goes last).
+  else angles = angles.map((a) => ({ ...a, _r: -(a.weight || 0) * (SLOT_WEIGHT[a.slot] || 1) + a._i / 1e6 })).sort((a, b) => a._r - b._r);
   const chosen = pickFive(angles);
   angles = chosen.map((a, i) => ({ n: i + 1, first_test: i < 3, angle: a.angle, slot: a.slot, persona: personas[0] ? personas[0].label : '', trigger: a.trigger || '', hook: a.hook,
     proof: a.proof, compliance: compliance(pick.main, a.hook), based_on: a.based_on, jev_p: a.jev_p ?? null, needs_proof: !!a.needs_proof }));
@@ -302,7 +308,7 @@ export function buildCard(input) {
     questions: themes.question.slice(0, 1).map((t) => ({ ...t, quotes: pickQuotes(voice.filter((v) => v.tags.question), 4) })),
     intent: themes.intent.slice(0, 3),
     situations,
-    words: { phrases: words, avoid: avoidList(competitors, pick.main) },
+    words: { phrases: words.map((w) => (claimsIn(w.phrase).length ? { ...w, claim: claimsIn(w.phrase)[0].label } : w)), avoid: avoidList(competitors, pick.main) },
     competitors,
     angles,
     drafts: scored.map((d) => ({ hook: d.hook, slot: d.slot, angle: d.angle, jev_p: d.jev_p, jev_claim: d.jev_claim, chosen: chosen.some((c) => c.hook === d.hook) })),
@@ -348,8 +354,10 @@ function buildPersonas({ reach, situations, themes, jevAud, markets, gift, voice
   const sits = situations.filter((s) => !['partner', 'house', 'giftgiver'].includes(s.key));
   const bySplit = reach && reach.skew ? `${reach.skew === 'women' ? 'Women' : 'Men'}${reach.span ? ` ${reach.span.label}` : ''}` : '';
   const base = jevAud && !['Everyone', 'Women', 'Men'].includes(jevAud) ? jevAud : sits[0] && sits[0].n >= 3 ? PERSONA[sits[0].key] || sits[0].label : bySplit || (jevAud === 'Women' ? 'Women' : jevAud === 'Men' ? 'Men' : 'Broad buyers');
-  const qualifier = sits.filter((s) => ['bigdog', 'olddog', 'puppy', 'multipet', 'caravan', 'smallhome', 'hotsleeper', 'traveller', 'parent', 'worker', 'outdoors'].includes(s.key) && !base.toLowerCase().includes(s.label.toLowerCase().split(' ')[0]))
-    .slice(0, 2).map((s) => s.label.toLowerCase());
+  const baseKey = jevAud && !['Everyone', 'Women', 'Men'].includes(jevAud) ? '' : sits[0] && sits[0].n >= 3 ? sits[0].key : '';
+  const qualifier = sits.filter((s) => ['bigdog', 'olddog', 'puppy', 'multipet', 'caravan', 'smallhome', 'hotsleeper', 'sidesleeper', 'traveller', 'parent', 'worker', 'outdoors'].includes(s.key) && s.key !== baseKey &&
+    !base.toLowerCase().includes((PERSONA[s.key] || s.label).toLowerCase().split(' ')[0]))
+    .slice(0, 2).map((s) => (PERSONA[s.key] || s.label).toLowerCase());
   const label = qualifier.length ? `${base} (${qualifier.join(', ')})` : base;
   const sexLine = reach ? reach.skew === 'women' ? `mostly women (${reach.women}% of reach)` : reach.skew === 'men' ? `mostly men (${reach.men}% of reach)` : `women and men (${reach.women}% / ${reach.men}%)` : 'unknown (no EU reach data)';
   const ageLine = reach && reach.span ? `${reach.span.label} (${reach.span.share}% of reach)` : 'unknown (no EU reach data)';
@@ -410,28 +418,32 @@ function draftAngles({ themes, vars, usedAngles, summerSoon, words }) {
     return false;
   };
   // 1. Pain: the top pain themes, then a hook made of the customers' own phrase ("Slimy water bowl, again?").
-  for (const t of themes.pain.slice(0, 3)) push('pain', 'Problem first', t.key, TEMPLATES.pain[t.key], { trigger: '', proof: PROOF.pain, based_on: t.quotes.slice(0, 2), needs_proof: false, theme: t.label });
+  for (const t of themes.pain.filter((x) => x.n >= 3).slice(0, 3)) {
+    // "Slimy" only when the customers say slime; else the plain "never looks clean".
+    const key = t.key === 'dirty' && t.quotes.some((x) => /slim/i.test(x.text)) ? 'slimy' : t.key;
+    push('pain', 'Problem first', key, TEMPLATES.pain[key], { trigger: '', proof: PROOF.pain, based_on: t.quotes.slice(0, 2), needs_proof: false, theme: t.label, weight: t.n });
+  }
   const painWord = THEMES.pain.map(([, , re]) => re);
   const ph = (words || []).find((w) => w.phrase.split(' ').length <= 3 && painWord.some((re) => re.test(w.phrase)) && !claimsIn(w.phrase).length);
-  if (ph) push('pain', 'Problem first, in their words', 'phrase', [`${cap1(ph.phrase)}, again?`], { proof: PROOF.pain, based_on: [ph.example].filter(Boolean), needs_proof: false, theme: `"${ph.phrase}" (${ph.n} statements)` });
+  if (ph) push('pain', 'Problem first, in their words', 'phrase', [`${cap1(ph.phrase)}, again?`], { proof: PROOF.pain, based_on: [ph.example].filter(Boolean), needs_proof: false, theme: `"${ph.phrase}" (${ph.n} statements)`, weight: ph.n });
   // 2. The top objections, answered.
-  for (const t of themes.objection.slice(0, 2)) push('objection', `Answer the doubt: ${t.label.toLowerCase()}`, t.key, TEMPLATES.objection[t.key], { proof: ANSWERS[t.key], based_on: t.quotes.slice(0, 2), needs_proof: ['quality', 'fit', 'works'].includes(t.key), theme: t.label });
+  for (const t of themes.objection.slice(0, 2)) push('objection', `Answer the doubt: ${t.label.toLowerCase()}`, t.key, TEMPLATES.objection[t.key], { proof: ANSWERS[t.key], based_on: t.quotes.slice(0, 2), needs_proof: ['quality', 'fit', 'works'].includes(t.key), theme: t.label, weight: t.n });
   // 3. Triggers: the top one, then the season that is coming in the first market.
   for (const t of themes.trigger.slice(0, 2)) {
     const key = t.key === 'season' ? (summerSoon ? 'summer' : 'winter') : t.key;
-    push('trigger', `The moment: ${t.label.toLowerCase()}`, key, TEMPLATES.trigger[key], { trigger: t.label, proof: PROOF.trigger, based_on: t.quotes.slice(0, 2), needs_proof: false, theme: t.label });
+    push('trigger', `The moment: ${t.label.toLowerCase()}`, key, TEMPLATES.trigger[key], { trigger: t.label, proof: PROOF.trigger, based_on: t.quotes.slice(0, 2), needs_proof: false, theme: t.label, weight: t.n });
   }
-  push('trigger', 'The moment: the season ahead', summerSoon ? 'summer' : 'winter', TEMPLATES.trigger[summerSoon ? 'summer' : 'winter'], { trigger: summerSoon ? 'Summer coming' : 'Winter coming', proof: PROOF.trigger, based_on: [], needs_proof: false, theme: 'calendar' });
+  push('trigger', 'The moment: the season ahead', summerSoon ? 'summer' : 'winter', TEMPLATES.trigger[summerSoon ? 'summer' : 'winter'], { trigger: summerSoon ? 'Summer coming' : 'Winter coming', proof: PROOF.trigger, based_on: [], needs_proof: false, theme: 'calendar', weight: 1 });
   // 4. Outcomes.
-  for (const t of themes.outcome.slice(0, 2)) push('outcome', `The result: ${t.label.toLowerCase()}`, t.key, TEMPLATES.outcome[t.key] || TEMPLATES.outcome.any, { proof: PROOF.outcome, based_on: t.quotes.slice(0, 2), needs_proof: true, theme: t.label });
-  push('outcome', 'The result', 'any', TEMPLATES.outcome.any, { proof: PROOF.outcome, based_on: [], needs_proof: false, theme: 'generic' });
+  for (const t of themes.outcome.slice(0, 2)) push('outcome', `The result: ${t.label.toLowerCase()}`, t.key, TEMPLATES.outcome[t.key] || TEMPLATES.outcome.any, { proof: PROOF.outcome, based_on: t.quotes.slice(0, 2), needs_proof: true, theme: t.label, weight: t.n });
+  push('outcome', 'The result', 'any', TEMPLATES.outcome.any, { proof: PROOF.outcome, based_on: [], needs_proof: false, theme: 'generic', weight: 1 });
   // A phrase people repeat (not the product's own name, no claim) as a curiosity hook: "Front clip? Watch this first."
   const rep = (words || []).find((w) => w.n >= 3 && w.phrase.split(' ').length <= 3 && !claimsIn(w.phrase).length && !painWord.some((re) => re.test(w.phrase)));
-  if (rep) push('open', 'Open angle: their own words as the question', 'phrase', [`${cap1(rep.phrase)}? Watch this first.`], { proof: PROOF.question, based_on: [rep.example].filter(Boolean), needs_proof: false, theme: `"${rep.phrase}" (${rep.n} statements)` });
+  if (rep) push('open', 'Open angle: their own words as the question', 'phrase', [`${cap1(rep.phrase)}? Watch this first.`], { proof: PROOF.question, based_on: [rep.example].filter(Boolean), needs_proof: false, theme: `"${rep.phrase}" (${rep.n} statements)`, weight: 2.5 });
   // 5. Open angles: kinds no competitor ad uses yet.
   for (const k of ['comparison', 'demo', 'question', 'gift', 'story']) {
     if (usedAngles.has(k)) continue;
-    push('open', `Open angle: ${ANGLES[k] ? ANGLES[k].toLowerCase() : k} (no competitor ad uses it)`, k, TEMPLATES.open[k], { proof: PROOF[k], based_on: [], needs_proof: false, theme: 'not used by competitors' });
+    push('open', `Open angle: ${ANGLES[k] ? ANGLES[k].toLowerCase() : k} (no competitor ad uses it)`, k, TEMPLATES.open[k], { proof: PROOF[k], based_on: [], needs_proof: false, theme: 'not used by competitors', weight: 2 });
   }
   return out;
 }
@@ -545,12 +557,15 @@ function gapsOf(card, collected, jev) {
 export function shortLine(card) {
   const p = card.personas && card.personas[0];
   const bits = [];
-  if (p) bits.push(p.label.charAt(0).toLowerCase() + p.label.slice(1));
-  const fromSplit = p && /^(Women|Men)\b/.test(p.label);
-  if (card.reach && fromSplit) {
+  // A persona named by the reach split ("Women 35-64") carries its share; any qualifier follows after a comma.
+  const fromSplit = p && card.reach && card.reach.skew && new RegExp(`^${card.reach.skew === 'women' ? 'Women' : 'Men'}\\b`).test(p.label);
+  const low = (t) => t.charAt(0).toLowerCase() + t.slice(1);
+  if (p && fromSplit) {
+    const [, base, qual] = /^([^(]*?)\s*(?:\((.*)\))?$/.exec(p.label) || [null, p.label, ''];
     const share = card.reach.skew === 'women' ? card.reach.women : card.reach.men;
-    bits[bits.length - 1] += ` (${share}% of reach)`;
-  } else if (card.reach) {
+    bits.push(`${low(base)} (${share}% of reach)${qual ? `, ${qual}` : ''}`);
+  } else if (p) bits.push(low(p.label));
+  if (card.reach && !fromSplit) {
     const sex = card.reach.skew === 'women' ? `${card.reach.women}% women` : card.reach.skew === 'men' ? `${card.reach.men}% men` : '';
     const age = card.reach.span ? card.reach.span.label : '';
     const x = [sex, age].filter(Boolean).join(' ');
@@ -647,7 +662,7 @@ export function cardMarkdown(c) {
   L.push('## 6. Customer words', '');
   if (c.words.phrases.length) {
     L.push('| Phrase | Statements | Example |', '|---|---|---|');
-    for (const w of c.words.phrases) L.push(`| ${w.phrase} | ${w.n} | ${w.example ? q(w.example).replace(/\|/g, '/') : ''} |`);
+    for (const w of c.words.phrases) L.push(`| ${w.phrase}${w.claim ? ` (${w.claim.toLowerCase()}: do not use in ads)` : ''} | ${w.n} | ${w.example ? q(w.example).replace(/\|/g, '/') : ''} |`);
   } else L.push('Not enough repeated phrases.');
   L.push('');
   if (c.words.avoid.length) {

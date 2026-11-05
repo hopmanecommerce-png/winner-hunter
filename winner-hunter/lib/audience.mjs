@@ -29,7 +29,8 @@ export const SEED = (() => {
 })();
 
 export const VERSION = `card ${CARD_VERSION} / collect ${COLLECT_VERSION}`;
-export const DEFAULTS = { perPick: 14, jevCalls: 10, statements: 120, ads: 3 };
+// softMs: no new paid call or Jev request after this long (the daily job gives a step 90 s); callMs: one call's timeout.
+export const DEFAULTS = { perPick: 14, jevCalls: 10, statements: 120, ads: 3, softMs: 55000, callMs: 25000 };
 export const BASELINE_KEY = 'audience:baseline';
 const MAX_IDS = 3000;
 
@@ -172,29 +173,32 @@ export async function audienceCard(pick, ctx = {}) {
   let api = null;
   let jev = null;
   let credits = 0;
+  const started = Date.now();
+  const softDeadline = started + (ctx.softMs ?? DEFAULTS.softMs);
+  const late = () => Date.now() > softDeadline || !!(ctx.signal && ctx.signal.aborted);
   try {
     const cache = ctx.cache ? (ctx.cache.raw ? ctx.cache.raw : ctxCache(ctx.cache)) : memoryCache();
     const p = await enrich(pick, ctx.db);
     const budget = ctx.budget || {};
     const perPick = Math.max(0, Math.min(ctx.perPick ?? DEFAULTS.perPick, budget.credits ?? Infinity));
     if (String(env.SCRAPECREATORS_API_KEY || '').trim() && perPick > 0) {
-      api = audienceClient({ key: env.SCRAPECREATORS_API_KEY, cap: perPick, fetch: ctx.fetch, sleep: ctx.sleep });
+      api = audienceClient({ key: env.SCRAPECREATORS_API_KEY, cap: perPick, fetch: ctx.fetch, sleep: ctx.sleep, timeout: ctx.callMs ?? DEFAULTS.callMs });
     } else missing.push(perPick > 0 ? 'no SCRAPECREATORS_API_KEY: cached data only' : 'no credits left today: cached data only');
     const jevOk = String(env.TYPESAFE_API_KEY || '').trim() && (budget.jevUsd == null || budget.jevUsd > 0) && ctx.jev !== false;
-    if (jevOk) jev = jevClient({ key: env.TYPESAFE_API_KEY, fetch: ctx.fetch, pause: ctx.sleep, cap: ctx.jevCalls ?? DEFAULTS.jevCalls });
+    if (jevOk) jev = jevClient({ key: env.TYPESAFE_API_KEY, fetch: ctx.fetch, pause: ctx.sleep, cap: ctx.jevCalls ?? DEFAULTS.jevCalls, tries: 2, timeout: ctx.callMs ?? DEFAULTS.callMs });
     else missing.push('Jev off (no TYPESAFE_API_KEY or no budget): word lists only');
 
     // 2. The search phrase.
     const cands = candidates({ phrase: p.phrase, name: p.name, title: p.title, url: p.url, sub: p.sub, main: p.main, ad: p.ad });
     let phrase = cands[0] || { phrase: '', how: 'none' };
-    if (jev && cands.length > 1 && !p.phrase && !ctx.signal?.aborted) {
+    if (jev && cands.length > 1 && !p.phrase && !late()) {
       const chosen = await choosePhrase(cands, { client: jev, product: { title: p.title || p.name, url: p.url, sub: p.sub, ad: p.ad } });
       if (chosen) phrase = { phrase: chosen, how: `Jev chose from ${cands.length}` };
     }
     if (!phrase.phrase) missing.push('no English search phrase: no customer statements pulled');
 
     // 3. Collect.
-    const collected = await collect({ id: p.id, phrase: phrase.phrase, ad_ids: p.ad_ids, shop: ctx.shop, tiktok: p.tiktok }, { api, cache, now, perPick, signal: ctx.signal, log, ads: DEFAULTS.ads, threads: ctx.threads ?? 1 });
+    const collected = await collect({ id: p.id, phrase: phrase.phrase, ad_ids: p.ad_ids, shop: ctx.shop, tiktok: p.tiktok }, { api, cache, now, perPick, signal: ctx.signal, deadline: softDeadline, log, ads: DEFAULTS.ads, threads: ctx.threads ?? 1 });
     credits = collected.credits;
     if (collected.stopped && collected.stopped !== 'no API key (cache only)') missing.push(`data pull stopped: ${collected.stopped}`);
     for (const e of collected.errors.slice(0, 3)) missing.push(e);
@@ -206,7 +210,7 @@ export async function audienceCard(pick, ctx = {}) {
 
     // 4. Label statements.
     const jevInfo = { used: false, labelled: 0, error: '' };
-    if (jev && collected.voice.length && !ctx.signal?.aborted) {
+    if (jev && collected.voice.length && !late()) {
       const r = await labelStatements(collected.voice, { client: jev, product: { name: p.name || p.title, phrase: phrase.phrase }, max: ctx.statements ?? DEFAULTS.statements });
       jevInfo.used = r.labelled > 0;
       jevInfo.labelled = r.labelled;
@@ -218,7 +222,7 @@ export async function audienceCard(pick, ctx = {}) {
 
     // 5. The card; Jev ranks the drafts, then the card is built again with that ranking (pure, cheap).
     let card = buildCard(input);
-    if (jev && card.drafts.length && !ctx.signal?.aborted) {
+    if (jev && card.drafts.length && !late()) {
       const ranking = await rankHooks(card.drafts.map((d) => d.hook), { client: jev, product: { name: card.name, phrase: card.phrase }, persona: card.personas[0] && card.personas[0].label });
       if (ranking) card = buildCard({ ...input, jev: { ...jevInfo, ranking } });
       else missing.push('Jev hook ranking: no answer (drafts in rule order)');
@@ -226,6 +230,7 @@ export async function audienceCard(pick, ctx = {}) {
     if (!card.reach) missing.push('no EU reach data');
     if (card.data.statements < 30) missing.push(`only ${card.data.statements} customer statements`);
     card.missing = missing;
+    card.data.seconds = Math.round((Date.now() - started) / 100) / 10;
     return { card, markdown: cardMarkdown(card), one_line: card.one_line, credits_used: credits, jev: jev ? jev.stats() : null, missing };
   } catch (e) {
     log(`audience ${pick && (pick.id || pick.key)}: ${e && e.stack ? e.stack : e}`);
