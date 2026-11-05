@@ -442,19 +442,19 @@ export function validateKit(R, S) {
   // The checklist every sheet shows, in this order (CLAUDE.md: GPSR, CE, WEEE and battery rules, cosmetics rules, medical
   // claims, brand dupes and return risk from sizing). The radar keys that feed each.
   const CHECKS = [
-    { k: 'gpsr', label: 'GPSR (EU)', keys: [], eu: true },
-    { k: 'ce', label: 'CE (EMC, RoHS, LVD)', keys: ['ce'] },
-    { k: 'weee', label: 'WEEE registration', keys: ['ce'] },
-    { k: 'battery', label: 'Battery rules (UN38.3, EU 2023/1542)', keys: ['battery'] },
-    { k: 'radio', label: 'Radio (RED)', keys: ['radio'] },
-    { k: 'cosmetics', label: 'Cosmetics rules (CPNP)', keys: ['cosmetics'] },
-    { k: 'medical', label: 'Medical claims and devices', keys: ['medical', 'device', 'pseudo', 'claims'] },
-    { k: 'brand', label: 'Brand dupes and trademark', keys: ['brand', 'tm'] },
-    { k: 'kids', label: 'Toys and children (EN 71)', keys: ['kids'] },
-    { k: 'food', label: 'Food contact', keys: ['food', 'bamboo'] },
-    { k: 'other', label: 'Other restricted (weapons, biocides, adult, CBD, pet medicine)', keys: ['weapon', 'regulated', 'adult', 'biocide', 'pet_med', 'eat', 'pet_eat', 'blade', 'ship'] },
-    { k: 'returns', label: 'Return risk (sizes, fragile, bulky)', keys: ['sizing', 'fragile', 'bulky', 'ioss'] },
-    { k: 'ugc', label: 'Creatives: no copied UGC', keys: [] },
+    { k: 'gpsr', label: 'GPSR (EU)', short: 'GPSR', keys: [], eu: true },
+    { k: 'ce', label: 'CE (EMC, RoHS, LVD)', short: 'CE', keys: ['ce'] },
+    { k: 'weee', label: 'WEEE registration', short: 'WEEE', keys: ['ce'] },
+    { k: 'battery', label: 'Battery rules (UN38.3, EU 2023/1542)', short: 'Battery', keys: ['battery'] },
+    { k: 'radio', label: 'Radio (RED)', short: 'Radio', keys: ['radio'] },
+    { k: 'cosmetics', label: 'Cosmetics rules (CPNP)', short: 'Cosmetics', keys: ['cosmetics'] },
+    { k: 'medical', label: 'Medical claims and devices', short: 'Medical', keys: ['medical', 'device', 'pseudo', 'claims'] },
+    { k: 'brand', label: 'Brand dupes and trademark', short: 'Brand', keys: ['brand', 'tm'] },
+    { k: 'kids', label: 'Toys and children (EN 71)', short: 'Kids (EN 71)', keys: ['kids'] },
+    { k: 'food', label: 'Food contact', short: 'Food contact', keys: ['food', 'bamboo'] },
+    { k: 'other', label: 'Other restricted (weapons, biocides, adult, CBD, pet medicine)', short: 'Restricted', keys: ['weapon', 'regulated', 'adult', 'biocide', 'pet_med', 'eat', 'pet_eat', 'blade', 'ship'] },
+    { k: 'returns', label: 'Return risk (sizes, fragile, bulky)', short: 'Returns', keys: ['sizing', 'fragile', 'bulky', 'ioss'] },
+    { k: 'ugc', label: 'Creatives: no copied UGC', short: 'UGC', keys: [] },
   ];
   // Market-specific stops for electric and radio goods (market-rules.mjs blocker items, 31 Oct 2026).
   const MARKET_STOPS = {
@@ -515,7 +515,7 @@ export function validateKit(R, S) {
       }
       const blocker = hits.find((h) => h.level === 'block');
       const status = blocker ? 'blocker' : c.k === 'returns' ? 'risk' : 'docs';
-      items.push({ k: c.k, label: c.label, status, text: (blocker || hits[0]).text + (hits.length > 1 ? ` (+${hits.length - 1} more)` : ''), hits: hits.map((h) => h.k) });
+      items.push({ k: c.k, label: c.label, status, short: (blocker || hits[0]).short || c.short, text: (blocker || hits[0]).text + (hits.length > 1 ? ` (+${hits.length - 1} more)` : ''), hits: hits.map((h) => h.k) });
     }
     const flags = new Set([...(p.jev && Array.isArray(p.jev.flags) ? p.jev.flags : []), ...(Array.isArray(p.risks) ? p.risks.map((r) => r && r.k) : [])].filter(Boolean));
     const undecided = UNDECIDED.filter(([, re]) => re.test(name)).map(([k, , text]) => ({ k, text: `${text}: Connor has not decided on this category` }));
@@ -534,11 +534,15 @@ export function validateKit(R, S) {
     // The main blocker in a few words (the digest's line): a block first, then the papers, then a market stop.
     const blockers = items.filter((i) => i.status === 'blocker');
     const docs = items.filter((i) => i.status === 'docs');
-    const label = (i) => i.label.split(' (')[0];
+    const label = (i) => (i.k === 'weee' ? 'WEEE' : i.short || (CHECKS.find((c) => c.k === i.k) || {}).short || i.label.split(' (')[0]);
+    // Docs for a claim means no health claims in the copy, not papers: said apart.
+    const papers = docs.filter((i) => i.k !== 'medical');
+    const claimsOnly = docs.some((i) => i.k === 'medical');
     let main;
     if (excluded.length) main = `Block: ${excluded[0].k === 'eat' ? 'people eat or take it' : 'gymwear'} (off the board)`;
     else if (blockers.length) main = `Block: ${blockers.map(label).join(', ')}`;
-    else if (docs.length) main = `Docs: ${docs.map(label).join(', ')}`;
+    else if (papers.length) main = `Docs: ${papers.map(label).join(', ')}${claimsOnly ? ' · no health claims' : ''}`;
+    else if (claimsOnly) main = 'No health claims in the copy';
     else if (stops.length) main = `${stops[0].cc}: ${stops[0].text.split(':')[0]}`;
     else main = 'No blocker found';
     if (!excluded.length && !blockers.length && undecided.length) main += ` · flag: ${undecided[0].text.split(':')[0]}`;

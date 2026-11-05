@@ -8,6 +8,7 @@
 import { VALIDATE, sheetOf, renderSheet, digestOf, csvRow, CSV_COLS } from '../worker/src/validate.mjs';
 import { fromPaste, cleanUrl, platformOf } from '../worker/src/sourcing.mjs';
 import { zhGuess } from '../worker/src/pipeline.mjs';
+import { SHORT } from '../worker/src/risk.mjs';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const isDay = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
@@ -253,25 +254,52 @@ export function pasteInto(picks, id, text) {
  * store_url, ad_library[], board }, markets) as the sheet takes it. A pick already in the sheet's own shape passes as it is.
  * Fields the scorer may add: jev { p, flags, main, sub }, supplier { url, cost, weight_g, moq }, zh, audience, made_to_order.
  */
+// The scorer passes the risk radar's findings as phrases ("Docs: Claims", "Block: Cosmetic") and returns ("Sizes"). Back to
+// the Jev answers behind them, so this sheet's radar reads what the scorer's did (risk.mjs JEV: Jev's trait → radar key).
+const KEY_OF = Object.fromEntries(Object.entries(SHORT).map(([k, v]) => [String(v).toLowerCase(), k]));
+const TRAIT_OF = { eat: 'people', pet_eat: 'animals', cosmetics: 'skin', brand: 'brand', claims: 'medical', ce: 'electric', kids: 'kids', food: 'foodcontact', ship: 'restricted', sizing: 'sizing', fragile: 'fragile', bulky: 'bulky' };
+function jevFromRisk(risk) {
+  if (!risk || typeof risk !== 'object') return null;
+  const words = [...(Array.isArray(risk.flags) ? risk.flags : []), ...(Array.isArray(risk.returns) ? risk.returns : [])].map((f) => String(f || '').replace(/^(Block|Docs|OK)\s*:\s*/i, '').replace(/^↩\s*/, '').trim().toLowerCase());
+  // The scorer's radar had Jev's answers (or found nothing): what its flags don't name was a no, so a category guess
+  // (risk.mjs CATS, only for unanswered questions) can't add what the scorer's radar didn't find.
+  const p = Object.fromEntries([...new Set(Object.values(TRAIT_OF))].map((t) => [t, 0]));
+  p.physical = 1;
+  for (const w of words) {
+    const k = KEY_OF[w] || (w.startsWith('size') ? 'sizing' : w);
+    if (TRAIT_OF[k]) p[TRAIT_OF[k]] = 1;
+    if (k === 'digital') p.physical = 0;
+  }
+  return { p, yesno: true, from: 'the scorer\'s risk flags' };
+}
+
+/**
+ * A scored product (shared/INTERFACES.md, section 2: key, id, name, src, category, sub, score, pillars, risk, price
+ * { amount, currency, eur }, econ, evidence [{ signal, value, kind, source, date, link }], links { product_url,
+ * store_url, ad_library (a link or a list), board }, image, markets) as the sheet takes it. A pick already in the sheet's
+ * own shape passes as it is. Fields the scorer may add: jev { p, flags, main, sub } (else its risk flags stand in),
+ * supplier { url, cost, weight_g, moq }, zh, audience, made_to_order.
+ */
 export function pickFromScored(p) {
   if (!p || typeof p !== 'object') return {};
   if (!p.links && !p.src && !(p.price && typeof p.price === 'object')) return p; // the sheet's own shape
   const links = p.links || {};
   const price = p.price && typeof p.price === 'object' ? p.price : null;
-  const ads = Array.isArray(links.ad_library) ? links.ad_library : [];
-  const ev = (Array.isArray(p.evidence) ? p.evidence : []).filter((e) => e && (e.signal || e.text)).slice(0, 8).map((e) => ({
+  const ads = Array.isArray(links.ad_library) ? links.ad_library : links.ad_library ? [links.ad_library] : [];
+  const ev = (Array.isArray(p.evidence) ? p.evidence : []).filter((e) => e && (e.signal || e.text) && !/^breakeven|^margin/.test(String(e.signal || ''))).slice(0, 8).map((e) => ({
     text: e.text || `${String(e.signal).replace(/_/g, ' ')}: ${e.value}`, url: e.link || '', status: e.kind === 'fact' ? 'fact' : e.kind === 'claim' ? 'claim (unverified)' : 'estimate', date: e.date || '',
   }));
   const pillars = p.pillars && typeof p.pillars === 'object' ? Object.fromEntries(Object.entries(p.pillars).map(([k, v]) => [k, typeof v === 'number' ? Math.round(v * 100) : v])) : null;
   const zh = p.zh || zhGuess(p.name || '') || '';
+  const jev = p.jev && typeof p.jev === 'object' ? p.jev : jevFromRisk(p.risk);
   return {
     id: p.id || p.key, key: p.key || '', name: p.name || '', source: p.src || p.source || '',
     price: price ? (price.amount != null ? price.amount : price.eur) : p.price, cur: price ? (price.amount != null ? price.currency || 'EUR' : 'EUR') : p.cur,
     markets: Array.isArray(p.markets) ? p.markets : [], product_url: links.product_url || p.product_url || '', store_url: links.store_url || p.store_url || '',
-    ad_url: ads[0] || p.ad_url || '', board_url: links.board || '', img: p.img || links.img || '',
+    ad_url: ads[0] || p.ad_url || '', board_url: links.board || '', img: p.img || p.image || links.img || '',
     category: p.category ? (typeof p.category === 'string' ? { main: p.category, sub: p.sub || '' } : p.category) : null,
-    jev: p.jev || null, risks: Array.isArray(p.risks) ? p.risks : [], supplier: p.supplier || null, zh, audience: p.audience || null, made_to_order: !!p.made_to_order,
-    score: p.score != null ? { total: typeof p.score === 'number' ? p.score : p.score.total, breakdown: pillars, level: p.level, claims: ev.some((e) => /claim/.test(e.status)) } : null,
+    jev, risks: Array.isArray(p.risks) ? p.risks : [], supplier: p.supplier || null, zh, audience: p.audience || null, made_to_order: !!p.made_to_order, problem: p.problem || '',
+    score: p.score != null ? { total: typeof p.score === 'number' ? p.score : p.score.total, breakdown: pillars, level: p.level, why: p.why || '', claims: ev.some((e) => /claim/.test(e.status)) } : null,
     evidence: ev,
   };
 }
@@ -296,7 +324,7 @@ export function missingOf(sheet) {
 export function oneLineOf(sheet) {
   const d = digestOf(sheet);
   const whole = (x) => `€${Math.round(x)}`;
-  const block = d.main_blocker === 'No blocker found' ? 'none' : d.main_blocker.replace(/^Block: /, '').replace(/^Docs: /, 'papers for ').replace(/ registration| rules|\s*\(.*?\)/g, '');
+  const block = d.main_blocker.replace(/^No blocker found/, 'none').replace(/^Block: /, '').replace(/^Docs: /, 'papers for ');
   const money = d.margin_eur == null ? 'No price yet' : d.margin_eur <= 0 ? `Loses ${whole(-d.margin_eur)} an order in ${d.market}` : `Margin ${whole(d.margin_eur)}, break-even CPA ${whole(d.be_cpa_eur)} in ${d.market}${d.cost_status && d.cost_status !== 'fact' ? ' (est.)' : ''}`;
   const line = `${money}. Blocker: ${block}`;
   return line.length <= 110 ? line : line.slice(0, 107).replace(/[\s,;:.]+\S*$/, '') + '...';

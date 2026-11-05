@@ -202,7 +202,7 @@ test('compliance: CE, WEEE, battery and radio papers for an electric gadget; cos
   const serum = sheetOf({ id: 's', name: 'Rosemary hair growth serum', price: 29.95, cur: 'EUR', source: 'eu' }, { day: DAY }).compliance;
   assert.strictEqual(serum.level, 'block');
   assert.strictEqual(serum.items.find((i) => i.k === 'cosmetics').status, 'blocker');
-  assert.match(serum.main, /^Block: Cosmetics/);
+  assert.match(serum.main, /^Block: Cosmetic/);
   const nzOnly = sheetOf({ id: 'z', name: 'Bamboo pillowcase', price: 59, cur: 'NZD', markets: ['NZ'] }, { day: DAY, settings: { home: 'NZ' } });
   assert.strictEqual(nzOnly.compliance.items.find((i) => i.k === 'gpsr').status, 'todo', 'NL and DE are on its market list too');
   const noEu = VALIDATE.complianceOf({ name: 'Bamboo pillowcase' }, ['NZ', 'AU']);
