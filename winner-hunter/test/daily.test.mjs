@@ -133,12 +133,14 @@ test('the product sheet is the last gate: a red sheet drops that pick and the ne
   const red = new Set();
   const sheet = async (p) => {
     if (red.size < 2 && !red.has(p.key)) { red.add(p.key); return { level: 'red', margin_eur: -3, breakeven_cpa_eur: 0, main_blocker: 'heavy', one_line: 'Loses money in NZ' }; }
+    if (red.size === 2) { red.add(p.key); return { level: 'green', margin_eur: 30, breakeven_cpa_eur: 30, sheet: { links: [{ label: 'Product page', ok: false, status: 404 }] } }; }
     return { level: 'green', margin_eur: 30, breakeven_cpa_eur: 30, main_blocker: 'none', one_line: 'Margin €30' };
   };
   let cards = 0;
   const rec = await runDaily({ db: client(db), now: NOW, steps: { sheet, audience: async () => { cards++; return { one_line: 'x', credits_used: 1 }; } } });
-  assert.strictEqual(rec.prepare.dropped.length, 2);
+  assert.strictEqual(rec.prepare.dropped.length, 3);
   assert.match(rec.prepare.dropped[0].why, /product sheet: red/);
+  assert.match(rec.prepare.dropped[2].why, /product page does not open \(404\)/);
   const keys = db.prepare('SELECT product_key FROM daily_picks WHERE day = ?').all(DAY).map((r) => r.product_key);
   assert.strictEqual(keys.length, rec.picks);
   for (const k of red) assert.ok(!keys.includes(k), 'a red sheet is never a pick');

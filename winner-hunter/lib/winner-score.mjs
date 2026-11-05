@@ -408,7 +408,11 @@ export function scoreProduct(f, ctx = {}) {
 
   // ---- The ladder: each rung true, false or null (not known).
   const L = SPEC.ladder;
-  const paid = src === 'tiktok' ? (num(f.shop_ads) > 0 ? true : null) : src === 'research' ? (adDays != null ? true : null) : true;
+  // Paid: outside the EU the hunt marks a product whose ads it no longer finds (active 0); an EU row last seen over 14 days
+  // before the day is not known to run any more (the EU hunt runs by hand).
+  const stale = src === 'eu' && day && asOf && (Date.parse(day) - Date.parse(asOf)) / 864e5 > 14;
+  const paid = src === 'tiktok' ? (num(f.shop_ads) > 0 ? true : null) : src === 'research' ? (adDays != null ? true : null)
+    : src === 'world' && f.active === false ? false : stale ? null : true;
   const sustained = adDays == null && copies == null ? null : (adDays != null && adDays >= L.sustainedDays)
     || (copies != null && copies >= L.sustainedCopies && (shopAds == null || shopAds >= L.sustainedShopAds) && (adDays == null || adDays >= L.sustainedCopyDays));
   const rankOk = num(f.bs_rank) != null && f.bs_rank <= L.sellingRank && (sp == null || sp >= L.sellingRankStore);
