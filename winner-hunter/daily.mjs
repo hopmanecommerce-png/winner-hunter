@@ -319,7 +319,10 @@ async function main() {
     await migrate(db, files.map((f) => fs.readFileSync(new URL(f, dir), 'utf8')));
   }
   const tiktokRows = a.tiktokCsv ? parseCsv(fs.readFileSync(a.tiktokCsv, 'utf8')) : null;
-  const rec = await runDaily({ db, env, now: a.now || Date.now(), day: a.day || null, force: a.force, dry: a.dry, tiktokRows, out: a.out || env.DAILY_OUT || '', board: a.board || env.WH_BOARD_URL || '' });
+  // The workflow passes its inputs through the environment (never into the script's text): a day must look like one.
+  const day = a.day || (/^\d{4}-\d{2}-\d{2}$/.test(env.DAILY_DAY || '') ? env.DAILY_DAY : null);
+  const force = a.force || env.DAILY_FORCE === 'true';
+  const rec = await runDaily({ db, env, now: a.now || Date.now(), day, force, dry: a.dry, tiktokRows, out: a.out || env.DAILY_OUT || '', board: a.board || env.WH_BOARD_URL || '' });
   // Counts only: the Actions log of a public repository is public.
   const line = rec.skipped ? `Today's winners ${rec.day}: already done (${rec.status}), nothing changed.`
     : `Today's winners ${rec.day}: ${rec.status}, ${rec.picks} picks from ${rec.counts.ranked ?? 0} scored products (${rec.counts.passed ?? 0} passed the bar); stages ${rec.stages.map((x) => `${x.stage} ${x.ok ? 'ok' : 'failed'} ${Math.round(x.ms / 1000)}s`).join(', ')}.`;

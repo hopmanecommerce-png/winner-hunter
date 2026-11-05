@@ -1,0 +1,62 @@
+# Today's winners, once a day (winner-hunter/daily.mjs): 5 to 10 products with their score, evidence, audience card and
+# product sheet, ready on the board's Today tab and in the digest before Connor wakes (Grok Bot reads it on the VPS at
+# about 07:00 Asia/Bangkok; scripts/fetch-daily-digest.mjs puts it there). It reads the board's tables and writes only its
+# own: daily_runs, daily_picks, winner_scores, score_backtests, daily_cache, and the state row winner_weights.
+# Started three ways, and the first one does the day (a day that is done is left alone):
+#   - when Momentum finishes (its numbers are then a day fresh);
+#   - by the VPS crontab (gh-wh workflow run daily-winners.yml), since GitHub's own schedule can start hours late;
+#   - by this schedule at 23:20 UTC (06:20 in Bangkok) as the fallback.
+# By hand: Actions → Today's winners → Run workflow (tick force to make the day again; Connor's decided picks stay).
+# Secrets: CF_API_TOKEN, CF_ACCOUNT_ID (CF_D1_TOKEN, a D1-only token, is used instead when it is there). Optional:
+# TYPESAFE_API_KEY (Jev, for the audience and sheet steps) and SCRAPECREATORS_API_KEY (problem data), each capped a day by
+# the repository variables DAILY_CREDITS (default 200 ScrapeCreators credits) and DAILY_JEV_USD (default 0.5).
+# The log shows counts only: this repository is public.
+name: Today's winners
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Make the day again (decided picks stay)'
+        type: boolean
+        default: false
+      day:
+        description: 'Day (YYYY-MM-DD, Asia/Bangkok); empty: today'
+        type: string
+        default: ''
+  workflow_run:
+    workflows: [Momentum]
+    types: [completed]
+  schedule:
+    - cron: '20 23 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-winners
+  cancel-in-progress: false
+
+jobs:
+  daily:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CF_API_TOKEN: ${{ secrets.CF_D1_TOKEN || secrets.CF_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID || '8934aca9-51d3-4f87-9c62-e897843149a1' }}
+      TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+      SCRAPECREATORS_API_KEY: ${{ secrets.SCRAPECREATORS_API_KEY }}
+      DAILY_CREDITS: ${{ vars.DAILY_CREDITS || '200' }}
+      DAILY_JEV_USD: ${{ vars.DAILY_JEV_USD || '0.5' }}
+      DAILY_FORCE: ${{ inputs.force && 'true' || 'false' }}
+      DAILY_DAY: ${{ inputs.day }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+
+      - name: Today's winners
+        run: node winner-hunter/daily.mjs
