@@ -28,7 +28,7 @@ const FB_AD = {
 };
 const FB_AD_MEN = { ...FB_AD, adArchiveID: '999888777666', aaa_info: { ...FB_AD.aaa_info, age_country_gender_reach_breakdown: [cellRow('DE', [['45-54', 50, 400, 10], ['55-64', 40, 300, 0]])] } };
 const REDDIT_C = { success: true, credits_charged: 1, comments: [
-  { body: 'The bowl gets slimy every single day and I hate scrubbing it', votes: 12, url: 'https://www.reddit.com/r/dogs/comments/a1/x/c1/', created_at_iso: '2026-10-01T00:00:00Z', author: 'someone', post: { title: 'Water bowl advice' } },
+  { body: 'The bowl gets slimy every single day and I hate scrubbing it', votes: 12, url: 'https://www.reddit.com/r/dogs/comments/a1/x/c1/', created_at_iso: '2026-10-01T00:00:00Z', author: 'someone', post: { title: 'Water bowl or fountain advice' } },
   { body: 'lol', votes: 50, url: 'https://www.reddit.com/r/dogs/comments/a1/x/c2/' },
   { body: 'Our aquarium pump hums all night, unrelated to dogs entirely', votes: 3, url: 'https://www.reddit.com/r/fish/comments/a2/y/c3/', post: { title: 'Aquarium noise' } },
 ] };
@@ -87,7 +87,7 @@ test('readers keep text, likes, date and the public link, never a name or handle
   assert.equal(r.length, 2, 'the one-word comment is dropped');
   assert.equal(r[0].likes, 12);
   assert.equal(r[0].date, '2026-10-01');
-  assert.equal(r[0].on, 'Water bowl advice');
+  assert.equal(r[0].on, 'Water bowl or fountain advice');
   const v = readTikTokVideos(TT_SEARCH);
   assert.deepEqual(v.map((x) => x.id), ['7001', '7003'], 'ads dropped, most comments first');
   const t = readTikTokComments(TT_COMMENTS, 'q', v[0].url);
@@ -328,6 +328,7 @@ function cardInput(extra = {}) {
     ...readYouTubeComments(YT_COMMENTS, 'dog water fountain', 'https://www.youtube.com/watch?v=yt1'),
     { src: 'tiktok', kind: 'comment', text: 'Bought one for my new puppy and the bowl is never slimy now', likes: 5, url: 'https://www.tiktok.com/@a/video/7001' },
     { src: 'tiktok', kind: 'comment', text: 'Got this as a gift for my sister and her dogs', likes: 2, url: 'https://www.tiktok.com/@a/video/7001' },
+    { src: 'youtube', kind: 'comment', text: 'The water in a plain bowl gets slimy and gross after two days', likes: 1, url: 'https://www.youtube.com/watch?v=yt1' },
   ];
   const ads = [readFbAd(FB_AD)];
   return { pick: { id: 'p1', key: 'research|p1', name: 'Dog water fountain', main: 'Pets', markets: ['NZ', 'AU'], jev: { audience: 'Dog owners' } }, phrase: { phrase: 'dog water fountain', how: 'given' },
