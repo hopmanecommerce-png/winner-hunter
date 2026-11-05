@@ -122,25 +122,46 @@ export function tiktokFacts(rows) {
   for (const t of rows) perShop.set(t.shop || '', (perShop.get(t.shop || '') || 0) + 1);
   const STOP = new Set(['store', 'shop', 'official', 'home', 'the', 'and', 'life', 'living', 'direct', 'outlet', 'mall', 'brand', 'global', 'usa', 'us', 'llc', 'inc', 'co']);
   const shopWords = (shop) => String(shop || '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !STOP.has(w));
+  // The TikTok tab's table (tiktok_products) names its columns differently from the research export: read either.
+  const shape = (t0) => ('sold_us' in t0 || 'price_min' in t0 ? { ...t0, product_id: t0.id, sold: t0.sold_us, price_usd: t0.price_min, tiktok_url: t0.url, jev_blockers: t0.blockers,
+    jev_category: t0.category, meta_ads_us: t0.meta_us, meta_ads_au: t0.meta_au, meta_ads_nz: t0.meta_nz, meta_ads_total: t0.meta_ads_total ?? (num(t0.meta_us) || 0) + (num(t0.meta_au) || 0) + (num(t0.meta_nz) || 0),
+    ad_library_url: t0.meta_url, sold_may_include_non_us: t0.sold_mixed ? 'true' : 'false', price_suspect: t0.price_suspect ? 'true' : 'false', as_of: String(t0.updated_at || '').slice(0, 10) } : t0);
+  // Brand shops and brand lines, per shop (estimates, word matches): a shop that puts its own name in any title is a brand
+  // shop for all its listings (KastKingUSA's "50L BaitSpace …" names no brand); a brand-like word (CamelCase: MotorBox) that
+  // starts 2+ titles of one shop is a brand line.
+  const tokensOf = (title) => String(title || '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4);
+  const namedIn = (shop, title) => { const tk = tokensOf(title); return shopWords(shop).some((w) => tk.some((x) => x === w || (w.startsWith(x) && x.length >= 5) || (x.startsWith(w) && w.length >= 5))); };
+  const CAMEL = /^\p{Lu}?\p{Ll}+\p{Lu}[\p{L}\p{N}]*$/u;
+  const brandShops = new Set();
+  const lines = new Map();
+  for (const t0 of rows) {
+    const t = shape(t0);
+    const shop = t.shop || '';
+    if (shop && namedIn(shop, t.title)) brandShops.add(shop);
+    const first = String(t.title || '').replace(/【[^】]*】|\[[^\]]*\]/g, ' ').trim().split(/\s+/).slice(0, 2).find((w) => CAMEL.test(w.replace(/[^\p{L}\p{N}]/gu, '')));
+    if (shop && first) {
+      const k = shop + '\u0001' + first.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
+      lines.set(k, (lines.get(k) || 0) + 1);
+    }
+  }
   return rows.map((t0) => {
-    // The TikTok tab's table (tiktok_products) names its columns differently from the research export: read either.
-    const t = 'sold_us' in t0 || 'price_min' in t0 ? { ...t0, product_id: t0.id, sold: t0.sold_us, price_usd: t0.price_min, tiktok_url: t0.url, jev_blockers: t0.blockers,
-      jev_category: t0.category, meta_ads_us: t0.meta_us, meta_ads_au: t0.meta_au, meta_ads_nz: t0.meta_nz, meta_ads_total: t0.meta_ads_total ?? (num(t0.meta_us) || 0) + (num(t0.meta_au) || 0) + (num(t0.meta_nz) || 0),
-      ad_library_url: t0.meta_url, sold_may_include_non_us: t0.sold_mixed ? 'true' : 'false', price_suspect: t0.price_suspect ? 'true' : 'false', as_of: String(t0.updated_at || '').slice(0, 10) } : t0;
+    const t = shape(t0);
     const ads = { US: num(t.meta_ads_us), AU: num(t.meta_ads_au), NZ: num(t.meta_ads_nz), CA: num(t.meta_ads_ca) };
     const matched = t.meta_status === 'matched';
     const markets = matched ? Object.entries(ads).filter(([, n]) => n > 0).map(([c]) => c) : [];
     const blockers = String(t.jev_blockers || '').split(/[\s,]+/).filter(Boolean);
     const id = String(t.product_id || t.id || '');
     // A shop word in the title, also glued ("KastKingUSA" sells "KastKing …", "Ridge Shop" sells "Ridge …").
-    const tokens = String(t.title || '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4);
-    const named = shopWords(t.shop).some((w) => tokens.some((x) => x === w || (w.startsWith(x) && x.length >= 5) || (x.startsWith(w) && w.length >= 5)));
+    const named = namedIn(t.shop, t.title);
+    const first = String(t.title || '').replace(/【[^】]*】|\[[^\]]*\]/g, ' ').trim().split(/\s+/).slice(0, 2).find((w) => CAMEL.test(w.replace(/[^\p{L}\p{N}]/gu, '')));
+    const line = first && (lines.get((t.shop || '') + '\u0001' + first.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase()) || 0) >= 2 ? first.replace(/[^\p{L}\p{N}]/gu, '') : '';
     // On TikTok Shop the shop's own name in the title is how brands list (Ridge, KastKing, Bedsure): a brand listing.
-    const brandOwned = !!t.brand_group || !!t.title_brand || named;
+    const brandOwned = !!t.brand_group || !!t.title_brand || named || brandShops.has(t.shop || '') || !!line;
     // Meta numbers belong to the shop's page; they say something about this product only when a sampled ad names it.
     const named_ads = num(t.ads_mention_n);
     return {
-      brand_owned: brandOwned, brand_note: brandOwned ? (t.brand_group ? 'brand group ' + t.brand_group : t.title_brand ? 'brand ' + t.title_brand : `the shop's name (${t.shop}) is in the title`) : '',
+      brand_owned: brandOwned, brand_note: brandOwned ? (t.brand_group ? 'brand group ' + t.brand_group : t.title_brand ? 'brand ' + t.title_brand : named ? `the shop's name (${t.shop}) is in the title`
+        : line ? `a brand line (${line}) of the shop ${t.shop}` : `a listing of the brand shop ${t.shop}`) : '',
       page_level: matched && !(named_ads > 0), ads_named: named_ads,
       key: 'tiktok|' + id, id, src: 'tiktok', title: t.title || '', name: t.title || '', shop: t.shop || '', store: hostOf(t.store_url) || (t.shop ? 'tiktok shop ' + String(t.shop).toLowerCase() : ''), store_url: t.store_url || '',
       product_url: t.tiktok_url || '', tiktok_url: t.tiktok_url || '', image: t.image_url || '', price: t.price_suspect === 'true' ? null : num(t.price_usd), cur: 'USD',

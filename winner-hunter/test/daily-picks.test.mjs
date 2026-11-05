@@ -110,6 +110,12 @@ test('outside the EU and TikTok: markets, the TikTok tab table and the research 
   assert.strictEqual(csv[0].page_level, true, 'no sampled ad names the product');
   assert.strictEqual(csv[0].gap, true);
   assert.strictEqual(csv[0].store, 'tiktok shop kastkingusa');
+  const shops = tiktokFacts([{ product_id: '20', title: 'KastKing BaitSpace sling bag', shop: 'KastKingUSA' }, { product_id: '21', title: '50L BaitSpace tackle backpack', shop: 'KastKingUSA' },
+    { product_id: '22', title: 'MotorBox Americana leather seat covers', shop: 'Carbella Auto' }, { product_id: '23', title: 'MotorBox Cabin King seat covers', shop: 'Carbella Auto' },
+    { product_id: '24', title: 'Cooling pillowcase set', shop: 'Carbella Auto' }]);
+  assert.deepStrictEqual(shops.map((x) => x.brand_owned), [true, true, true, true, false], "a brand shop's listing without its name, and a brand line, are brand listings");
+  assert.match(shops[1].brand_note, /brand shop KastKingUSA/);
+  assert.match(shops[2].brand_note, /brand line \(MotorBox\)/);
   const tab = tiktokFacts([{ id: '18', title: 'Cooling sheet set', shop: 'Sleepy Co', url: 'https://www.tiktok.com/shop/pdp/18', price_min: 39, sold_us: 5000, category: 'Sleep and comfort', blockers: 'bulky', meta_status: 'none', price_suspect: 1 }]);
   assert.strictEqual(tab[0].sold, 5000);
   assert.strictEqual(tab[0].price, null, 'a suspect price is no price');
