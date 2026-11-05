@@ -335,7 +335,7 @@ export function validateKit(R, S) {
     const theirEur = theirs ? toEur(theirs.amount, theirs.cur) : null;
     const mine = p.sell_price != null ? priceOf(p.sell_price, 'EUR') : null;
     const mineEur = mine ? toEur(mine.amount, mine.cur) : null;
-    if (mineEur > 0) out.price = { eur: round(mineEur), status: 'assumption', basis: `your price ${mine.cur === 'EUR' ? eur(mine.amount) : `${mine.amount} ${mine.cur}`}` };
+    if (mineEur > 0) out.price = { eur: round(mineEur), status: 'assumption', basis: `your planned price ${mine.cur === 'EUR' ? eur(mine.amount) : `${mine.amount} ${mine.cur}`}${mine.cur !== 'EUR' ? ` at the ECB rate of ${FX.as_of}` : ''}`, local: mine };
     else if (theirEur > 0) out.price = { eur: round(theirEur), status: 'fact', basis: `their store's price ${theirs.cur === 'EUR' ? eur(theirs.amount) : `${theirs.amount} ${theirs.cur}`} at the ECB rate of ${FX.as_of}`, local: theirs };
     else out.price = null;
     const sup = p.supplier && typeof p.supplier === 'object' ? p.supplier : {};
@@ -394,11 +394,24 @@ export function validateKit(R, S) {
       }
       // A Kungfubuy quote to this very country is the fact for product + shipping of 1 to 5 units: it replaces the fit.
       const quoted = quote && quoteCc(quote) === cc ? quote.eur : null;
+      // A supplier's own shipping quote to this country (CJ's freight, say): it replaces the fit for one unit.
+      const sup = pick && pick.supplier && typeof pick.supplier === 'object' ? pick.supplier : {};
+      const shipQ = sup.ship != null && String(sup.ship_to || '').toUpperCase() === cc ? priceOf(sup.ship, 'EUR') : null;
+      const shipQEur = shipQ ? toEur(shipQ.amount, shipQ.cur) : null;
       const own = inp.price.local && inp.price.local.cur === m.cur ? inp.price.local.amount : null; // their price is in this currency
       const run = (price, units, off = 0, scaled = false) => {
         const local = own != null && !scaled ? round(own * units * (1 - off / 100), 2) : null; // scaled: a price that is not theirs
         const x = orderOf({ market: m, price, units, unit_cost: inp.cost.eur, grams: inp.grams.g, refund_pct: refund, day, local });
         const total = quoted && quoted[units - 1] > 0 ? quoted[units - 1] : null;
+        if (total == null && shipQEur != null && units === 1) {
+          const d = round(shipQEur - x.ship);
+          const dropFee = sup.ship_incl_fees ? round(x.customs_parts.filter((c) => c.k === 'fee').reduce((a, c) => a + c.eur, 0)) : 0;
+          Object.assign(x, { ship: round(shipQEur), ship_status: sup.status === 'fact' ? 'fact' : 'estimate', ship_basis: `${clean(sup.ship_basis || 'the supplier\'s shipping quote', 160)}: ${shipQ.cur === 'EUR' ? eur(shipQ.amount) : `${shipQ.amount} ${shipQ.cur}`}${dropFee ? ' (the border fee included)' : ''}`,
+            customs: round(x.customs - dropFee), customs_parts: dropFee ? x.customs_parts.filter((c) => c.k !== 'fee') : x.customs_parts, landed: round(x.landed + d - dropFee), contribution: round(x.contribution - d + dropFee) });
+          x.margin_pct = price > 0 ? round((x.contribution / price) * 100, 1) : null;
+          x.be_cpa = round(Math.max(x.contribution, 0));
+          x.be_roas = x.contribution > 0 ? round(price / x.contribution) : null;
+        }
         if (total != null) {
           const ship = round(total - x.product);
           const d = ship - x.ship;

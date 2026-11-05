@@ -601,3 +601,24 @@ test('a pick can name its own test market; it wins over the default NZ', () => {
   assert.strictEqual(s.test_plan.market, 'AU');
   assert.strictEqual(sheetOf({ id: 'u', name: 'X', price: 30, cur: 'EUR', test_market: 'XX' }, { day: DAY }).economics.markets[0].cc, 'NZ', 'an unknown market: the default');
 });
+
+test('a supplier\'s own shipping quote to a market (CJ freight) replaces the fit there, for one unit', () => {
+  const pick = { id: 'mat', name: 'Dog cooling mat', price: 'NZ$59.95', markets: ['NZ'], supplier: { cost: '$2.28', weight_g: 320, ship: '$8.63', ship_to: 'NZ', ship_incl_fees: true, status: 'fact', ship_basis: 'CJ freight quote, CJPacket Sensitive, 25 Oct 2026' } };
+  const s = sheetOf(pick, { day: DAY });
+  const o = s.economics.markets[0].offers[0];
+  near(o.ship, 8.63 / 1.1267);
+  assert.strictEqual(o.ship_status, 'fact');
+  assert.strictEqual(o.customs, 0, 'the quote includes the clearance fee: no NZ levy on top');
+  assert.match(o.ship_basis, /^CJ freight quote, CJPacket Sensitive, 25 Oct 2026: 8\.63 USD \(the border fee included\)$/);
+  const au = s.economics.markets.find((m) => m.cc === 'AU').offers[0];
+  assert.notStrictEqual(au.ship_status, 'fact', 'only for the market the quote is for');
+});
+
+test('a planned price (sell_price) is an assumption, not a fact, and keeps its own currency on the sheet', () => {
+  const s = sheetOf({ id: 'p', name: 'Caravan sheet', sell_price: 'A$149', markets: ['AU'], test_market: 'AU' }, { day: DAY });
+  assert.strictEqual(s.economics.inputs.price.status, 'assumption');
+  assert.match(s.economics.inputs.price.basis, /^your planned price 149 AUD/);
+  assert.strictEqual(s.economics.markets[0].offers[0].local, 149);
+  assert.ok(s.assumptions.some((a) => /Selling price/.test(a)));
+  assert.ok(!s.facts.some((f) => /Selling price/.test(f)));
+});
